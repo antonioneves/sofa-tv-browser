@@ -71,7 +71,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
             clipToPadding = false
         }
         top.addView(ImageView(context).apply {
-            setImageResource(R.mipmap.ic_launcher)
+            setImageResource(R.drawable.ic_sofa)
         }, LinearLayout.LayoutParams(64.px, 64.px).apply { marginEnd = 32.px; topMargin = 12.px })
 
         searchPill = LinearLayout(context).apply {
