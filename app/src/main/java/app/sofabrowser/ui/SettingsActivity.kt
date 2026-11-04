@@ -140,6 +140,7 @@ class SettingsActivity : Activity() {
         }
         switch(R.string.cookies, R.string.cookies_sub, prefs::cookies, confirmOff = R.string.cookies_confirm)
         switch(R.string.third_party_cookies, R.string.third_party_cookies_sub, prefs::blockThirdPartyCookies)
+        switch(R.string.cookie_banners, R.string.cookie_banners_sub, prefs::rejectCookieBanners)
         switch(R.string.gpc, R.string.gpc_sub, prefs::sendGpc)
         switch(R.string.safe_browsing, R.string.safe_browsing_sub, prefs::safeBrowsing)
         row(getString(R.string.drm_setting), getString(R.string.drm_setting_sub), valueText(drmLabel())) { pickDrm() }

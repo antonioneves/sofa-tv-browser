@@ -23,6 +23,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.CustomHeader
 import androidx.webkit.ProfileStore
+import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import app.sofabrowser.Prefs
@@ -120,6 +121,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         view.setInitialScale((85 * if (density >= 1) minOf(density, 2f) else density).toInt())
         WebViews.configure(view, prefs)
         applyGpc(view)
+        applyBannerRejection(view)
         // Fresh random names per view for everything injected into pages (see PageKey).
         val key = PageKey()
         VideoRelay.install(view, key, panelScale(),
@@ -162,6 +164,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             it.destroy()
         }
         web = null
+        bannerScript = null
         frames.clear()
         host.onPlaying(false)
         if (isolated) deletePrivateProfile()
@@ -170,7 +173,17 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     }
 
     fun applySettings() {
-        web?.let { WebViews.configure(it, prefs); applyGpc(it) }
+        web?.let { WebViews.configure(it, prefs); applyGpc(it); applyBannerRejection(it) }
+    }
+
+    private var bannerScript: ScriptHandler? = null
+
+    /** Adds or removes the cookie banner script to match the setting; the page in view keeps what it has until it reloads. */
+    private fun applyBannerRejection(view: WebView) {
+        bannerScript?.remove()
+        bannerScript = null
+        if (!prefs.rejectCookieBanners || !WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
+        bannerScript = WebViewCompat.addDocumentStartJavaScript(view, CookieBanners.SCRIPT, setOf("*"))
     }
 
     @SuppressLint("RequiresFeature") // MULTI_PROFILE is checked via profilesSupported

@@ -63,6 +63,8 @@ class Prefs(context: Context) {
     var strongerAsked by boolean("stronger_asked", false)
     var cookies by boolean("cookies", true)
     var blockThirdPartyCookies by boolean("block_3p_cookies", true)
+    /** Clicks "Reject all" on cookie banners (CookieBanners). Takes effect on the next page. */
+    var rejectCookieBanners by boolean("reject_cookie_banners", true)
     /**
      * Sends the Global Privacy Control signal. Off by default: like the old Do Not Track header (which Sofa
      * never sends), it is set by few browsers and so makes a visitor easier to single out.
