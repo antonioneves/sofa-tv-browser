@@ -27,6 +27,7 @@ object WebViews {
         val s = web.settings
         s.javaScriptEnabled = prefs.javascript
         s.domStorageEnabled = true
+        s.cacheMode = WebSettings.LOAD_DEFAULT
         s.mediaPlaybackRequiresUserGesture = !prefs.autoplay
         s.loadWithOverviewMode = true
         s.useWideViewPort = true

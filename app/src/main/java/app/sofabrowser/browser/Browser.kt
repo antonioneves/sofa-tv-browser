@@ -212,7 +212,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
                 adBlocker.resetPageCount()
                 streams.clear()
             } else {
-                if (url !in refetching) streams.request(url, listed(url), request.requestHeaders)
+                if (url !in refetching && StreamSniffer.isCandidate(url)) streams.request(url, listed(url), request.requestHeaders)
                 if (app.sofabrowser.BuildConfig.DEBUG && extensionOf(url) in setOf("m3u8", "mpd")) android.util.Log.d("SofaStream", "manifest $url")
             }
             return if (prefs.adBlock) adBlocker.intercept(request, pageUrl, pageHost) else null

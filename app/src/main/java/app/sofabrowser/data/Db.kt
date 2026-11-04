@@ -16,6 +16,10 @@ data class HistoryEntry(val id: Long, val title: String, val url: String, val vi
  */
 class Db private constructor(context: Context) : SQLiteOpenHelper(context, "sofa.db", null, 2) {
 
+    private val writer = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "history-db").apply { priority = Thread.MIN_PRIORITY }
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE tiles (id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, position INTEGER NOT NULL)")
         db.execSQL("CREATE TABLE bookmarks (id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL UNIQUE, created INTEGER NOT NULL)")
@@ -110,21 +114,26 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, "sofa
 
     /** Records a visit, collapsing a reload or same-page revisit within the last minute into one row. */
     fun recordVisit(title: String, url: String) {
-        val db = writableDatabase
         val now = System.currentTimeMillis()
-        val updated = db.update("history", ContentValues().apply { put("title", title); put("visited", now) },
-            "url = ? AND visited > ?", arrayOf(url, (now - 60_000).toString()))
-        if (updated == 0) {
-            db.insert("history", null, ContentValues().apply {
-                put("title", title); put("url", url); put("visited", now)
-            })
+        writer.execute {
+            val db = writableDatabase
+            val updated = db.update("history", ContentValues().apply { put("title", title); put("visited", now) },
+                "url = ? AND visited > ?", arrayOf(url, (now - 60_000).toString()))
+            if (updated == 0) {
+                db.insert("history", null, ContentValues().apply {
+                    put("title", title); put("url", url); put("visited", now)
+                })
+            }
         }
     }
 
     fun updateHistoryTitle(url: String, title: String) {
-        writableDatabase.execSQL(
-            "UPDATE history SET title = ? WHERE id = (SELECT id FROM history WHERE url = ? ORDER BY visited DESC LIMIT 1)",
-            arrayOf(title, url))
+        if (title.isBlank()) return
+        writer.execute {
+            writableDatabase.execSQL(
+                "UPDATE history SET title = ? WHERE id = (SELECT id FROM history WHERE url = ? ORDER BY visited DESC LIMIT 1)",
+                arrayOf(title, url))
+        }
     }
 
     fun removeHistory(id: Long) {

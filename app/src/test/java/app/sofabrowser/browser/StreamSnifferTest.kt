@@ -92,4 +92,15 @@ class StreamSnifferTest {
         sniffer.request("data:application/x-mpegurl;base64,AAAA.m3u8", listed = false)
         assertEquals(emptyList<String>(), urls())
     }
+
+    @Test
+    fun isCandidateIdentifiesMediaUrls() {
+        assertTrue(StreamSniffer.isCandidate("https://cdn.test/vod/master.m3u8"))
+        assertTrue(StreamSniffer.isCandidate("https://cdn.test/vod/video.mp4?token=123"))
+        assertTrue(StreamSniffer.isCandidate("http://cdn.test/stream.mpd#track=1"))
+        org.junit.Assert.assertFalse(StreamSniffer.isCandidate("https://cdn.test/app.js"))
+        org.junit.Assert.assertFalse(StreamSniffer.isCandidate("https://cdn.test/style.css"))
+        org.junit.Assert.assertFalse(StreamSniffer.isCandidate("https://cdn.test/image.png"))
+        org.junit.Assert.assertFalse(StreamSniffer.isCandidate("data:video/mp4;base64,AAAA"))
+    }
 }

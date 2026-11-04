@@ -64,8 +64,13 @@ class StreamSniffer {
         file = null
     }
 
-    private companion object {
+    companion object {
         const val MAX_MANIFESTS = 12
         const val EARLIEST = 3
+        val MEDIA_EXTENSIONS = setOf("m3u8", "mpd", "mp4", "m4v", "webm", "mkv", "mov")
+
+        /** Whether [url] has an extension that could be a video manifest or file. */
+        fun isCandidate(url: String): Boolean =
+            (url.startsWith("https://") || url.startsWith("http://")) && extensionOf(url) in MEDIA_EXTENSIONS
     }
 }

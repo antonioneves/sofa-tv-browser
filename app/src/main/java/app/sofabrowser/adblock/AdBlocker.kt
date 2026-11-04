@@ -90,7 +90,7 @@ class AdBlocker private constructor(private val context: Context) {
         if (pageUrl != null && !pageAllowed(set, pageUrl)) return null
         val target = RequestUrl(url)
         val headers = request.requestHeaders
-        if (!set.blocks(target, getContentType(target, false, headers), pageHost)) return null
+        if (!set.blocks(target, pageHost) { getContentType(target, false, headers) }) return null
         blocked.incrementAndGet()
         val accept = headers.entries.firstOrNull { it.key.equals("Accept", ignoreCase = true) }?.value
         return when (BlockedResponse.kind(url, accept)) {
@@ -431,13 +431,24 @@ class AdBlocker private constructor(private val context: Context) {
 /** Sites where the user switched ad blocking off. */
 object Allowlist {
     private const val PREFS = "adblock_allowlist"
+    @Volatile private var cached: Set<String>? = null
+
+    @Synchronized
+    private fun get(context: Context): Set<String> = cached ?: run {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).all.keys.also { cached = it }
+    }
 
     fun contains(context: Context, host: String): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).contains(normalize(host))
+        get(context).contains(normalize(host))
 
+    @Synchronized
     fun set(context: Context, host: String, allowed: Boolean) {
+        val norm = normalize(host)
+        val current = get(context).toMutableSet()
+        if (allowed) current.add(norm) else current.remove(norm)
+        cached = current
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
-            if (allowed) putBoolean(normalize(host), true) else remove(normalize(host))
+            if (allowed) putBoolean(norm, true) else remove(norm)
         }.apply()
     }
 

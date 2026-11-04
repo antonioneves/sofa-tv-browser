@@ -173,7 +173,16 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
         root.addView(home, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(root)
 
-        if (!handleIntent(intent)) showHome()
+        if (!handleIntent(intent)) {
+            showHome()
+            Looper.myQueue().addIdleHandler {
+                if (!isFinishing && !isDestroyed && homeShown && web == null) {
+                    ensureWeb()
+                    web?.onPause()
+                }
+                false
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -200,6 +209,7 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
     private fun ensureWeb() {
         if (web != null) return
         val view = browser.create(prefs.privateMode)
+        view.overScrollMode = View.OVER_SCROLL_NEVER
         view.setFindListener { active, total, _ -> findBar.setMatches(active, total) }
         cursor.addView(view, 0, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }

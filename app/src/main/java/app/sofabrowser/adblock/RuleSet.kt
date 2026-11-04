@@ -46,6 +46,7 @@ class RuleSet private constructor(
     private val popupDeny = lists.getValue(ABP_PREFIX_POPUP_DENY)
     private val popupAllow = lists.getValue(ABP_PREFIX_POPUP_ALLOW)
     private val documentDeny = lists.getValue(ABP_PREFIX_DOCUMENT_DENY)
+    private val hasRuleFilters = deny.size > 0 || allow.size > 0 || important.size > 0 || importantAllow.size > 0
 
     /**
      * Whether a window a page at [openerHost] opens at [url] is blocked: its host is a blocked domain, or a $popup rule
@@ -70,16 +71,22 @@ class RuleSet private constructor(
      * Whether a subresource request for [url] of content [type] (ContentRequest.TYPE_*) is blocked on a page at
      * [pageHost]. Call [pageAllowed] once per page first; this doesn't repeat it.
      */
-    fun blocks(url: RequestUrl, type: Int, pageHost: String?): Boolean {
+    fun blocks(url: RequestUrl, pageHost: String?, type: () -> Int): Boolean {
         val host = url.host ?: return false
+        if (!hasRuleFilters && thirdPartyDomains.size == 0) {
+            return domains.isBlocked(host)
+        }
         val party = party(host, pageHost)
-        val request = ContentRequest(url, pageHost, type, party)
+        val request = ContentRequest(url, pageHost, type(), party)
         if (importantAllow[request] != null) return false
         if (important[request] != null) return true
         val denied = domains.isBlocked(host) || party == THIRD_PARTY && thirdPartyDomains.isBlocked(host) || deny[request] != null
         if (!denied) return false
         return allow[request] == null
     }
+
+    fun blocks(url: RequestUrl, type: Int, pageHost: String?): Boolean =
+        blocks(url, pageHost) { type }
 
     /** False when a @@…$document exception switches blocking off on the page at [pageUrl]. */
     fun pageAllowed(pageUrl: RequestUrl): Boolean = documentAllow[page(pageUrl)] == null

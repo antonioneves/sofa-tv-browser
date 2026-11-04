@@ -57,8 +57,21 @@ object InPageBlocking {
     for (const c of el.classList) add('.' + c);
   };
   const flush = () => {
-    timer = 0;
-    for (const n of queue.splice(0)) {
+    if (timer) { clearTimeout(timer); timer = 0; }
+    if (!queue.length) return;
+    const nodes = queue.splice(0);
+    const roots = [];
+    for (const n of nodes) {
+      if (!n || n.nodeType !== 1) continue;
+      let inside = false;
+      for (let i = roots.length - 1; i >= 0; i--) {
+        const r = roots[i];
+        if (r.contains(n)) { inside = true; break; }
+        if (n.contains(r)) { roots.splice(i, 1); }
+      }
+      if (!inside) roots.push(n);
+    }
+    for (const n of roots) {
       visit(n);
       if (n.firstElementChild) for (const el of n.querySelectorAll('[id],[class]')) visit(el);
     }
@@ -66,7 +79,8 @@ object InPageBlocking {
     // A page that replaced the document's style sheets gets this one back.
     try { if (sheet && !document.adoptedStyleSheets.includes(sheet)) document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]; } catch (e) {}
   };
-  const later = () => { if (!timer) timer = setTimeout(flush, 80); };
+  const delay = () => document.readyState === 'complete' ? 120 : 250;
+  const later = () => { if (!timer) timer = setTimeout(flush, delay()); };
   const start = () => {
     new MutationObserver((records) => {
       for (const r of records) {
@@ -77,6 +91,8 @@ object InPageBlocking {
     }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'class'] });
     if (document.documentElement) queue.push(document.documentElement);
     later();
+    window.addEventListener('DOMContentLoaded', flush, { once: true });
+    window.addEventListener('load', flush, { once: true });
   };
   // Trap links: nearly invisible, or laid over most of the screen, and leading to another site.
   const site = (h) => h.split('.').slice(-2).join('.');
