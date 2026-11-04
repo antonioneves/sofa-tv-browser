@@ -2,7 +2,6 @@ package app.sofabrowser.update
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.AlertDialog
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -111,7 +110,7 @@ object Updater {
         if (downloading) return
         downloading = true
         val cancelled = AtomicBoolean(false)
-        val dialog: AlertDialog = Ui.dialog(activity)
+        val dialog = Ui.dialog(activity)
             .setTitle(activity.getString(R.string.update_downloading, release.version))
             .setMessage(activity.getString(R.string.percent, 0))
             .setNegativeButton(android.R.string.cancel) { _, _ -> cancelled.set(true) }

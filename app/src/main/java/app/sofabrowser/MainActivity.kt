@@ -85,6 +85,7 @@ import app.sofabrowser.ui.ListActivity
 import app.sofabrowser.ui.Palette
 import app.sofabrowser.ui.SearchActivity
 import app.sofabrowser.ui.SettingsActivity
+import app.sofabrowser.ui.TileMenu
 import app.sofabrowser.ui.SetupActivity
 import app.sofabrowser.ui.Ui
 import app.sofabrowser.ui.px
@@ -694,15 +695,15 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
     }
 
     override fun onTileMenu(site: Site) {
-        val items = arrayOf(getString(R.string.open), getString(R.string.move), getString(R.string.edit), getString(R.string.remove))
-        dialog().setTitle(site.title).setItems(items) { _, which ->
-            when (which) {
-                0 -> openUrl(site.url)
-                1 -> home.startMoving(site)
-                2 -> editTile(site)
-                3 -> { db.removeTile(site.id); home.refresh(prefs.privateMode, prefs.adBlock) }
+        TileMenu(this, site, object : TileMenu.Actions {
+            override fun open(site: Site) = openUrl(site.url)
+            override fun move(site: Site) = home.startMoving(site)
+            override fun edit(site: Site) = editTile(site)
+            override fun remove(site: Site) {
+                db.removeTile(site.id)
+                home.refresh(prefs.privateMode, prefs.adBlock)
             }
-        }.show()
+        }).show()
     }
 
     override fun onAddTile() = editTile(null)
@@ -1806,7 +1807,7 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
                     .setPositiveButton(android.R.string.ok, null).show()
             }
             .create()
-        d.setOnShowListener { d.getButton(AlertDialog.BUTTON_POSITIVE).requestFocus() }
+        d.setOnShowListener { d.getButton(AlertDialog.BUTTON_POSITIVE)?.requestFocus() }
         d.show()
     }
 
@@ -1815,7 +1816,7 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
     private fun dialog() = Ui.dialog(this)
 
     private fun padded(v: View) = FrameLayout(this).apply {
-        setPadding(48.px, 24.px, 48.px, 0)
+        setPadding(0, 0, 0, 0)
         addView(v, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 

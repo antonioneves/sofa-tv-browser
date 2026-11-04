@@ -533,7 +533,7 @@ class SettingsActivity : Activity() {
             .setNegativeButton(android.R.string.cancel, null).show()
     }
 
-    private fun padded(v: View) = FrameLayout(this).apply { setPadding(48.px, 16.px, 48.px, 0); addView(v) }
+    private fun padded(v: View) = FrameLayout(this).apply { addView(v) }
 
     private fun dialog() = Ui.dialog(this)
 

@@ -3,7 +3,6 @@ package app.sofabrowser.ui
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
@@ -166,7 +165,7 @@ object Ui {
         setOnClickListener { onClick() }
     }
 
-    fun dialog(context: Context) = AlertDialog.Builder(context, p.dialogTheme)
+    fun dialog(context: Context) = SofaDialog.Builder(context)
 }
 
 /** Design pixels (1920x1080 grid) to real pixels. */
