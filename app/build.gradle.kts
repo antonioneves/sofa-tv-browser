@@ -128,8 +128,31 @@ val legalAssets = tasks.register<CopyLegalFiles>("legalAssets") {
     sources.from(rootProject.file("LICENSE"), rootProject.file("NOTICE.md"), rootProject.file("LICENSE-APACHE-2.0.txt"))
 }
 
+/** Copies the unsigned "Add to TV home screen" template (the :shortcut module) into generated assets. */
+abstract class CopyShortcutTemplate : DefaultTask() {
+    @get:InputFiles
+    abstract val template: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+        template.singleFile.copyTo(File(out, "shortcut-template.apk"))
+    }
+}
+
+val shortcutAssets = tasks.register<CopyShortcutTemplate>("shortcutAssets") {
+    dependsOn(":shortcut:assembleRelease")
+    template.from(project(":shortcut").layout.buildDirectory.file("outputs/apk/release/shortcut-release-unsigned.apk"))
+}
+
 androidComponents {
     onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(shortcutAssets, CopyShortcutTemplate::outputDir)
         // Ships LICENSE, NOTICE.md and the Apache licence of the bundled ad-block engine: the APK carries its licences, and
         // About can show the first two.
         variant.sources.assets?.addGeneratedSourceDirectory(legalAssets, CopyLegalFiles::outputDir)
@@ -143,6 +166,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.11.1")
+
+    // Signs the per-page launcher APKs "Add to TV home screen" builds on the TV (Android's own APK signer), Apache-2.0.
+    implementation("com.android.tools.build:apksig:9.4.1")
 
     testImplementation("junit:junit:4.13.2")
 }

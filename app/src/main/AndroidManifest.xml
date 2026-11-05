@@ -83,6 +83,15 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <!-- A page saved to the TV home screen. Its own task: Back leaves to the home screen, never into the browser. -->
+        <activity
+            android:name=".PageActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density"
+            android:documentLaunchMode="intoExisting"
+            android:exported="true"
+            android:launchMode="standard"
+            android:supportsPictureInPicture="true"
+            android:windowSoftInputMode="adjustNothing" />
         <activity
             android:name=".ui.SearchActivity"
             android:exported="false"
@@ -103,6 +112,10 @@
         <!-- Told by Android's chooser which player was picked for "Play in…". -->
         <receiver
             android:name=".browser.PlayerChosen"
+            android:exported="false" />
+        <!-- Hears back from the system installer while Sofa installs a page's launcher tile. -->
+        <receiver
+            android:name=".shortcut.ShortcutInstalled"
             android:exported="false" />
         <service
             android:name=".downloads.DownloadService"

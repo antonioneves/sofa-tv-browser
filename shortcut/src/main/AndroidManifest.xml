@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- Sofa replaces the SHORTCUT_* texts below (and this package name) inside the compiled manifest. -->
+    <application
+        android:allowBackup="false"
+        android:banner="@drawable/banner"
+        android:icon="@drawable/banner"
+        android:label="SHORTCUT_LABEL">
+
+        <meta-data android:name="app.sofabrowser.shortcut.URL" android:value="SHORTCUT_URL" />
+        <meta-data android:name="app.sofabrowser.shortcut.TARGET" android:value="SHORTCUT_TARGET" />
+
+        <activity
+            android:name=".Launch"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -21,7 +21,7 @@ import app.sofabrowser.R
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
 
-    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, BOOKMARK, PIN, HISTORY, BOOKMARKS, DOWNLOADS, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
+    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
     interface Actions {
         fun onAddress()
@@ -114,6 +114,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page)
         add(Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark)
         add(Action.PIN, R.drawable.ic_add, R.string.pin_to_home)
+        add(Action.TV_SHORTCUT, R.drawable.ic_tv, R.string.tv_shortcut)
         add(Action.HISTORY, R.drawable.ic_history, R.string.history)
         add(Action.BOOKMARKS, R.drawable.ic_bookmarks, R.string.bookmarks)
         add(Action.DOWNLOADS, R.drawable.ic_download, R.string.downloads)

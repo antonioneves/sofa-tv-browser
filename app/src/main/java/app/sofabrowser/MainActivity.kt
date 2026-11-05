@@ -85,6 +85,7 @@ import app.sofabrowser.ui.ListActivity
 import app.sofabrowser.ui.Palette
 import app.sofabrowser.ui.SearchActivity
 import app.sofabrowser.ui.SettingsActivity
+import app.sofabrowser.shortcut.TvShortcut
 import app.sofabrowser.ui.TileMenu
 import app.sofabrowser.ui.SetupActivity
 import app.sofabrowser.ui.Ui
@@ -96,7 +97,7 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /** The single activity for the home screen and the browser; settings and lists are separate screens. */
-class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Actions, VideoBar.Actions, CursorLayout.Listener,
+open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Actions, VideoBar.Actions, CursorLayout.Listener,
     FindBar.Actions {
 
     private lateinit var prefs: Prefs
@@ -121,6 +122,10 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
     private lateinit var palette: Palette
 
     private val web get() = browser.web
+    /** Opened from a TV home screen tile: only the page shows. */
+    /** A tile on the TV home screen opens its page in a [PageActivity]: the page alone, no menu, no way on to the browser. */
+    protected open val standalone = false
+    private val pageOnly get() = standalone
     private val homeShown get() = home.visibility == View.VISIBLE
     private val recordHistory get() = HistoryRetention.records(prefs.historyDays) && !browser.privateMode
 
@@ -270,7 +275,20 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
             // While the bar has focus, the D-pad moves between its buttons instead of the pointer.
             if (findBar.hasFocus()) return super.dispatchKeyEvent(event)
         }
-        if (homeShown) {
+        if (standalone) {
+            // Back steps back through the page's own history and then leaves, to the TV home screen.
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) when {
+                        cursor.scrollMode -> cursor.setScrollMode(false)
+                        web?.canGoBack() == true -> browser.goBack()
+                        else -> finish()
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_MENU -> return true
+            }
+        } else if (homeShown) {
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                 if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) backOnHome()
                 return true
@@ -390,7 +408,7 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
         when (action) {
             GamePad.Action.WATCH -> if (!homeShown) watch()
             GamePad.Action.SEARCH -> if (homeShown) onSearch() else onAddress()
-            GamePad.Action.HOME -> if (!homeShown) showHome()
+            GamePad.Action.HOME -> if (!homeShown && !standalone) showHome()
             GamePad.Action.HISTORY_BACK -> if (!homeShown && web?.canGoBack() == true) browser.goBack()
             GamePad.Action.HISTORY_FORWARD -> if (!homeShown && web?.canGoForward() == true) browser.goForward()
             GamePad.Action.SEEK_BACK_LONG, GamePad.Action.SEEK_FORWARD_LONG -> if (inFullscreen) {
@@ -595,6 +613,11 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
                 db.addTile(w.title?.ifBlank { null } ?: UrlInput.display(url), url)
                 toast(R.string.pinned)
             }
+            BrowserMenu.Action.TV_SHORTCUT -> if (Browser.isWebUrl(url)) {
+                menu?.dismiss()
+                val title = w.title.orEmpty()
+                w.evaluateJavascript(TvShortcut.LOOK_SCRIPT) { TvShortcut.add(this, url, title, TvShortcut.look(it)) }
+            }
             BrowserMenu.Action.HISTORY -> openList(ListActivity.MODE_HISTORY)
             BrowserMenu.Action.BOOKMARKS -> openList(ListActivity.MODE_BOOKMARKS)
             BrowserMenu.Action.ADBLOCK -> if (host != null) {
@@ -757,7 +780,7 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
         if (findBar.showing) closeFind()
         loading = true
         zoomStep = 0
-        progress.visibility = View.VISIBLE
+        progress.visibility = if (pageOnly) View.GONE else View.VISIBLE
         val host = Browser.hostOf(url)
         cursor.cursorEnabled = host == null || !prefs.keysToPage(host)
         if (cursor.scrollMode) cursor.setScrollMode(false)
@@ -775,6 +798,7 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
     }
 
     override fun onProgress(percent: Int) {
+        if (pageOnly) { if (percent >= 100) onPageFinished(web?.url.orEmpty()); return }
         progress.animate().scaleX(percent / 100f).setDuration(150).start()
         if (percent >= 100) onPageFinished(web?.url.orEmpty())
     }
@@ -1825,6 +1849,7 @@ class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Ac
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
 
     companion object {
+        /** Set by a TV home screen tile (the :shortcut template) when it opens its page in Sofa. */
         private const val REQ_URL = 10
         private const val REQ_NOTIFICATIONS = 11
         private const val REQ_MIC = 12

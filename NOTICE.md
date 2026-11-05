@@ -97,3 +97,9 @@ them:
   Wikimedia Foundation.
 - Site icons and names on the home screen (`1.png`) and the search engine icons (`4.png`) are trademarks of their
   respective owners.
+
+## apksig (APK signing)
+
+"Add to TV home screen" signs the launcher tile it builds with `apksig`, the APK signing library of the Android
+build tools (https://android.googlesource.com/platform/tools/apksig), licensed under the Apache License,
+Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).

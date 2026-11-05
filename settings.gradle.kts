@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "sofa-tv-browser"
-include(":app")
+include(":app", ":shortcut")

@@ -69,6 +69,11 @@
     <string name="bookmark_added">Bookmark added</string>
     <string name="bookmark_removed">Bookmark removed</string>
     <string name="pin_to_home">Add to home</string>
+    <string name="tv_shortcut">Add to TV home</string>
+    <string name="shortcut_building">Making the TV home tile…</string>
+    <string name="shortcut_added">Added to the TV home screen: find it among your apps.</string>
+    <string name="shortcut_failed">Couldn\'t add the TV home tile: %1$s</string>
+    <string name="shortcut_allow_installs">Allow Sofa to install apps, then try again</string>
     <string name="pinned">Added to Quick access</string>
     <string name="adblock_site">Ad block</string>
     <string name="adblock_site_on">Ad block: on here</string>

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Add to TV home:** a new button in the page menu gives the page its own tile among the TV's apps. Sofa makes and
+  signs a tiny launcher app on the TV itself (nothing is downloaded or sent), and the tile opens the page in Sofa with
+  nothing on screen but the page: no menu, and Back goes back through the page and then leaves to the TV home screen,
+  never into the browser. Android asks you to allow Sofa to install apps the first time. The tile uses the
+  page's own theme colour and its large icon when it has them, and a wide preview picture of the page (its `og:image`)
+  fills the tile when the page has one. The icon and picture are the only things fetched, from the page's own site and
+  only when you press the button.
+
 ## 1.2.2 (2026-10-30)
 
 **Sofa Player**
