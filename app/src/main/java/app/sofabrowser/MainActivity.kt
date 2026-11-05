@@ -126,6 +126,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     /** A tile on the TV home screen opens its page in a [PageActivity]: the page alone, no menu, no way on to the browser. */
     protected open val standalone = false
     private val pageOnly get() = standalone
+    private var splash: View? = null
     private val homeShown get() = home.visibility == View.VISIBLE
     private val recordHistory get() = HistoryRetention.records(prefs.historyDays) && !browser.privateMode
 
@@ -177,6 +178,16 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
         home = HomeView(this, this)
         root.addView(home, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        if (standalone) {
+            // The page can take a few seconds to show: until it has loaded, the screen says what is opening.
+            val name = Browser.hostOf(intent?.dataString.orEmpty())?.removePrefix("www.").orEmpty()
+            splash = FrameLayout(this).apply {
+                setBackgroundColor(0xFF101114.toInt())
+                addView(Ui.text(context, 44, Ui.DARK.text, bold = true).apply { text = name },
+                    FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            }
+            root.addView(splash, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
         setContentView(root)
 
         if (!handleIntent(intent)) {
@@ -790,6 +801,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     override fun onPageFinished(url: String) {
         loading = false
+        splash?.let { (it.parent as? ViewGroup)?.removeView(it); splash = null }
         progress.animate().cancel()
         progress.visibility = View.GONE
         progress.scaleX = 0f

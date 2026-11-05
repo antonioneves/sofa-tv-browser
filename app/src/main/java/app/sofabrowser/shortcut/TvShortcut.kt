@@ -55,19 +55,19 @@ object TvShortcut {
     private const val BANNER_H = 360
 
     /** What the page says about its own look: its theme colour and the address of its largest icon. */
-    class Look(val color: Int?, val iconUrl: String?, val imageUrl: String? = null)
+    class Look(val color: Int?, val iconUrl: String?, val imageUrl: String? = null, val siteName: String? = null)
 
     const val LOOK_SCRIPT = """(function(){var m=document.querySelector('meta[name=theme-color]'),b=null,n=-1;
 document.querySelectorAll('link[rel~=icon],link[rel^=apple-touch-icon]').forEach(function(l){
 var s=parseInt(((l.sizes&&l.sizes[0])||'0').split('x')[0])||0;if(/apple/.test(l.rel))s=Math.max(s,180);
 if(l.href&&!/\.svg/i.test(l.href)&&s>=n){b=l.href;n=s}});
 var o=document.querySelector('meta[property="og:image"],meta[name="twitter:image"]');
-return JSON.stringify({c:m?m.content:'',i:b||'',g:o?new URL(o.content,location.href).href:''})})()"""
+return JSON.stringify({c:m?m.content:'',i:b||'',g:o?new URL(o.content,location.href).href:'',n:(document.querySelector('meta[property="og:site_name"]')||{}).content||''})})()"""
 
     fun look(raw: String?): Look = runCatching {
         val text = org.json.JSONTokener(raw).nextValue() as String
         val o = org.json.JSONObject(text)
-        Look(runCatching { Color.parseColor(o.optString("c").trim()) }.getOrNull(), o.optString("i").ifBlank { null }, o.optString("g").ifBlank { null })
+        Look(runCatching { Color.parseColor(o.optString("c").trim()) }.getOrNull(), o.optString("i").ifBlank { null }, o.optString("g").ifBlank { null }, o.optString("n").trim().ifBlank { null })
     }.getOrDefault(Look(null, null))
 
     /** The screen the button was pressed on, to move aside once Android's confirmation is up. */
@@ -99,7 +99,8 @@ return JSON.stringify({c:m?m.content:'',i:b||'',g:o?new URL(o.content,location.h
     }
 
     private fun build(context: Context, url: String, title: String, look: Look): File {
-        val label = title.trim().ifBlank { Uri.parse(url).host.orEmpty() }.take(40)
+        // A short name: the site's own, else its address. A page title is too long for a tile.
+        val label = (look.siteName ?: Uri.parse(url).host.orEmpty().removePrefix("www.").ifBlank { title.trim() }).take(24)
         val manifestTexts = mapOf(
             TEMPLATE_PACKAGE to packageFor(url),
             "SHORTCUT_LABEL" to label,
@@ -210,11 +211,23 @@ return JSON.stringify({c:m?m.content:'',i:b||'',g:o?new URL(o.content,location.h
     private fun download(iconUrl: String?, minSize: Int = 96): Bitmap? = runCatching {
         if (iconUrl == null || !iconUrl.startsWith("https://")) return null
         val conn = (java.net.URL(iconUrl).openConnection() as java.net.HttpURLConnection).apply {
-            connectTimeout = 5000; readTimeout = 5000
+            connectTimeout = 8000; readTimeout = 8000
         }
         val bytes = conn.inputStream.use { it.readBytes() }.takeIf { it.size <= 2_000_000 }
         bytes?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
     }.getOrNull()?.takeIf { it.width >= minSize && it.height >= minSize }
+
+    /** White behind a dark icon, the page's colour behind a light one (a white logo would vanish on white). */
+    private fun plate(icon: android.graphics.drawable.Drawable, size: Int, bg: Int): Int {
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        icon.setBounds(0, 0, size, size); icon.draw(Canvas(bmp))
+        var sum = 0.0; var n = 0
+        for (x in 0 until size step 4) for (y in 0 until size step 4) {
+            val px = bmp.getPixel(x, y)
+            if (Color.alpha(px) > 128) { sum += 0.299 * Color.red(px) + 0.587 * Color.green(px) + 0.114 * Color.blue(px); n++ }
+        }
+        return if (n > 0 && sum / n > 170) bg else Color.WHITE
+    }
 
     private fun banner(context: Context, url: String, label: String, look: Look): ByteArray {
         val bmp = Bitmap.createBitmap(BANNER_W, BANNER_H, Bitmap.Config.ARGB_8888)
@@ -253,8 +266,9 @@ return JSON.stringify({c:m?m.content:'',i:b||'',g:o?new URL(o.content,location.h
                 c.drawBitmap(logo, null, box, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
                 c.restore()
             } else {
-                c.drawRoundRect(box, 20f, 20f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bg })
-                Favicons.get(context).drawable(url, label, small).apply { setBounds(box.left.toInt() + 12, box.top.toInt() + 12, box.right.toInt() - 12, box.bottom.toInt() - 12) }.draw(c)
+                val d = Favicons.get(context).drawable(url, label, small)
+                c.drawRoundRect(box, 20f, 20f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = plate(d, small, bg) })
+                d.apply { setBounds(box.left.toInt() + 12, box.top.toInt() + 12, box.right.toInt() - 12, box.bottom.toInt() - 12) }.draw(c)
             }
             val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE; textSize = 44f; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -280,8 +294,8 @@ return JSON.stringify({c:m?m.content:'',i:b||'',g:o?new URL(o.content,location.h
             c.drawBitmap(big, null, box, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
             c.restore()
         } else {
-            c.drawRoundRect(box, 44f, 44f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
             val d = Favicons.get(context).drawable(url, label, icon)
+            c.drawRoundRect(box, 44f, 44f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = plate(d, icon, bg) })
             val pad = 28
             d.setBounds((left + pad).toInt(), (top + pad).toInt(), (left + icon - pad).toInt(), (top + icon - pad).toInt())
             d.draw(c)
