@@ -8,6 +8,9 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -205,6 +208,7 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
                 addView(text, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 setOnFocusChangeListener { _, has ->
                     text.setTextColor(if (has) p.onFocus else p.text)
+                    text.text = tinted(label, has)
                     radio.tone(if (has) p.onFocus else p.text)
                 }
                 setOnClickListener {
@@ -221,6 +225,24 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         return Capped(context, 90.px).apply {
             isVerticalScrollBarEnabled = false
             addView(list)
+        }
+    }
+
+    /**
+     * A label's own colour spans (the small grey line under an engine's name) are fixed colours, so on the white
+     * focus fill they would vanish: while focused they take the on-focus tone instead.
+     */
+    private fun tinted(label: CharSequence, focused: Boolean): CharSequence {
+        if (label !is Spanned) return label
+        val spans = label.getSpans(0, label.length, ForegroundColorSpan::class.java)
+        if (spans.isEmpty()) return label
+        return SpannableString(label).apply {
+            for (span in spans) {
+                val from = getSpanStart(span)
+                val to = getSpanEnd(span)
+                removeSpan(span)
+                setSpan(ForegroundColorSpan(if (focused) Ui.p.onFocusWeak else span.foregroundColor), from, to, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
         }
     }
 
@@ -241,8 +263,23 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
 
     /** A scroller that never grows past [MAX_BODY] design pixels, so the sheet fits the screen. */
     private class Capped(context: Context, margin: Int) : FocusScrollView(context, margin) {
+        init {
+            // Rows scrolling out of view fade away instead of being cut off hard right under the title.
+            isVerticalFadingEdgeEnabled = true
+            setFadingEdgeLength(36.px)
+            overScrollMode = OVER_SCROLL_NEVER
+        }
+
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(MAX_BODY.px, View.MeasureSpec.AT_MOST))
+        }
+
+        // The sheet doesn't clip its children (a focused button grows past it), so the scroller clips itself.
+        override fun draw(canvas: android.graphics.Canvas) {
+            canvas.save()
+            canvas.clipRect(scrollX, scrollY, scrollX + width, scrollY + height)
+            super.draw(canvas)
+            canvas.restore()
         }
     }
 
