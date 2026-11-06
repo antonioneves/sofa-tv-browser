@@ -115,8 +115,10 @@
     <string name="pin_change">Change PIN</string>
     <string name="pin_changed">PIN changed</string>
     <string name="pin_forgot">Forgot PIN</string>
-    <string name="pin_forgot_title">Erase the private space?</string>
-    <string name="pin_forgot_message">A forgotten PIN can\'t be recovered. This deletes everything in the private space, including its bookmarks and downloads. The rest of Sofa stays as it is.</string>
+    <string name="pin_forgot_title">Erase the private space and saved sign-ins?</string>
+    <string name="pin_forgot_message">A forgotten PIN can\'t be recovered. This deletes everything in the private space, including its bookmarks and downloads, and the sign-ins saved outside it. The rest of Sofa stays as it is.</string>
+    <string name="pin_signins">For saved sign-ins</string>
+    <string name="pin_choose_signins_sub">Sofa asks for it before saving or filling in a password. It\'s also the private space\'s PIN.</string>
     <string name="pin_forgot_erase">Erase everything</string>
     <string name="tv_shortcut">Add to TV home</string>
     <string name="shortcut_building">Making the TV home tile…</string>
@@ -395,7 +397,7 @@
     <string name="clear_on_exit">Clear browsing data on exit</string>
     <string name="clear_on_exit_sub">Cookies, site storage, cache, history, where you stopped videos and site settings</string>
     <string name="save_signins">Offer to save sign-ins</string>
-    <string name="save_signins_sub">On secure (https) sites, never in private browsing. Passwords are encrypted with a key Android keeps for Sofa, and are only filled in when you pick one</string>
+    <string name="save_signins_sub">On secure (https) sites, never in private browsing. Passwords are encrypted with a key Android keeps for Sofa, and are only saved or filled in after Sofa\'s PIN (not needed inside the private space)</string>
     <string name="saved_signins">Saved sign-ins</string>
     <plurals name="saved_signins_count">
         <item quantity="one">%d sign-in</item>

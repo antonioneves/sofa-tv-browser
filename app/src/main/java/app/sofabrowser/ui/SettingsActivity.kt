@@ -43,6 +43,7 @@ import app.sofabrowser.data.Db
 import app.sofabrowser.data.Favicons
 import app.sofabrowser.data.HistoryRetention
 import app.sofabrowser.data.SignIns
+import app.sofabrowser.data.SpacePin
 import app.sofabrowser.data.SiteChoice
 import app.sofabrowser.forgetSiteChoices
 import app.sofabrowser.siteChoices
@@ -183,11 +184,13 @@ class SettingsActivity : Activity() {
             nav(R.string.saved_signins, resources.getQuantityString(R.plurals.saved_signins_count, savedCount, savedCount)) { showSignIns() }
         }
         nav(R.string.clear_now, null) { clearNow() }
-        if (Space.active) {
+        // Outside the space the PIN also guards saved sign-ins, so it can be changed here once they use it.
+        if (Space.active || SpacePin.isSet(this) && (prefs.saveSignIns || savedCount > 0)) {
             nav(R.string.pin_change, null) {
                 startActivity(Intent(this, PinActivity::class.java).putExtra(PinActivity.EXTRA_MODE, PinActivity.MODE_CHANGE))
             }
-        } else if (Space.supported) {
+        }
+        if (!Space.active && Space.supported) {
             switch(R.string.private_space, R.string.private_space_sub, prefs::privateSpace)
         }
 

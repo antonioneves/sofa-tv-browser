@@ -10,10 +10,14 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import app.sofabrowser.R
 import app.sofabrowser.Space
+import app.sofabrowser.data.SignIns
 import app.sofabrowser.data.SpacePin
 import kotlin.concurrent.thread
 
-/** Asks for the private space's PIN, by the screen's number pad or the remote's number keys. */
+/**
+ * Asks for Sofa's PIN, by the screen's number pad or the remote's number keys. One PIN opens the private space and
+ * lets saved sign-ins be filled in outside it.
+ */
 class PinActivity : Activity() {
     private enum class Step { CHECK, CHOOSE, REPEAT }
 
@@ -66,10 +70,11 @@ class PinActivity : Activity() {
     }
 
     private fun begin() {
-        step = if (mode == MODE_ENTER && !SpacePin.isSet(this)) Step.CHOOSE else Step.CHECK
+        val choosing = mode == MODE_ENTER || mode == MODE_SIGNIN
+        step = if (choosing && !SpacePin.isSet(this)) Step.CHOOSE else Step.CHECK
         typed = ""
         chosen = ""
-        forgot.visibility = if (mode == MODE_ENTER && step == Step.CHECK) View.VISIBLE else View.GONE
+        forgot.visibility = if (choosing && step == Step.CHECK) View.VISIBLE else View.GONE
         show(null)
     }
 
@@ -79,7 +84,11 @@ class PinActivity : Activity() {
             Step.CHOOSE -> if (mode == MODE_CHANGE) R.string.pin_new else R.string.pin_choose
             Step.REPEAT -> R.string.pin_repeat
         })
-        note.text = message ?: getString(if (step == Step.CHOOSE && mode == MODE_ENTER) R.string.pin_choose_sub else R.string.private_space)
+        note.text = message ?: getString(when {
+            mode == MODE_SIGNIN -> if (step == Step.CHOOSE) R.string.pin_choose_signins_sub else R.string.pin_signins
+            step == Step.CHOOSE && mode == MODE_ENTER -> R.string.pin_choose_sub
+            else -> R.string.private_space
+        })
         dots.text = (0 until SpacePin.LENGTH).joinToString(" ") { if (it < typed.length) "●" else "○" }
     }
 
@@ -136,6 +145,7 @@ class PinActivity : Activity() {
         when (mode) {
             MODE_ENTER -> Space.enter(this)
             MODE_UNLOCK -> { Space.unlock(); finish() }
+            MODE_SIGNIN -> { setResult(RESULT_OK); finish() }
             else -> finish()
         }
     }
@@ -144,7 +154,12 @@ class PinActivity : Activity() {
         Ui.dialog(this)
             .setTitle(R.string.pin_forgot_title)
             .setMessage(R.string.pin_forgot_message)
-            .setPositiveButton(R.string.pin_forgot_erase) { _, _ -> Space.erase(this); begin() }
+            .setPositiveButton(R.string.pin_forgot_erase) { _, _ ->
+                // The sign-ins were behind the same PIN: a new one mustn't open them.
+                Space.erase(this)
+                SignIns.get(this).clear()
+                if (mode == MODE_SIGNIN) finish() else begin()
+            }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
             // Erasing can't be undone, so a second press of OK mustn't do it.
@@ -167,5 +182,7 @@ class PinActivity : Activity() {
         const val MODE_ENTER = 0
         const val MODE_UNLOCK = 1
         const val MODE_CHANGE = 2
+        /** Before a sign-in is saved or filled in, outside the space; chooses the PIN if there's none yet. */
+        const val MODE_SIGNIN = 3
     }
 }
