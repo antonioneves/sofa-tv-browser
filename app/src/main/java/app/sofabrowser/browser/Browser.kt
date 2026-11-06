@@ -30,6 +30,7 @@ import app.sofabrowser.Prefs
 import app.sofabrowser.siteUserAgents
 import app.sofabrowser.siteZooms
 import app.sofabrowser.hiddenElements
+import app.sofabrowser.cookieBannerSites
 import app.sofabrowser.data.HiddenElements
 import app.sofabrowser.adblock.AdBlocker
 import app.sofabrowser.adblock.Allowlist
@@ -107,6 +108,8 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     /** Per-site zoom chosen in private browsing, likewise. */
     private val privateZooms = HashMap<String, Int>()
     private val privateHidden = HashMap<String, String>()
+    /** Sites the cookie banner check is done with in private browsing, which has cookies of its own. */
+    private val privateBannerSites = HashSet<String>()
     /** Ad blocking turned off or back on per host in private browsing; read on WebView's network threads too. */
     private val privateAdBlockOff = ConcurrentHashMap<String, Boolean>()
     /** "Keys go to the site" per host in private browsing. */
@@ -144,7 +147,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         WebViews.configure(view, prefs)
         appliedUserAgent = agentKey(prefs.userAgent)
         applyGpc(view)
-        applyBannerRejection(view)
         // Fresh random names per view for everything injected into pages (see PageKey).
         val key = PageKey()
         VideoRelay.install(view, key, panelScale(),
@@ -168,6 +170,13 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         }
         PageDownloads.install(view, key)
         pageKey = key
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            WebViewCompat.addWebMessageListener(view, key.banners, setOf("*")) { v, message, _, _, _ ->
+                val pageHost = runCatching { org.json.JSONObject(message.data.orEmpty()).optString("h") }.getOrNull()
+                v.post { onBannerSiteDone(pageHost) }
+            }
+        }
+        applyBannerRejection(view)
         applySignIns(view)
         HiddenPages.install(view, key, ::onElementPicked)
         applyHidden(view)
@@ -199,7 +208,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         host.onPlaying(false)
         if (isolated) deletePrivateProfile()
         if (privateMode) {
-            privateUserAgents.clear(); privateZooms.clear(); privateHidden.clear()
+            privateUserAgents.clear(); privateZooms.clear(); privateHidden.clear(); privateBannerSites.clear()
             privateAdBlockOff.clear(); privateKeysToPage.clear(); privateDrmAnswers.clear()
         }
         appliedUserAgent = null
@@ -352,8 +361,26 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     private fun applyBannerRejection(view: WebView) {
         bannerScript?.remove()
         bannerScript = null
+        val key = pageKey ?: return
         if (!prefs.rejectCookieBanners || !WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
-        bannerScript = WebViewCompat.addDocumentStartJavaScript(view, CookieBanners.SCRIPT, setOf("*"))
+        val done = if (privateMode) privateBannerSites else cookieBannerSites(context).let { saved ->
+            CookieBanners.current(saved, System.currentTimeMillis()).also { keep -> saved.keys.filter { it !in keep }.forEach { saved.remove(it) } }
+        }
+        bannerScript = WebViewCompat.addDocumentStartJavaScript(view, CookieBanners.script(key.banners, done), setOf("*"))
+    }
+
+    /** The cookie banner check is done with the page in view: leave its site alone on pages loaded from now on. */
+    private fun onBannerSiteDone(pageHost: String?) {
+        val view = web ?: return
+        val site = siteOf(view.url) ?: return
+        // Only for the site in view, which a page's frames can't name otherwise.
+        if (pageHost.isNullOrEmpty() || Sites.of(pageHost.lowercase()) != site) return
+        if (privateMode) { if (!privateBannerSites.add(site)) return }
+        else cookieBannerSites(context).let { saved ->
+            if (site in CookieBanners.current(saved, System.currentTimeMillis())) return
+            saved[site] = System.currentTimeMillis().toString()
+        }
+        applyBannerRejection(view)
     }
 
     @SuppressLint("RequiresFeature") // MULTI_PROFILE is checked via profilesSupported

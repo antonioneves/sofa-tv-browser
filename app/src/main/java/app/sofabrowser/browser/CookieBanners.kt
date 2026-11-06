@@ -1,5 +1,6 @@
 package app.sofabrowser.browser
 
+
 /**
  * Turns cookie banners down. A small script in every frame (banners often live in an iframe) looks, as the page
  * loads, for a rejection button: the ones the common consent platforms use, or any button that says "Reject all",
@@ -7,14 +8,36 @@ package app.sofabrowser.browser
  * It clicks that and nothing else: never "Accept", never "Manage", and it gives up after about 13 seconds or three
  * clicks. A button must be visible and sit near cookie or consent wording, so "Decline" on an invitation stays alone.
  *
- * It has no channel back to Sofa, so a page can't reach it, and it keeps nothing. The script is tested against mock
- * banners outside the app; a site that words its button some other way keeps its banner.
+ * A site is looked at once: after a click (the site keeps the answer in its cookies) or after a full look found
+ * nothing, the script tells Sofa, which leaves that site alone for [RECHECK_DAYS] days, or until its cookies are
+ * cleared. The channel has a random name per WebView ([PageKey]); a page that finds it can only stop the look on its
+ * own site, which wording its button some other way does as well. A site that does so keeps its banner.
  */
 object CookieBanners {
-    val SCRIPT = """
+    /** Days after which a site that was looked at is looked at again, in case it asks once more. */
+    const val RECHECK_DAYS = 30L
+    private const val RECHECK_MS = RECHECK_DAYS * 24 * 60 * 60 * 1000
+
+    /** The sites of [looked] (site -> when, in ms) to leave alone at [now]. */
+    fun current(looked: Map<String, String>, now: Long): List<String> =
+        looked.filterValues { (it.toLongOrNull() ?: 0) in (now - RECHECK_MS + 1)..now }.keys.sorted()
+
+    /** The script for every frame, skipping pages of the [done] sites and reporting to [channel]. */
+    fun script(channel: String, done: Collection<String>) = """
 (() => {
   if (window.__sofaConsent) return;
   try { Object.defineProperty(window, '__sofaConsent', { value: 1 }); } catch (e) { return; }
+  // The page's own address, also from inside its frames, where banners often are.
+  const top = (() => {
+    try {
+      const a = location.ancestorOrigins;
+      return new URL(a && a.length ? a[a.length - 1] : location.href).hostname.toLowerCase();
+    } catch (e) { return location.hostname.toLowerCase(); }
+  })();
+  const DONE = ${done.filter { it.all { c -> c.isLetterOrDigit() || c in ".-" } }.joinToString(",", "[", "]") { "\"$it\"" }};
+  if (!top || DONE.some((s) => top === s || top.endsWith('.' + s))) return;
+  const L = "$channel";
+  const tell = () => { try { const out = window[L]; if (out) out.postMessage(JSON.stringify({ h: top })); } catch (e) {} };
   // Rejection buttons of the common consent platforms; the rest is found by what the button says.
   const KNOWN = [
     '#onetrust-reject-all-handler', '.ot-pc-refuse-all-handler',
@@ -63,6 +86,7 @@ object CookieBanners {
     seen.add(el);
     clicks++;
     el.click();
+    tell();
   };
   const attempt = () => {
     for (const sel of KNOWN) {
@@ -84,7 +108,9 @@ object CookieBanners {
   const DELAYS = [400, 900, 1500, 2500, 4000, 6000, 9000, 13000];
   let step = 0;
   const poll = () => {
-    if (clicks >= 3 || step >= DELAYS.length) return;
+    if (clicks >= 3) return;
+    // The page itself looked all the way through: done with this site, banner or not.
+    if (step >= DELAYS.length) { if (window === window.top) tell(); return; }
     try { attempt(); } catch (e) {}
     const wait = DELAYS[step++] - (DELAYS[step - 2] || 0);
     setTimeout(poll, wait);

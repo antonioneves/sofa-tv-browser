@@ -136,6 +136,8 @@ object WebViews {
     fun clearBrowsingData(context: Context, web: WebView?) {
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
+        // The sites' answers to their cookie banners went with the cookies: look at them again.
+        app.sofabrowser.cookieBannerSites(context).clear()
         WebStorage.getInstance().deleteAllData()
         web?.clearCache(true)
         web?.clearFormData()

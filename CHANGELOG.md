@@ -23,6 +23,10 @@
 - **Faster cookie banner check** on busy pages: the button text check skips long link text (headlines and teasers)
   before reading it closely, about four times less work per look on a news front page with hundreds of links. The
   same buttons are found.
+- **Cookie banners are looked for once per site**: after Sofa has rejected a site's banner, or found none, it leaves
+  that site's pages alone for 30 days, so they load with less work. It looks again sooner when cookies or browsing
+  data are cleared, or when the site is reset in Settings › Site settings. In private browsing this is kept only
+  until private browsing ends.
 - **Start page** (Settings › Browsing, off by default): "Open a page at start" makes Sofa open a chosen page instead
   of the home screen when it starts. Pick one of your bookmarks or type an address. Off, Sofa starts on the home
   screen as before.
