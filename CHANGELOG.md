@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **Hide parts of a page**: in the menu, "Hide parts of the page", then point at something and press OK to hide it;
-  Back when you are done. Hidden parts stay hidden on that site's pages until you reset the site in
+  Back when you are done; hold OK on the menu button to bring back the last one hidden. Hidden parts stay hidden on that site's pages until you reset the site in
   Settings › Site settings (which also lists how many parts are hidden). Included in the backup; in the private space
   they are forgotten when it closes.
 - **Backup**: on the phone page (the one for typing and for bookmarks), download everything you set up as one file

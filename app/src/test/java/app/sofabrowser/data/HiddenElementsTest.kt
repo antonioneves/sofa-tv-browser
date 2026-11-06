@@ -53,4 +53,11 @@ class HiddenElementsTest {
         val sites = SiteChoice.collect(emptyMap(), emptyMap(), emptySet(), emptySet(), mapOf("www.example.com" to "div.ad\n.x"))
         assertEquals(listOf(SiteChoice("example.com", hidden = 2)), sites)
     }
+
+    @Test
+    fun removeLastDropsTheNewest() {
+        assertEquals("a\nb", HiddenElements.removeLast("a\nb\nc"))
+        assertEquals("", HiddenElements.removeLast("a"))
+        assertEquals("", HiddenElements.removeLast(null))
+    }
 }

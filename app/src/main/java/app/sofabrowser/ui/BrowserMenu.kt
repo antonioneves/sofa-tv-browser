@@ -27,7 +27,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     interface Actions {
         fun onAddress()
         fun onAction(action: Action)
-        /** OK held on [action]'s button; only Translate answers it, with its languages. */
+        /** OK held on [action]'s button; Translate answers it with its languages, Hide parts with an undo. */
         fun onActionHeld(action: Action)
     }
 
@@ -149,6 +149,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         buttons[Action.TRANSLATE]?.setOnLongClickListener { actions.onActionHeld(Action.TRANSLATE); true }
         add(Action.READER, R.drawable.ic_article, R.string.reader_view)
         add(Action.HIDE_PARTS, R.drawable.ic_visibility_off, R.string.hide_parts)
+        buttons[Action.HIDE_PARTS]?.setOnLongClickListener { actions.onActionHeld(Action.HIDE_PARTS); true }
         add(Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark)
         add(Action.PIN, R.drawable.ic_add, R.string.pin_to_home)
         // A tile on the TV's home screen would show anyone what's in the private space.

@@ -26,6 +26,9 @@ object HiddenElements {
         return if (!valid(selector) || selector in all || all.size >= MAX_PER_SITE) join(all) else join(all + selector)
     }
 
+    /** [text] without the selector added last. */
+    fun removeLast(text: String?): String = join(parse(text).dropLast(1))
+
     /** How many parts of the site's pages are hidden. */
     fun count(text: String?) = parse(text).size
 }

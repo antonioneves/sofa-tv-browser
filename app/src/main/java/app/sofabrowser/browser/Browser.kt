@@ -264,9 +264,24 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         val site = Sites.of(pageHost)
         // Only while the user is picking, and only for the site in view.
         if (!picking || siteOf(view.url) != site || !HiddenElements.valid(selector)) return
-        if (privateMode) privateHidden[site] = HiddenElements.add(privateHidden[site], selector)
+        if (privateMode) privateHidden[site] = HiddenElements.add(privateHidden[site] ?: hiddenElements(context)[site], selector)
         else hiddenElements(context).let { it[site] = HiddenElements.add(it[site], selector) }
         applyHidden(view)
+    }
+
+    /** Brings back the part of the site in view that was hidden last, and reloads the page; false when none is hidden. */
+    fun undoHidden(): Boolean {
+        val view = web ?: return false
+        val site = siteOf(view.url) ?: return false
+        val saved = if (privateMode) privateHidden[site] ?: hiddenElements(context)[site] else hiddenElements(context)[site]
+        if (HiddenElements.count(saved) == 0) return false
+        val rest = HiddenElements.removeLast(saved)
+        if (privateMode) privateHidden[site] = rest
+        else hiddenElements(context).let { if (rest.isEmpty()) it.remove(site) else it[site] = rest }
+        stopPicking()
+        applyHidden(view)
+        reload()
+        return true
     }
 
     /** The site's own "Browse as" choice for [url], or null when it follows the default in Settings. */

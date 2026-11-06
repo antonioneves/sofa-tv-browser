@@ -854,7 +854,14 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     override fun onActionHeld(action: BrowserMenu.Action) {
-        if (action == BrowserMenu.Action.TRANSLATE) pickTranslateLanguage()
+        when (action) {
+            BrowserMenu.Action.TRANSLATE -> pickTranslateLanguage()
+            BrowserMenu.Action.HIDE_PARTS -> {
+                menu?.dismiss()
+                toast(if (browser.undoHidden()) R.string.hide_parts_undone else R.string.hide_parts_none)
+            }
+            else -> {}
+        }
     }
 
     /** The languages to translate into, the TV's own first; choosing one translates the page into it. */
