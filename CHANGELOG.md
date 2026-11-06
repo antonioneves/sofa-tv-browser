@@ -29,7 +29,8 @@
 - **Zoom, per site:** the zoom chosen on a site is kept for that site's pages (in private browsing, only until it
   closes).
 - **Site settings** (Settings → Site settings): lists every site with its own choices (zoom, Browse as, ad blocking
-  turned off, keys going to the site), and resets one site or all of them.
+  turned off, keys going to the site), and resets one site or all of them. Choices made in private browsing,
+  including answers to the protected-content prompt, are never saved and are gone when it closes.
 - Clearing browsing data, now or when Sofa closes, also forgets the choices made for each site.
 - The menu is more solid, so the page behind it no longer shows through its buttons.
 - The home screen no longer has an Exit button: Home or Back on the remote leaves Sofa.

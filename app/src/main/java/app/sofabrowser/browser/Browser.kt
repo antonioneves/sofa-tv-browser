@@ -34,6 +34,7 @@ import app.sofabrowser.adblock.Allowlist
 import app.sofabrowser.adblock.InPageBlocking
 import app.sofabrowser.adblock.NavigationGuard
 import app.sofabrowser.adblock.Sites
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Owns the single WebView: creates it in the normal or private profile, applies settings and relays page events.
@@ -102,6 +103,12 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     private val privateUserAgents = HashMap<String, String>()
     /** Per-site zoom chosen in private browsing, likewise. */
     private val privateZooms = HashMap<String, Int>()
+    /** Ad blocking turned off or back on per host in private browsing; read on WebView's network threads too. */
+    private val privateAdBlockOff = ConcurrentHashMap<String, Boolean>()
+    /** "Keys go to the site" per host in private browsing. */
+    private val privateKeysToPage = HashMap<String, Boolean>()
+    /** Answers to the protected-content prompt per origin in private browsing. */
+    private val privateDrmAnswers = HashMap<String, Boolean>()
 
     val adBlocker = AdBlocker.get(context)
     private val guard = NavigationGuard()
@@ -180,7 +187,10 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         frames.clear()
         host.onPlaying(false)
         if (isolated) deletePrivateProfile()
-        if (privateMode) { privateUserAgents.clear(); privateZooms.clear() }
+        if (privateMode) {
+            privateUserAgents.clear(); privateZooms.clear()
+            privateAdBlockOff.clear(); privateKeysToPage.clear(); privateDrmAnswers.clear()
+        }
         appliedUserAgent = null
         privateMode = false
         isolated = false
@@ -314,7 +324,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
                 if (url !in refetching && StreamSniffer.isCandidate(url)) streams.request(url, listed(url), request.requestHeaders)
                 if (app.sofabrowser.BuildConfig.DEBUG && extensionOf(url) in setOf("m3u8", "mpd")) android.util.Log.d("SofaStream", "manifest $url")
             }
-            return if (prefs.adBlock) adBlocker.intercept(request, pageUrl, pageHost) else null
+            return if (blocking(pageHost)) adBlocker.intercept(request, pageUrl, pageHost) else null
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -584,7 +594,31 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     fun reload() { guard.userNavigation(); web?.reload() }
 
     /** Whether ad blocking (and with it pop-up and redirect blocking) applies to pages from [pageHost]. */
-    private fun blocking(pageHost: String?) = prefs.adBlock && (pageHost == null || !Allowlist.contains(context, pageHost))
+    private fun blocking(pageHost: String?) = prefs.adBlock && (pageHost == null || !adBlockOff(pageHost))
+
+    // The choices below are saved for good, except in private browsing, which keeps them only until it closes.
+
+    /** Whether ad blocking is turned off for [host]. */
+    fun adBlockOff(host: String): Boolean =
+        privateAdBlockOff[Allowlist.normalize(host)].takeIf { privateMode } ?: Allowlist.contains(context, host)
+
+    fun setAdBlockOff(host: String, off: Boolean) {
+        if (privateMode) privateAdBlockOff[Allowlist.normalize(host)] = off else Allowlist.set(context, host, off)
+    }
+
+    /** Whether the remote's keys go to [host]'s pages instead of moving the pointer. */
+    fun keysToPage(host: String): Boolean = privateKeysToPage[host].takeIf { privateMode } ?: prefs.keysToPage(host)
+
+    fun setKeysToPage(host: String, on: Boolean) {
+        if (privateMode) privateKeysToPage[host] = on else prefs.setKeysToPage(host, on)
+    }
+
+    /** [origin]'s answer to the protected-content prompt: true allowed, false blocked, null never answered. */
+    fun drmAnswer(origin: String): Boolean? = privateDrmAnswers[origin].takeIf { privateMode } ?: prefs.drmAnswer(origin)
+
+    fun setDrmAnswer(origin: String, allowed: Boolean) {
+        if (privateMode) privateDrmAnswers[origin] = allowed else prefs.setDrmAnswer(origin, allowed)
+    }
 
     /** The address blocked last, if "Allow once" may still open it. */
     fun pendingAllow(): String? = guard.pending(SystemClock.uptimeMillis())

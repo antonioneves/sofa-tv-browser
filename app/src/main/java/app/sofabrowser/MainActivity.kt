@@ -39,7 +39,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.webkit.WebViewFeature
-import app.sofabrowser.adblock.Allowlist
 import app.sofabrowser.browser.Browser
 import app.sofabrowser.browser.CursorLayout
 import app.sofabrowser.browser.Decoders
@@ -595,7 +594,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             canGoForward = web?.canGoForward() == true,
             loading = loading,
             bookmarked = url.isNotEmpty() && db.isBookmarked(url),
-            adBlockOn = prefs.adBlock && (host == null || !Allowlist.contains(this, host)),
+            adBlockOn = prefs.adBlock && (host == null || !browser.adBlockOff(host)),
             blocked = browser.adBlocker.blockedCount,
             desktop = browser.userAgentMode(url) != "mobile",
             pointer = cursor.cursorEnabled,
@@ -663,8 +662,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             BrowserMenu.Action.BOOKMARKS -> openList(ListActivity.MODE_BOOKMARKS)
             BrowserMenu.Action.ADBLOCK -> if (host != null) {
                 if (!prefs.adBlock) { toast(R.string.adblock_globally_off); return }
-                val allowed = !Allowlist.contains(this, host)
-                Allowlist.set(this, host, allowed)
+                val allowed = !browser.adBlockOff(host)
+                browser.setAdBlockOff(host, allowed)
                 toast(if (allowed) R.string.adblock_site_disabled else R.string.adblock_site_enabled)
                 menu?.dismiss()
                 browser.reload()
@@ -672,8 +671,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             BrowserMenu.Action.USER_AGENT -> pickUserAgent()
             BrowserMenu.Action.SCROLL -> { menu?.dismiss(); cursor.setScrollMode(true) }
             BrowserMenu.Action.POINTER -> if (host != null) {
-                val keys = !prefs.keysToPage(host)
-                prefs.setKeysToPage(host, keys)
+                val keys = !browser.keysToPage(host)
+                browser.setKeysToPage(host, keys)
                 cursor.cursorEnabled = !keys
                 toast(if (keys) R.string.pointer_off_toast else R.string.pointer_on_toast)
                 menu?.dismiss()
@@ -855,7 +854,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         zoomStep = 0
         progress.visibility = if (pageOnly) View.GONE else View.VISIBLE
         val host = Browser.hostOf(url)
-        cursor.cursorEnabled = host == null || !prefs.keysToPage(host)
+        cursor.cursorEnabled = host == null || !browser.keysToPage(host)
         if (cursor.scrollMode) cursor.setScrollMode(false)
         if (url != autoWatchUrl) { stopAutoWatch(); autoWatchUrl = null }
         menu?.takeIf { it.isShowing }?.update(menuState())
@@ -1686,7 +1685,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     override fun onProtectedMediaRequest(origin: String, grant: (Boolean) -> Unit) {
-        when (ProtectedMedia.decide(prefs.drmMode, prefs.drmAnswer(origin))) {
+        when (ProtectedMedia.decide(prefs.drmMode, browser.drmAnswer(origin))) {
             ProtectedMedia.Decision.GRANT -> { grant(true); return }
             ProtectedMedia.Decision.DENY -> { grant(false); return }
             ProtectedMedia.Decision.ASK -> {}
@@ -1695,8 +1694,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         var answered = false
         dialog().setTitle(R.string.drm_title)
             .setMessage(getString(R.string.drm_message, Browser.hostOf(origin) ?: origin))
-            .setPositiveButton(R.string.allow) { _, _ -> answered = true; prefs.setDrmAnswer(origin, true); grant(true) }
-            .setNegativeButton(R.string.block) { _, _ -> answered = true; prefs.setDrmAnswer(origin, false); grant(false) }
+            .setPositiveButton(R.string.allow) { _, _ -> answered = true; browser.setDrmAnswer(origin, true); grant(true) }
+            .setNegativeButton(R.string.block) { _, _ -> answered = true; browser.setDrmAnswer(origin, false); grant(false) }
             .setOnDismissListener { if (!answered) grant(false) }
             .show()
     }

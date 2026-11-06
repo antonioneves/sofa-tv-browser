@@ -455,5 +455,5 @@ object Allowlist {
         }.apply()
     }
 
-    private fun normalize(host: String) = host.lowercase().removePrefix("www.")
+    fun normalize(host: String) = host.lowercase().removePrefix("www.")
 }
