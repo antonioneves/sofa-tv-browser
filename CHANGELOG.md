@@ -7,7 +7,7 @@
   Settings › Site settings (which also lists how many parts are hidden). Included in the backup; in the private space
   they are forgotten when it closes.
 - **Backup**: on the phone page (the one for typing and for bookmarks), download everything you set up as one file
-  (settings, bookmarks, history, home tiles, search shortcuts, per-site choices and the ad blocking allowlist) and
+  (settings, bookmarks, history, home tiles, search shortcuts, per-site choices, hidden parts of pages, which filter lists are on, the lists you added and the ad blocking allowlist) and
   restore it later or on another TV. Restoring adds to what is there and never deletes; the file is checked, and
   anything unknown is ignored. Saved sign-ins and the PIN are not in it.
 - **Saved sign-ins** (Settings › Privacy, off by default): after you sign in on a secure (https) site, Sofa offers to

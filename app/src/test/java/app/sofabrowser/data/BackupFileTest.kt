@@ -43,4 +43,20 @@ class BackupFileTest {
         assertFalse(BackupFile.cleanPages(listOf("t" to "file:///etc/passwd", "t" to "javascript:1")).isNotEmpty())
         assertEquals(1, BackupFile.cleanPages(listOf("t" to "https://a.com")).size)
     }
+
+    @Test
+    fun filterListsKeepSwitchesAndHttpsAdditions() {
+        val got = BackupFile.cleanLists(listOf(
+            BackupFile.ListChoice("easylist", null, true),
+            BackupFile.ListChoice("easylist", null, false),
+            BackupFile.ListChoice("nonsense", null, true),
+            BackupFile.ListChoice(null, "https://example.com/list.txt", false),
+            BackupFile.ListChoice(null, "http://example.com/plain.txt", true),
+            BackupFile.ListChoice(null, "https://exa mple.com/x", true),
+        ))
+        assertEquals(listOf(
+            BackupFile.ListChoice("easylist", null, true),
+            BackupFile.ListChoice(null, "https://example.com/list.txt", false),
+        ), got)
+    }
 }

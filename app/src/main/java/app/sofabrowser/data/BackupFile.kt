@@ -1,5 +1,7 @@
 package app.sofabrowser.data
 
+import app.sofabrowser.adblock.FilterList
+
 /**
  * What a Sofa backup may carry back into the settings, and what is left out. A backup file is untrusted: every
  * setting it names must be a known one, of the right type and with a value the app understands, or it is dropped.
@@ -72,6 +74,20 @@ object BackupFile {
     /** Sites (host names) with their hidden parts of pages kept to the plain selectors [HiddenElements] allows. */
     fun cleanHidden(raw: Map<String, String>): Map<String, String> =
         raw.filterKeys { HOST.matches(it) }.mapValues { HiddenElements.join(HiddenElements.parse(it.value)) }.filterValues { it.isNotEmpty() }
+
+    /** A filter list in a backup: one of the lists every install has ([id]), or one added by its https [url]. */
+    data class ListChoice(val id: String?, val url: String?, val enabled: Boolean)
+
+    /** The switches of the lists every install has, and the lists added by an https address (at most [MAX_LISTS]). */
+    fun cleanLists(raw: List<ListChoice>): List<ListChoice> {
+        val known = raw.filter { it.id in FilterList.defaults().map(FilterList::id) }.distinctBy { it.id }.map { ListChoice(it.id, null, it.enabled) }
+        val added = raw.filter { it.id == null || it.id !in known.map { k -> k.id } }
+            .filter { it.url != null && it.url.startsWith("https://") && it.url.length <= 2048 && it.url.none(Char::isWhitespace) }
+            .distinctBy { it.url }.take(MAX_LISTS).map { ListChoice(null, it.url, it.enabled) }
+        return known + added
+    }
+
+    private const val MAX_LISTS = 10
 
     /** A string map (shortcuts, per-site choices) with sane keys and values. */
     fun cleanMap(raw: Map<String, String>): Map<String, String> =

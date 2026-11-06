@@ -2,7 +2,9 @@ package app.sofabrowser.data
 
 import android.content.Context
 import app.sofabrowser.Space
+import app.sofabrowser.adblock.AdBlocker
 import app.sofabrowser.adblock.Allowlist
+import app.sofabrowser.adblock.FilterList
 import app.sofabrowser.hiddenElements
 import app.sofabrowser.savedSearchShortcuts
 import app.sofabrowser.siteUserAgents
@@ -12,7 +14,7 @@ import org.json.JSONObject
 
 /**
  * Everything the user set up, in one JSON file: settings, bookmarks, history, quick-access tiles, search shortcuts,
- * the choices made for single sites and the ad blocking allowlist. What the file may carry is up to [BackupFile];
+ * the choices made for single sites, the filter lists (which are on, and the ones added) and the ad blocking allowlist. What the file may carry is up to [BackupFile];
  * restoring adds to what is here (bookmarks, history, tiles) or replaces the same setting, and never deletes.
  */
 object Backup {
@@ -41,6 +43,11 @@ object Backup {
             .put("site_user_agents", JSONObject(siteUserAgents(context).toMap()))
             .put("site_zoom", JSONObject(siteZooms(context).toMap()))
             .put("hidden_elements", JSONObject(hiddenElements(context).toMap()))
+            .put("filter_lists", JSONArray(AdBlocker.get(context).lists.map {
+                JSONObject().put("enabled", it.enabled).apply {
+                    if (it.id in FilterList.defaults().map(FilterList::id)) put("id", it.id) else put("url", it.url ?: return@map null)
+                }
+            }.filterNotNull()))
             .put("allowlist", JSONArray(Allowlist.all(context).toList()))
             .toString(1)
     }
@@ -84,6 +91,18 @@ object Backup {
         siteZooms(context).putAll(strings("site_zoom").filterValues { it.toIntOrNull() != null })
         hiddenElements(context).let { saved ->
             BackupFile.cleanHidden(strings("hidden_elements")).forEach { (site, text) -> saved[site] = text }
+        }
+        root.optJSONArray("filter_lists")?.let { a ->
+            val listed = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map {
+                BackupFile.ListChoice(it.optString("id").ifEmpty { null }, it.optString("url").ifEmpty { null }, it.optBoolean("enabled", true))
+            }
+            val blocker = AdBlocker.get(context)
+            for (choice in BackupFile.cleanLists(listed)) {
+                if (choice.id != null) blocker.setEnabled(choice.id, choice.enabled)
+                else if (blocker.lists.none { it.url == choice.url }) blocker.add(choice.url!!) { added ->
+                    added.onSuccess { if (!choice.enabled) blocker.setEnabled(it.id, false) }
+                }
+            }
         }
         root.optJSONArray("allowlist")?.let { a ->
             BackupFile.cleanHosts((0 until a.length()).map { a.opt(it) }).forEach { Allowlist.set(context, it, true) }
