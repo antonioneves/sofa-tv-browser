@@ -4,7 +4,8 @@ package app.sofabrowser.browser
 /**
  * Turns cookie banners down. A small script in every frame (banners often live in an iframe) looks, as the page
  * loads, for a rejection button: the ones the common consent platforms use, or any button that says "Reject all",
- * "Decline", "Only necessary" and the like in a few languages, inside something that talks about cookies or consent.
+ * "Decline", "Only necessary" and the like in a few languages, inside something that talks about cookies or consent,
+ * also within the shadow roots some banners are drawn in.
  * It clicks that and nothing else: never "Accept", never "Manage", and it gives up after about 13 seconds or three
  * clicks. A button must be visible and sit near cookie or consent wording, so "Decline" on an invitation stays alone.
  *
@@ -18,9 +19,12 @@ object CookieBanners {
     const val RECHECK_DAYS = 30L
     private const val RECHECK_MS = RECHECK_DAYS * 24 * 60 * 60 * 1000
 
+    /** When the check last learned to find more banners (2026-11-07, inside shadow roots): sites looked at before are looked at again. */
+    private const val LEARNED_MS = 1_794_009_336_000L
+
     /** The sites of [looked] (site -> when, in ms) to leave alone at [now]. */
     fun current(looked: Map<String, String>, now: Long): List<String> =
-        looked.filterValues { (it.toLongOrNull() ?: 0) in (now - RECHECK_MS + 1)..now }.keys.sorted()
+        looked.filterValues { (it.toLongOrNull() ?: 0) in maxOf(now - RECHECK_MS + 1, LEARNED_MS)..now }.keys.sorted()
 
     /** The script for every frame, skipping pages of the [done] sites and reporting to [channel]. */
     fun script(channel: String, done: Collection<String>) = """
@@ -44,7 +48,7 @@ object CookieBanners {
     '#CybotCookiebotDialogBodyButtonDecline', '#CybotCookiebotDialogBodyLevelButtonLevelOptinDeclineAll',
     '#didomi-notice-disagree-button', '[data-testid="uc-deny-all-button"]', '.cky-btn-reject',
     '#cn-refuse-cookie', '.cmplz-deny', '.osano-cm-denyAll', '.iubenda-cs-reject-btn', '.cn-decline',
-    '#truste-consent-required', '.fc-cta-do-not-consent', '#sp-cc-rejectall-link', '#reject-all-gdpr'
+    '#truste-consent-required', '.fc-cta-do-not-consent', '#sp-cc-rejectall-link', '#reject-all-gdpr', '.cmpboxbtnno'
   ];
   const WORDS = new Set([
     'reject', 'reject all', 'reject cookies', 'reject all cookies', 'reject optional cookies', 'reject non-essential',
@@ -75,8 +79,16 @@ object CookieBanners {
   };
   // A rejection button counts only inside something that talks about cookies or consent, so "Decline" on an
   // invitation or "Deny" in a game is left alone.
+  // Up one level, from the top of a shadow root to the element that holds it.
+  const up = (n) => n.parentElement || (n.parentNode && n.parentNode.host) || null;
+  // Some banners keep their buttons in a shadow root (consentmanager), out of reach of the document's own search.
+  const roots = () => {
+    const out = [document];
+    for (let i = 0; i < out.length; i++) for (const el of out[i].querySelectorAll('*')) if (el.shadowRoot) out.push(el.shadowRoot);
+    return out;
+  };
   const inBanner = (el) => {
-    for (let n = el.parentElement, i = 0; n && i < 7; n = n.parentElement, i++) {
+    for (let n = up(el), i = 0; n && i < 7; n = up(n), i++) {
       const t = n.textContent;
       if (t.length < 4000 && CONSENT.test(t)) return true;
     }
@@ -89,12 +101,13 @@ object CookieBanners {
     tell(true);
   };
   const attempt = () => {
-    for (const sel of KNOWN) {
+    const all = roots();
+    for (const sel of KNOWN) for (const root of all) {
       let el;
-      try { el = document.querySelector(sel); } catch (e) { continue; }
+      try { el = root.querySelector(sel); } catch (e) { continue; }
       if (el && !seen.has(el) && shown(el)) { click(el); return true; }
     }
-    for (const el of document.querySelectorAll(CANDIDATES)) {
+    for (const root of all) for (const el of root.querySelectorAll(CANDIDATES)) {
       if (seen.has(el)) continue;
       const text = label(el);
       if (!WORDS.has(text)) continue;
