@@ -173,7 +173,8 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(view, key.banners, setOf("*")) { v, message, _, _, _ ->
                 val pageHost = runCatching { org.json.JSONObject(message.data.orEmpty()).optString("h") }.getOrNull()
-                v.post { onBannerSiteDone(pageHost) }
+                val found = runCatching { org.json.JSONObject(message.data.orEmpty()).optBoolean("found") }.getOrDefault(false)
+                v.post { onBannerSiteDone(pageHost, found) }
             }
         }
         applyBannerRejection(view)
@@ -369,8 +370,12 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         bannerScript = WebViewCompat.addDocumentStartJavaScript(view, CookieBanners.script(key.banners, done), setOf("*"))
     }
 
-    /** The cookie banner check is done with the page in view: leave its site alone on pages loaded from now on. */
-    private fun onBannerSiteDone(pageHost: String?) {
+    /** The page in view has finished loading; a look that found no banner counts only then, not for a page that was cut short. */
+    private var pageLoaded = false
+
+    /** The cookie banner check is done with the page in view ([found]: a banner was rejected): leave its site alone on pages loaded from now on. */
+    private fun onBannerSiteDone(pageHost: String?, found: Boolean) {
+        if (!found && !pageLoaded) return
         val view = web ?: return
         val site = siteOf(view.url) ?: return
         // Only for the site in view, which a page's frames can't name otherwise.
@@ -400,6 +405,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             if (isWebUrl(url) && applyUserAgentFor(view, url)) { view.reload(); return }
             pageHost = AdBlocker.hostOf(url)
             pageUrl = url
+            pageLoaded = false
             guard.pageStarted()
             // The picker belongs to the page it was started on.
             picking = false
@@ -408,7 +414,10 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             host.onPageStarted(url)
         }
 
-        override fun onPageFinished(view: WebView, url: String) = host.onPageFinished(url)
+        override fun onPageFinished(view: WebView, url: String) {
+            pageLoaded = true
+            host.onPageFinished(url)
+        }
 
         override fun onPageCommitVisible(view: WebView, url: String) = host.onPageVisible(url)
 

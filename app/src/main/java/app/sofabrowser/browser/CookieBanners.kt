@@ -9,7 +9,7 @@ package app.sofabrowser.browser
  * clicks. A button must be visible and sit near cookie or consent wording, so "Decline" on an invitation stays alone.
  *
  * A site is looked at once: after a click (the site keeps the answer in its cookies) or after a full look found
- * nothing, the script tells Sofa, which leaves that site alone for [RECHECK_DAYS] days, or until its cookies are
+ * nothing in a page that finished loading, the script tells Sofa, which leaves that site alone for [RECHECK_DAYS] days, or until its cookies are
  * cleared. The channel has a random name per WebView ([PageKey]); a page that finds it can only stop the look on its
  * own site, which wording its button some other way does as well. A site that does so keeps its banner.
  */
@@ -37,7 +37,7 @@ object CookieBanners {
   const DONE = ${done.filter { it.all { c -> c.isLetterOrDigit() || c in ".-" } }.joinToString(",", "[", "]") { "\"$it\"" }};
   if (!top || DONE.some((s) => top === s || top.endsWith('.' + s))) return;
   const L = "$channel";
-  const tell = () => { try { const out = window[L]; if (out) out.postMessage(JSON.stringify({ h: top })); } catch (e) {} };
+  const tell = (found) => { try { const out = window[L]; if (out) out.postMessage(JSON.stringify({ h: top, found })); } catch (e) {} };
   // Rejection buttons of the common consent platforms; the rest is found by what the button says.
   const KNOWN = [
     '#onetrust-reject-all-handler', '.ot-pc-refuse-all-handler',
@@ -86,7 +86,7 @@ object CookieBanners {
     seen.add(el);
     clicks++;
     el.click();
-    tell();
+    tell(true);
   };
   const attempt = () => {
     for (const sel of KNOWN) {
@@ -110,7 +110,7 @@ object CookieBanners {
   const poll = () => {
     if (clicks >= 3) return;
     // The page itself looked all the way through: done with this site, banner or not.
-    if (step >= DELAYS.length) { if (window === window.top) tell(); return; }
+    if (step >= DELAYS.length) { if (window === window.top) tell(false); return; }
     try { attempt(); } catch (e) {}
     const wait = DELAYS[step++] - (DELAYS[step - 2] || 0);
     setTimeout(poll, wait);
