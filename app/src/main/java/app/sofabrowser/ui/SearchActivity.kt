@@ -125,8 +125,11 @@ class SearchActivity : Activity() {
         micHolder.addView(micButton, FrameLayout.LayoutParams(96.px, 96.px))
         micIcon = micButton.getChildAt(0) as ImageView
         micHolder.visibility = if (prefs.voiceSearch) View.VISIBLE else View.GONE
-        bar.addView(micHolder, LinearLayout.LayoutParams(96.px, 96.px).apply { marginStart = 12.px })
-        bar.addView(squareButton(R.drawable.ic_smartphone, R.string.phone_type) { typeOnPhone() })
+        bar.addView(micHolder, LinearLayout.LayoutParams(96.px, 96.px).apply { marginStart = 36.px })
+        // Typing on the phone sits with the mic as another way to type, set apart from the search button.
+        bar.addView(squareButton(R.drawable.ic_smartphone, R.string.phone_type) { typeOnPhone() }.apply {
+            if (!prefs.voiceSearch) (layoutParams as LinearLayout.LayoutParams).marginStart = 36.px
+        })
         root.addView(bar)
 
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 24.px, 0, 48.px) }
