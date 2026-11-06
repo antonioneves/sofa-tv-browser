@@ -181,6 +181,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         // Private mode is a session: a cold start always begins in normal mode, with nothing left over.
         prefs.privateMode = false
         Browser.deletePrivateProfile()
+        forgetPrivateAllows()
         // Copies for other players are needed only while one starts; a kill or crash may have left some.
         StreamCopyProvider.clear(this)
         currentTab = Tab().also { tabs += it }
@@ -1450,6 +1451,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         StreamCopyProvider.clear(this)
         privateChoices = null
         translateSite = null
+        forgetPrivateAllows()
         prefs.privateMode = entering
         if (entering) {
             dialog().setTitle(R.string.private_mode)
@@ -2758,8 +2760,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             .setNegativeButton(R.string.allow_this_site) { _, _ ->
                 // Not entered: back to the block screen, with Go back in focus.
                 PinPad.guard(this, R.string.pin_title_allow_site, cancelled = { onSiteBlocked(url, list, replaced) }) {
-                    SiteAllowlist.allow(this, Browser.hostOf(url) ?: site)
-                    toast(getString(R.string.site_allowed, site))
+                    val private = browser.privateMode
+                    SiteAllowlist.allow(this, Browser.hostOf(url) ?: site, private)
+                    toast(getString(if (private) R.string.site_allowed_private else R.string.site_allowed, site))
                     if (replaced && web?.url == url) browser.reloadAllowed() else openUrl(url)
                 }
             }
@@ -2934,6 +2937,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 WebViews.clearBrowsingData(this, null)
                 if (prefs.clearOnExit) { db.clearHistory(); resume.clear(); forgetSiteChoices(this) }
             }
+            forgetPrivateAllows()
             prefs.privateMode = false
         }
         super.onDestroy()
@@ -2961,6 +2965,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     // Helpers
 
     private fun dialog() = Ui.dialog(this)
+
+    /** What private browsing let through Site filters lasts only as long as it (its ad blocking switches: [Browser.adBlockOff]). */
+    private fun forgetPrivateAllows() = SiteAllowlist.forgetPrivate()
 
     private fun padded(v: View) = FrameLayout(this).apply {
         setPadding(0, 0, 0, 0)

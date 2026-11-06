@@ -484,6 +484,7 @@
     <string name="go_back">Go back</string>
     <string name="allow_this_site">Allow this site</string>
     <string name="site_allowed">%s allowed</string>
+    <string name="site_allowed_private">%s allowed until you leave private browsing</string>
     <string name="dns">DNS</string>
     <string name="dns_intro">DNS turns a site\'s name into the address Sofa connects to. Sofa uses your TV\'s own DNS unless you choose a service here. The services listed use DNS over HTTPS: lookups are encrypted, so the network can\'t read or change them, but the service you choose sees the name of every site Sofa opens. An address you type in can also use DNS over TLS, encrypted too, or plain DNS, which isn\'t. Covers pages, Sofa Player, downloads and list updates.</string>
     <string name="dns_main">Main DNS</string>
