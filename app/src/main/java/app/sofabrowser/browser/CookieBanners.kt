@@ -23,7 +23,7 @@ object CookieBanners {
     '#cn-refuse-cookie', '.cmplz-deny', '.osano-cm-denyAll', '.iubenda-cs-reject-btn', '.cn-decline',
     '#truste-consent-required', '.fc-cta-do-not-consent', '#sp-cc-rejectall-link', '#reject-all-gdpr'
   ];
-  const WORDS = [
+  const WORDS = new Set([
     'reject', 'reject all', 'reject cookies', 'reject all cookies', 'reject optional cookies', 'reject non-essential',
     'reject non-essential cookies', 'decline', 'decline all', 'decline cookies', 'decline optional cookies', 'deny',
     'deny all', 'refuse', 'refuse all', 'only necessary', 'necessary only', 'only necessary cookies',
@@ -32,7 +32,7 @@ object CookieBanners {
     'refuser', 'tout refuser', 'continuer sans accepter', 'rechazar', 'rechazar todo', 'rechazar todas',
     'rejeitar', 'rejeitar tudo', 'rejeitar todos', 'recusar', 'recusar tudo', 'rifiuta', 'rifiuta tutto',
     'rifiuta tutti', 'weigeren', 'alles weigeren', 'alle weigeren', 'odmítnout vše', 'odrzuć wszystkie'
-  ];
+  ]);
   const CONSENT = /cookie|consent|gdpr|datenschutz|privacy|privacidad|confidentialit|privacidade|einwilligung/i;
   const CANDIDATES = 'button,[role="button"],a,input[type="button"],input[type="submit"]';
   const seen = new WeakSet();
@@ -44,8 +44,12 @@ object CookieBanners {
     const s = getComputedStyle(el);
     return s.visibility !== 'hidden' && s.display !== 'none';
   };
-  const label = (el) => (el.value && el.tagName === 'INPUT' ? el.value : el.textContent || el.getAttribute('aria-label') || el.title || '')
-    .replace(/\s+/g, ' ').trim().toLowerCase().replace(/[.!]+$/, '');
+  // Text too long to be one of WORDS, even with the markup's spaces, is skipped before any cleaning: news pages have
+  // hundreds of links with whole headlines in them, and this runs on each of them every time it looks.
+  const label = (el) => {
+    const raw = el.value && el.tagName === 'INPUT' ? el.value : el.textContent || el.getAttribute('aria-label') || el.title || '';
+    return raw.length > 200 ? '' : raw.replace(/\s+/g, ' ').trim().toLowerCase().replace(/[.!]+$/, '');
+  };
   // A rejection button counts only inside something that talks about cookies or consent, so "Decline" on an
   // invitation or "Deny" in a game is left alone.
   const inBanner = (el) => {
@@ -69,7 +73,7 @@ object CookieBanners {
     for (const el of document.querySelectorAll(CANDIDATES)) {
       if (seen.has(el)) continue;
       const text = label(el);
-      if (text.length > 40 || !WORDS.includes(text)) continue;
+      if (!WORDS.has(text)) continue;
       if (!shown(el) || !inBanner(el)) continue;
       click(el);
       return true;

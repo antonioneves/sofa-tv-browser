@@ -20,6 +20,9 @@
   saved, and not asked inside the space, which is behind it already. Forgetting the PIN erases them along with the
   space. They're never saved in private browsing, never shown in Settings and never backed up. Settings › Saved
   sign-ins lists them, with a site and user name only, and removes one or all. A password the site turns down (the sign-in form is back on the next page, or the page says the password is wrong) isn't offered for saving.
+- **Faster cookie banner check** on busy pages: the button text check skips long link text (headlines and teasers)
+  before reading it closely, about four times less work per look on a news front page with hundreds of links. The
+  same buttons are found.
 - **Start page** (Settings › Browsing, off by default): "Open a page at start" makes Sofa open a chosen page instead
   of the home screen when it starts. Pick one of your bookmarks or type an address. Off, Sofa starts on the home
   screen as before.
