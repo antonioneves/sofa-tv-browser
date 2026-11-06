@@ -42,6 +42,7 @@ import androidx.webkit.WebViewFeature
 import app.sofabrowser.adblock.Sites
 import app.sofabrowser.browser.Browser
 import app.sofabrowser.browser.Reader
+import app.sofabrowser.browser.SignInRejected
 import app.sofabrowser.browser.Translator
 import app.sofabrowser.browser.CursorLayout
 import app.sofabrowser.browser.Decoders
@@ -1956,19 +1957,25 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         if (saved && store.password(sent.origin, sent.user) == sent.password) return
         val site = Browser.hostOf(sent.origin)?.removePrefix("www.") ?: sent.origin
         val user = sent.user.ifEmpty { getString(R.string.signin_no_user) }
-        dialog().setTitle(if (saved) R.string.signin_update_title else R.string.signin_save_title)
-            .setMessage(getString(if (saved) R.string.signin_update_message else R.string.signin_save_message, user, site))
-            .setPositiveButton(if (saved) R.string.signin_update else R.string.signin_save) { _, _ ->
-                val save = {
-                    store.save(sent.origin, sent.user, sent.password)
-                    toast(R.string.signin_saved)
+        val show = {
+            dialog().setTitle(if (saved) R.string.signin_update_title else R.string.signin_save_title)
+                .setMessage(getString(if (saved) R.string.signin_update_message else R.string.signin_save_message, user, site))
+                .setPositiveButton(if (saved) R.string.signin_update else R.string.signin_save) { _, _ ->
+                    val save = {
+                        store.save(sent.origin, sent.user, sent.password)
+                        toast(R.string.signin_saved)
+                    }
+                    // Outside the space saving needs the PIN too, and the first one chooses it.
+                    withSignInPin(save)
                 }
-                // Outside the space saving needs the PIN too, and the first one chooses it.
-                withSignInPin(save)
-            }
-            .setNegativeButton(R.string.signin_not_now, null)
-            .apply { if (!saved) setNeutralButton(R.string.signin_never) { _, _ -> store.setNever(sent.origin, true) } }
-            .show()
+                .setNegativeButton(R.string.signin_not_now, null)
+                .apply { if (!saved) setNeutralButton(R.string.signin_never) { _, _ -> store.setNever(sent.origin, true) } }
+                .show()
+        }
+        // A rejection can show a page without a sign-in form; its words say so.
+        val w = web
+        if (w == null || SignInPages.origin(w.url) != sent.origin) show()
+        else w.evaluateJavascript(SignInRejected.TEXT_SCRIPT) { if (!SignInRejected.matches(it)) show() }
     }
 
     /** Fills in nothing by itself: the user picks the sign-in, and it goes only to the page that asked, if still there. */
