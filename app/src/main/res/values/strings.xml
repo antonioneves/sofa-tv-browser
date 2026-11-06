@@ -131,7 +131,10 @@
     <string name="translated">Translated into %1$s with Google. Hold OK on Translate to choose another language.</string>
     <string name="translate_failed">This page couldn\'t be translated. The site may not allow it, or Google Translate couldn\'t be reached.</string>
     <string name="phone_type">Type on your phone</string>
-    <string name="phone_how">Scan the code with the phone\'s camera, or open this address on a phone on the same network:\n%s</string>
+    <string name="phone_step_scan">Point your phone\'s camera at the code</string>
+    <string name="phone_step_type">Type an address or a search</string>
+    <string name="phone_step_open">It opens here on the TV</string>
+    <string name="phone_or_open">Or type this on a phone on the same network</string>
     <string name="phone_page_title">Send to Sofa on the TV</string>
     <string name="phone_send">Open on the TV</string>
     <string name="phone_sent">Sent. Look at the TV.</string>

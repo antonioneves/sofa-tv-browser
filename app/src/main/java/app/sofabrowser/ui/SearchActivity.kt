@@ -124,7 +124,10 @@ class SearchActivity : Activity() {
         micIcon = micButton.getChildAt(0) as ImageView
         micHolder.visibility = if (prefs.voiceSearch) View.VISIBLE else View.GONE
         bar.addView(micHolder, LinearLayout.LayoutParams(96.px, 96.px).apply { marginStart = 36.px })
-        bar.addView(squareButton(R.drawable.ic_smartphone, R.string.phone_type) { typeOnPhone() })
+        // Typing on the phone sits with the mic as another way to type, set apart from the search button.
+        bar.addView(squareButton(R.drawable.ic_smartphone, R.string.phone_type) { typeOnPhone() }.apply {
+            if (!prefs.voiceSearch) (layoutParams as LinearLayout.LayoutParams).marginStart = 36.px
+        })
         root.addView(bar)
 
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 24.px, 0, 48.px) }
@@ -374,34 +377,68 @@ class SearchActivity : Activity() {
         val address = link.start(this) ?: return Toast.makeText(this, R.string.phone_no_network, Toast.LENGTH_LONG).show()
         phoneLink?.stop()
         phoneLink = link
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            addView(ImageView(context).apply { setImageDrawable(qrCode(address)) }, LinearLayout.LayoutParams(320.px, 320.px))
-            addView(Ui.text(context, 24, Ui.p.textMid).apply {
-                text = getString(R.string.phone_how, address)
-                gravity = Gravity.CENTER
-                setPadding(0, 24.px, 0, 0)
-            })
-        }
         dialog = Ui.dialog(this)
             .setTitle(R.string.phone_type)
-            .setView(box)
+            .setView(phoneCard(address))
             .setNegativeButton(R.string.close, null)
             .setOnDismissListener { link.stop(); if (phoneLink === link) phoneLink = null }
             .show()
     }
 
-    /** Black on white with a quiet zone, drawn one pixel per module and scaled up without smoothing. */
+    /** The code on a white tile beside three numbered steps, with the address to type underneath them. */
+    private fun phoneCard(address: String): View {
+        val p = Ui.p
+        val tile = FrameLayout(this).apply {
+            background = Ui.rounded(Color.WHITE, 28, p.border, if (p.dark) 0 else 2)
+            // The tile's white margin is the code's quiet zone.
+            setPadding(32.px, 32.px, 32.px, 32.px)
+            addView(ImageView(context).apply { setImageDrawable(qrCode(address)) }, FrameLayout.LayoutParams(264.px, 264.px))
+        }
+        val steps = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            listOf(R.string.phone_step_scan, R.string.phone_step_type, R.string.phone_step_open).forEachIndexed { i, step ->
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(Ui.text(context, 24, Color.WHITE, bold = true).apply {
+                        text = (i + 1).toString()
+                        gravity = Gravity.CENTER
+                        background = Ui.rounded(Ui.SWITCH_ON, 22)
+                    }, LinearLayout.LayoutParams(44.px, 44.px).apply { marginEnd = 20.px })
+                    addView(Ui.text(context, 28, p.text).apply { text = getString(step) },
+                        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    if (i > 0) topMargin = 20.px
+                })
+            }
+            addView(Ui.text(context, 22, p.textHint).apply { text = getString(R.string.phone_or_open) },
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = 40.px
+                })
+            // Phone browsers add the scheme themselves, so the address to type is shorter without it.
+            addView(Ui.text(context, 26, p.text, bold = true).apply {
+                text = address.removePrefix("http://")
+                background = Ui.rounded(p.fill, 16)
+                setPadding(20.px, 14.px, 20.px, 14.px)
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = 12.px
+            })
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 16.px, 0, 0)
+            addView(tile, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            addView(steps, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 44.px })
+        }
+    }
+
+    /** Black modules on white, drawn one pixel per module and scaled up without smoothing. */
     private fun qrCode(text: String): BitmapDrawable {
         val qr = QrCode.encodeText(text, QrCode.Ecc.MEDIUM)
-        val quiet = 3
-        val n = qr.size + quiet * 2
-        val pixels = IntArray(n * n) { i ->
-            val x = i % n - quiet
-            val y = i / n - quiet
-            if (x in 0 until qr.size && y in 0 until qr.size && qr.getModule(x, y)) Color.BLACK else Color.WHITE
-        }
+        val n = qr.size
+        val pixels = IntArray(n * n) { i -> if (qr.getModule(i % n, i / n)) Color.BLACK else Color.WHITE }
         return BitmapDrawable(resources, Bitmap.createBitmap(pixels, n, n, Bitmap.Config.ARGB_8888)).apply {
             isFilterBitmap = false
         }
