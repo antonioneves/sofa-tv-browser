@@ -60,8 +60,14 @@ class PinActivity : Activity() {
                     }
                 })
             }
-            forgot = Ui.button(context, getString(R.string.pin_forgot), 24) { askErase() }
-            addView(forgot, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            addView(LinearLayout(context).apply {
+                gravity = Gravity.CENTER
+                val wrap = LinearLayout.LayoutParams.WRAP_CONTENT
+                addView(Ui.button(context, getString(android.R.string.cancel), 24) { cancel() },
+                    LinearLayout.LayoutParams(wrap, wrap).apply { setMargins(8.px, 0, 8.px, 0) })
+                forgot = Ui.button(context, getString(R.string.pin_forgot), 24) { askErase() }
+                addView(forgot, LinearLayout.LayoutParams(wrap, wrap).apply { setMargins(8.px, 0, 8.px, 0) })
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = 16.px
             })
             first?.requestFocus()
@@ -166,12 +172,14 @@ class PinActivity : Activity() {
             .getButton(DialogInterface.BUTTON_NEGATIVE)?.requestFocus()
     }
 
+    /** Away from a locked space means back to the normal side, not into what's behind this screen. */
+    private fun cancel() = if (mode == MODE_UNLOCK) Space.leave(this) else finish()
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         when (keyCode) {
             in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> digit((keyCode - KeyEvent.KEYCODE_0).toString())
             KeyEvent.KEYCODE_DEL -> erase()
-            // Away from a locked space means back to the normal side, not into what's behind this screen.
-            KeyEvent.KEYCODE_BACK -> if (mode == MODE_UNLOCK) Space.leave(this) else finish()
+            KeyEvent.KEYCODE_BACK -> cancel()
             else -> return super.onKeyDown(keyCode, event)
         }
         return true
