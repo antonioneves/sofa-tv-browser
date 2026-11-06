@@ -8,3 +8,6 @@ local.properties
 keystore.properties
 *.jks
 *.p12
+
+# Repomix code dumps
+repomix-output.xml
