@@ -32,6 +32,9 @@
   and keeps translating the site's pages as you go, until "Show original" or you leave the site. Hold OK on it to
   choose another language. The page's text goes to Google only when you press it; sites that refuse Google's
   translator can't be translated.
+- **Reader view** (page menu, under More): shows just the page's article, in large type on a dark page, without
+  menus, ads or sidebars. Up and Down (or Left and Right) turn the pages, and Back returns to the page as it was.
+  It uses Mozilla's Readability, built into Sofa, so nothing is sent anywhere.
 - **Sleep timer:** the moon button in the video controls stops playback after 15 minutes to 2 hours, in Sofa
   Player and on the page alike. A message comes up a minute before, and the button shows lit while the timer
   runs. Press it again to change the time or turn it off.

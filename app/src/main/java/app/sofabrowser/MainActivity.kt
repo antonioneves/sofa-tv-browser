@@ -41,6 +41,7 @@ import android.widget.Toast
 import androidx.webkit.WebViewFeature
 import app.sofabrowser.adblock.Sites
 import app.sofabrowser.browser.Browser
+import app.sofabrowser.browser.Reader
 import app.sofabrowser.browser.Translator
 import app.sofabrowser.browser.CursorLayout
 import app.sofabrowser.browser.Decoders
@@ -335,6 +336,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             }
             return super.dispatchKeyEvent(event)
         }
+        if (reading && readerKey(event)) return true
         val down = event.action == KeyEvent.ACTION_DOWN
         when (event.keyCode) {
             KeyEvent.KEYCODE_BACK -> {
@@ -608,6 +610,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             autoWatchHere = WatchTarget.autoWatches(prefs.autoWatch, host, prefs.autoWatchSites),
             translated = translateSite != null && host?.let(Sites::of) == translateSite,
             translateInto = Translator.name(translateCode(), Locale.getDefault()),
+            reading = reading,
         )
     }
 
@@ -652,6 +655,10 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             BrowserMenu.Action.TRANSLATE -> if (host != null && Browser.isWebUrl(url)) {
                 menu?.dismiss()
                 if (Sites.of(host) == translateSite) showOriginal() else { translateSite = Sites.of(host); translate(announce = true) }
+            }
+            BrowserMenu.Action.READER -> if (Browser.isWebUrl(url)) {
+                menu?.dismiss()
+                if (reading) leaveReader() else read()
             }
             BrowserMenu.Action.BOOKMARK -> if (Browser.isWebUrl(url)) {
                 if (db.isBookmarked(url)) db.removeBookmark(url) else db.addBookmark(w.title.orEmpty(), url)
@@ -771,6 +778,40 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 }
             }
         }
+    }
+
+    // ---- Reader view: the page's article alone, in large type; the D-pad turns pages and Back leaves ----
+
+    private var reading = false
+
+    private fun read() {
+        val w = web ?: return
+        cursor.removeCallbacks(translateCheck)
+        w.evaluateJavascript(Reader.script(this)) { result ->
+            if (web !== w) return@evaluateJavascript
+            if (result != "\"ok\"") return@evaluateJavascript toast(R.string.reader_view_none)
+            reading = true
+            // The pointer has nothing to do on the article: the D-pad pages through it instead.
+            cursor.cursorEnabled = false
+            if (cursor.scrollMode) cursor.setScrollMode(false)
+        }
+    }
+
+    private fun leaveReader() {
+        reading = false
+        browser.reload()
+    }
+
+    /** Up and Left turn back a page, Down and Right on; Back leaves reader view. */
+    private fun readerKey(event: KeyEvent): Boolean {
+        val pages = when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_LEFT -> -1f
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT -> 1f
+            KeyEvent.KEYCODE_BACK -> { if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) leaveReader(); return true }
+            else -> return false
+        }
+        if (event.action == KeyEvent.ACTION_DOWN) cursor.scrollPages(pages)
+        return true
     }
 
     private fun translateCode() = prefs.translateLanguage.ifEmpty { Translator.codeFor(Locale.getDefault()) ?: "en" }
@@ -944,6 +985,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         val host = Browser.hostOf(url)
         cursor.cursorEnabled = host == null || !browser.keysToPage(host)
         if (cursor.scrollMode) cursor.setScrollMode(false)
+        reading = false
         if (url != autoWatchUrl) { stopAutoWatch(); autoWatchUrl = null }
         cursor.removeCallbacks(translateCheck)
         pageTranslated = false

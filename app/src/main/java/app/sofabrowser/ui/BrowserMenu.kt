@@ -22,7 +22,7 @@ import app.sofabrowser.Space
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
 
-    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
+    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
     interface Actions {
         fun onAddress()
@@ -54,6 +54,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         val translated: Boolean,
         /** The name of the language Translate translates into. */
         val translateInto: String,
+        /** The page shows in reader view. */
+        val reading: Boolean,
     )
 
     private val buttons = LinkedHashMap<Action, LabeledIconButton>()
@@ -145,6 +147,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page)
         add(Action.TRANSLATE, R.drawable.ic_translate, R.string.translate)
         buttons[Action.TRANSLATE]?.setOnLongClickListener { actions.onActionHeld(Action.TRANSLATE); true }
+        add(Action.READER, R.drawable.ic_article, R.string.reader_view)
         add(Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark)
         add(Action.PIN, R.drawable.ic_add, R.string.pin_to_home)
         // A tile on the TV's home screen would show anyone what's in the private space.
@@ -275,6 +278,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         }
         buttons[Action.TRANSLATE]?.set(R.drawable.ic_translate,
             if (s.translated) context.getString(R.string.translate_off) else context.getString(R.string.translate_into, s.translateInto))
+        buttons[Action.READER]?.set(R.drawable.ic_article,
+            context.getString(if (s.reading) R.string.reader_view_off else R.string.reader_view))
         buttons[Action.USER_AGENT]?.set(if (s.desktop) R.drawable.ic_desktop_windows else R.drawable.ic_smartphone,
             context.getString(R.string.user_agent))
         buttons[Action.POINTER]?.set(if (s.pointer) R.drawable.ic_mouse else R.drawable.ic_keyboard,

@@ -130,6 +130,9 @@
     <string name="translating">Translating into %1$s…</string>
     <string name="translated">Translated into %1$s with Google. Hold OK on Translate to choose another language.</string>
     <string name="translate_failed">This page couldn\'t be translated. The site may not allow it, or Google Translate couldn\'t be reached.</string>
+    <string name="reader_view">Reader view</string>
+    <string name="reader_view_off">Leave reader view</string>
+    <string name="reader_view_none">This page has no article to read</string>
     <string name="sleep_timer">Sleep timer</string>
     <string name="sleep_off">Off</string>
     <plurals name="sleep_in">

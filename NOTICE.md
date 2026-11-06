@@ -9,6 +9,12 @@ Icons in `app/src/main/res/drawable/ic_*.xml` and the sofa glyph used in the lau
 from [Material Symbols](https://github.com/google/material-design-icons) by Google, licensed under the
 Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
 
+## Readability.js (reader view)
+
+`app/src/main/assets/reader/Readability.js` is [Readability](https://github.com/mozilla/readability) 0.6.0, copyright
+Arc90 Inc and Mozilla, licensed under the Apache License, Version 2.0 (see LICENSE-APACHE-2.0.txt). It is bundled
+unchanged.
+
 ## StevenBlack/hosts (ad and tracker domains)
 
 `app/src/main/assets/blocklist-hosts.txt.gz` is derived from the unified hosts file at
