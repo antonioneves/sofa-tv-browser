@@ -993,7 +993,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     // Browser events
 
     override fun onPageStarted(url: String) {
-        offerSignIn()
+        holdSignIn()
         if (findBar.showing) closeFind()
         loading = true
         zoomStep = 0
@@ -1031,7 +1031,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     override fun onVisited(url: String) {
-        offerSignIn()
+        holdSignIn()
         if (recordHistory && Browser.isWebUrl(url)) db.recordVisit(web?.title?.takeIf { web?.url == url }.orEmpty(), url)
     }
 
@@ -1914,11 +1914,25 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         sentSignIn = SentSignIn(origin, user, password)
     }
 
+    private val signInHandler = Handler(Looper.getMainLooper())
+    private val offerLater = Runnable { offerSignIn() }
+
+    /**
+     * The page moved on after a password was sent. A rejected one brings the sign-in form back, so the offer waits
+     * a moment for the new page to show one ([onSignInForm] then drops it); only a page without one gets it.
+     */
+    private fun holdSignIn() {
+        if (sentSignIn == null) return
+        signInHandler.removeCallbacks(offerLater)
+        signInHandler.postDelayed(offerLater, SIGNIN_WAIT_MS)
+    }
+
     override fun onSignInFormGone(origin: String) {
         if (sentSignIn?.origin == origin) offerSignIn()
     }
 
     private fun offerSignIn() {
+        signInHandler.removeCallbacks(offerLater)
         val sent = sentSignIn ?: return
         sentSignIn = null
         if (browser.privateMode || !prefs.saveSignIns) return
@@ -1945,6 +1959,11 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     /** Fills in nothing by itself: the user picks the sign-in, and it goes only to the page that asked, if still there. */
     override fun onSignInForm(form: SignInPages.Form) {
+        // The form is back after a password was sent from it: the site turned it down, so it isn't offered.
+        if (sentSignIn?.origin == form.origin) {
+            sentSignIn = null
+            signInHandler.removeCallbacks(offerLater)
+        }
         if (browser.privateMode || !prefs.saveSignIns || SignInPages.origin(web?.url) != form.origin) return
         // Without a PIN to ask for, nothing is filled in outside the space.
         if (!Space.active && !SpacePin.isSet(this)) return
@@ -2194,6 +2213,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         private const val REQ_NOTIFICATIONS = 11
         private const val REQ_MIC = 12
         private const val REQ_PIN = 13
+        /** How long a password sent waits for the next page to show whether the site took it. */
+        private const val SIGNIN_WAIT_MS = 3000L
         private const val STATE_URL = "page_url"
         private const val STATE_PAGE = "page_state"
         private const val MAX_SAVED_PAGE = 128 * 1024
