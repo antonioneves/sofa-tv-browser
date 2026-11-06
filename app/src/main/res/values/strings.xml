@@ -295,6 +295,12 @@
     <string name="custom_search_invalid" formatted="false">The address must start with https:// and contain %s</string>
     <string name="cursor_speed">Pointer speed</string>
     <string name="text_size">Text size</string>
+    <string name="start_page_setting">Open a page at start</string>
+    <string name="start_page_setting_sub">When off, Sofa starts on the home screen</string>
+    <string name="start_page">Start page</string>
+    <string name="start_page_none">Not chosen</string>
+    <string name="start_page_type">Type an address</string>
+    <string name="start_page_invalid">That isn\'t a web address</string>
     <string name="back_goes_back">Back key returns to the previous page</string>
     <string name="back_goes_back_sub">When off, Back opens the menu, which has its own Back button</string>
     <string name="javascript">JavaScript</string>

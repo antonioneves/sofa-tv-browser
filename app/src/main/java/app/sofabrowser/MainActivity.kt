@@ -194,7 +194,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         }
         setContentView(root)
 
-        if (!restorePage(savedInstanceState) && !handleIntent(intent)) {
+        if (!restorePage(savedInstanceState) && !handleIntent(intent) && !openStartPage(savedInstanceState)) {
             showHome()
             Looper.myQueue().addIdleHandler {
                 if (!isFinishing && !isDestroyed && homeShown && web == null) {
@@ -228,6 +228,13 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         ensureWeb()
         showBrowser()
         if (state.getBundle(STATE_PAGE)?.let { web?.restoreState(it) } == null) browser.load(url)
+        return true
+    }
+
+    /** "Start page" in Settings, on a fresh start only: a screen Android recreated stays where it was. */
+    private fun openStartPage(state: Bundle?): Boolean {
+        if (state != null || standalone || !prefs.startPageOn || !Browser.isWebUrl(prefs.startPage)) return false
+        openUrl(prefs.startPage)
         return true
     }
 

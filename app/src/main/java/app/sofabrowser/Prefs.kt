@@ -111,6 +111,10 @@ class Prefs(context: Context) {
     var customUserAgent by string("custom_user_agent", "")
     /** BACK goes to the previous page when there is one, instead of opening the menu (BrowsHere's behaviour). */
     var backGoesBack by boolean("back_goes_back", false)
+    /** Sofa starts on [startPage] instead of the home screen; off by default. */
+    var startPageOn by boolean("start_page_on", false)
+    /** An http(s) address, or "" until one is chosen. */
+    var startPage by string("start_page", "")
     var javascript by boolean("javascript", true)
     var autoplay by boolean("autoplay", true)
     /** In fullscreen, switch the TV to the video's frame rate (RefreshRateMatch). Off by default: the screen blanks. */

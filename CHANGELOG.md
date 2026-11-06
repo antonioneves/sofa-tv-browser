@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Start page** (Settings › Browsing, off by default): "Open a page at start" makes Sofa open a chosen page instead
+  of the home screen when it starts. Pick one of your bookmarks or type an address. Off, Sofa starts on the home
+  screen as before.
 - **Import and export bookmarks** in the HTML file Chrome uses, which Firefox, Edge and Safari also read and write.
   In Bookmarks, "Import or export" opens a page on the home network for your phone or computer: download Sofa's
   bookmarks from it, or pick a file exported from another browser to add its bookmarks (folders are flattened, and

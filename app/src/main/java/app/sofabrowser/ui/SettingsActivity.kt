@@ -30,11 +30,13 @@ import app.sofabrowser.R
 import app.sofabrowser.Space
 import app.sofabrowser.adblock.AdBlocker
 import app.sofabrowser.adblock.FilterList
+import app.sofabrowser.browser.Browser
 import app.sofabrowser.browser.ExternalPlayer
 import app.sofabrowser.browser.ProtectedMedia
 import app.sofabrowser.browser.RefreshRateMatch
 import app.sofabrowser.browser.SearchShortcuts
 import app.sofabrowser.browser.StreamCopyProvider
+import app.sofabrowser.browser.UrlInput
 import app.sofabrowser.browser.WatchTarget
 import app.sofabrowser.browser.WebViews
 import app.sofabrowser.data.Db
@@ -109,6 +111,12 @@ class SettingsActivity : Activity() {
         switch(R.string.most_visited_setting, R.string.most_visited_setting_sub, prefs::showMostVisited)
 
         section(R.string.section_browsing)
+        switch(R.string.start_page_setting, R.string.start_page_setting_sub, prefs::startPageOn) { on ->
+            if (on && prefs.startPage.isEmpty()) pickStartPage() else build()
+        }
+        if (prefs.startPageOn) {
+            nav(R.string.start_page, UrlInput.display(prefs.startPage).ifEmpty { getString(R.string.start_page_none) }) { pickStartPage() }
+        }
         nav(R.string.search_engine, prefs.searchEngine.name) { pickEngine() }
         switch(R.string.search_suggestions,
             if (prefs.searchEngine.suggestTemplate == null) R.string.search_suggestions_none else R.string.search_suggestions_sub,
@@ -301,6 +309,29 @@ class SettingsActivity : Activity() {
                     else Toast.makeText(this, R.string.custom_search_invalid, Toast.LENGTH_LONG).show()
                     build()
                 } else { prefs.searchEngineId = ids[which]; build() }
+            }.show()
+    }
+
+    /** A bookmark, or an address typed in; a search doesn't count as one. */
+    private fun pickStartPage() {
+        val bookmarks = Db.get(this).bookmarks()
+        val items = listOf<CharSequence>(getString(R.string.start_page_type)) + bookmarks.map { b ->
+            val url = UrlInput.display(b.url)
+            SpannableString(b.title.ifBlank { url } + "\n" + url).apply {
+                val from = length - url.length
+                setSpan(RelativeSizeSpan(0.7f), from, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(ForegroundColorSpan(Ui.p.textWeak), from, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+        dialog().setTitle(R.string.start_page)
+            .setItems(items.toTypedArray()) { _, which ->
+                if (which == 0) askText(R.string.start_page, prefs.startPage) { text ->
+                    val url = UrlInput.resolve(text, prefs.searchEngine, emptyList())
+                    if (text.isEmpty() || url == prefs.searchEngine.searchUrl(text) || !Browser.isWebUrl(url)) {
+                        Toast.makeText(this, R.string.start_page_invalid, Toast.LENGTH_LONG).show()
+                    } else prefs.startPage = url
+                    build()
+                } else { prefs.startPage = bookmarks[which - 1].url; build() }
             }.show()
     }
 
