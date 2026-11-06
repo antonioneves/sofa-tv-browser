@@ -1,5 +1,6 @@
 package app.sofabrowser.data
 
+import android.annotation.SuppressLint
 import android.content.Context
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -10,6 +11,7 @@ import javax.crypto.spec.PBEKeySpec
  * The private space's PIN: only a salted, slow hash of it is kept, and wrong tries make the next ones wait.
  * Written with commit, not apply: going into the space kills the process right after.
  */
+@SuppressLint("ApplySharedPref")
 object SpacePin {
     const val LENGTH = 4
     private const val PREFS = "space_pin"

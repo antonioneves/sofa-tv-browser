@@ -439,6 +439,8 @@ object Allowlist {
         context.getSharedPreferences(Space.name(PREFS), Context.MODE_PRIVATE).all.keys.also { cached = it }
     }
 
+    fun all(context: Context): Set<String> = get(context)
+
     fun contains(context: Context, host: String): Boolean =
         get(context).contains(normalize(host))
 

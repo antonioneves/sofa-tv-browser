@@ -81,7 +81,10 @@
     <string name="pin_repeat">Enter the same PIN again</string>
     <string name="pin_mismatch">The PINs didn\'t match. Choose one again.</string>
     <string name="pin_wrong">Wrong PIN</string>
-    <string name="pin_wait">Too many tries. Try again in %1$d seconds.</string>
+    <plurals name="pin_wait">
+        <item quantity="one">Too many tries. Try again in %1$d second.</item>
+        <item quantity="other">Too many tries. Try again in %1$d seconds.</item>
+    </plurals>
     <string name="pin_current">Enter your current PIN</string>
     <string name="pin_new">Choose a new PIN</string>
     <string name="pin_change">Change PIN</string>
@@ -253,7 +256,7 @@
         <item quantity="one">%d rule</item>
         <item quantity="other">%d rules</item>
     </plurals>
-    <string name="filter_lists_intro">Ads, trackers and pop-ups are blocked on this TV with the lists that are on. Lists in hosts, Adblock Plus and uBlock Origin format all work. Sofa only contacts a list\'s address when you add or update it, or every few days with automatic updates.</string>
+    <string name="filter_lists_intro">Ads, trackers and pop-ups are blocked on this TV with the lists that are on. Lists in hosts, Adblock Plus and uBlock Origin format all work. Sofa only contacts a list\'s address when you add or update it, or every few days with automatic updates. %1$s in all.</string>
     <string name="filter_list_builtin">Built in</string>
     <string name="filter_list_updated">Updated %s</string>
     <string name="filter_list_updated_now">Updated just now</string>
@@ -311,10 +314,23 @@
         <item>Never</item>
     </string-array>
     <string name="clear_on_exit">Clear browsing data on exit</string>
-    <string name="clear_on_exit_sub">Cookies, site storage, cache, history and where you stopped videos</string>
+    <string name="clear_on_exit_sub">Cookies, site storage, cache, history, where you stopped videos and site settings</string>
     <string name="clear_now">Clear browsing data now</string>
-    <string name="clear_now_confirm">Delete cookies, site storage, cache, history, saved site icons, where you stopped videos and your protected-content answers? Bookmarks and Quick access are kept.</string>
+    <string name="clear_now_confirm">Delete cookies, site storage, cache, history, saved site icons, where you stopped videos, site settings and your protected-content answers? Bookmarks and Quick access are kept.</string>
     <string name="clear">Clear</string>
+    <string name="site_settings">Site settings</string>
+    <string name="site_settings_sub">Zoom, Browse as, ad blocking and the pointer, as chosen for single sites in the page menu</string>
+    <string name="site_settings_intro">What the page menu keeps for single sites. Select a site to reset it to the defaults.</string>
+    <string name="site_settings_none">No site has settings of its own. Zoom, Browse as, ad blocking and the pointer chosen in the page menu are kept for the page\'s site and listed here.</string>
+    <string name="site_settings_separator">" · "</string>
+    <string name="site_zoom">Zoom %1$d%%</string>
+    <string name="site_browse_as">Browse as %1$s</string>
+    <string name="site_adblock_off">Ad blocking off</string>
+    <string name="site_keys_to_page">Keys go to the site</string>
+    <string name="site_settings_reset_confirm">Reset this site to the defaults? %1$s</string>
+    <string name="site_settings_reset_all">Reset all sites</string>
+    <string name="site_settings_reset_all_confirm">Reset every site to the defaults?</string>
+    <string name="reset">Reset</string>
     <string name="cleared">Browsing data cleared</string>
     <string name="about">About Sofa</string>
     <string name="about_engine">Web engine: Chrome %s</string>

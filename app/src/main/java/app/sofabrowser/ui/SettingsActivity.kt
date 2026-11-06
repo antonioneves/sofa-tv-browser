@@ -1,6 +1,7 @@
 package app.sofabrowser.ui
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -38,6 +39,9 @@ import app.sofabrowser.browser.WebViews
 import app.sofabrowser.data.Db
 import app.sofabrowser.data.Favicons
 import app.sofabrowser.data.HistoryRetention
+import app.sofabrowser.data.SiteChoice
+import app.sofabrowser.forgetSiteChoices
+import app.sofabrowser.siteChoices
 import app.sofabrowser.player.PlayerChoices
 import app.sofabrowser.update.Updater
 
@@ -46,7 +50,8 @@ class SettingsActivity : Activity() {
 
     private lateinit var prefs: Prefs
     private lateinit var list: LinearLayout
-    private val onListsPage get() = intent.getStringExtra(PAGE) == PAGE_LISTS
+    /** Which page this is: the settings ([PAGE_LISTS], [PAGE_SITES] or null for the main one). */
+    private val page get() = intent.getStringExtra(PAGE)
     /** The Filter lists row on the main page, whose rule count is refreshed on return. */
     private var listsRow: View? = null
 
@@ -66,13 +71,21 @@ class SettingsActivity : Activity() {
             clipChildren = false
             addView(list)
         })
-        if (onListsPage) buildLists() else build()
+        when (page) {
+            PAGE_LISTS -> buildLists()
+            PAGE_SITES -> buildSites()
+            else -> build()
+        }
     }
 
     override fun onRestart() {
         super.onRestart()
-        // Back from Filter lists: the rule count may have changed.
-        if (onListsPage) buildLists() else (listsRow as? TextView)?.text = rulesText(blocker.rules.rules)
+        when (page) {
+            PAGE_LISTS -> buildLists()
+            PAGE_SITES -> buildSites()
+            // Back from Filter lists: the rule count may have changed.
+            else -> (listsRow as? TextView)?.text = rulesText(blocker.rules.rules)
+        }
     }
 
     private fun build() {
@@ -105,7 +118,10 @@ class SettingsActivity : Activity() {
             }
         }
         nav(R.string.user_agent, resources.getStringArray(R.array.user_agents)[Prefs.UA_MODES.indexOf(prefs.userAgent).coerceAtLeast(0)]) { pickUserAgent() }
-        nav(R.string.cursor_speed, resources.getStringArray(R.array.cursor_speeds)[prefs.cursorSpeed - 1]) { pickCursorSpeed() }
+        row(getString(R.string.site_settings), getString(R.string.site_settings_sub), arrow()) {
+            startActivity(Intent(this, SettingsActivity::class.java).putExtra(PAGE, PAGE_SITES))
+        }
+        nav(R.string.cursor_speed,resources.getStringArray(R.array.cursor_speeds)[prefs.cursorSpeed - 1]) { pickCursorSpeed() }
         row(getString(R.string.game_controller), getString(R.string.game_controller_sub), arrow()) { PadHelp.dialog(this) }
         switch(R.string.back_goes_back, R.string.back_goes_back_sub, prefs::backGoesBack)
         switch(R.string.javascript, R.string.javascript_sub, prefs::javascript)
@@ -419,12 +435,7 @@ class SettingsActivity : Activity() {
 
     private fun buildLists() {
         list.removeAllViews()
-        list.addView(Ui.text(this, 56, Ui.p.textMid, bold = true).apply {
-            text = getString(R.string.filter_lists)
-        }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 16.px })
-        list.addView(Ui.text(this, 26, Ui.p.textWeak).apply {
-            text = getString(R.string.filter_lists_intro) + " " + rulesText(blocker.rules.rules) + "."
-        }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 32.px })
+        pageTitle(R.string.filter_lists, getString(R.string.filter_lists_intro, rulesText(blocker.rules.rules)))
 
         val first = blocker.lists.map { l -> row(l.name, listStatus(l), Toggle(l.enabled)) { listActions(l) } }.firstOrNull()
         switch(R.string.auto_update_lists, R.string.auto_update_lists_sub, prefs::autoUpdateLists) { on ->
@@ -441,6 +452,50 @@ class SettingsActivity : Activity() {
             }
         }
         first?.requestFocus()
+    }
+
+    /** A sub-page's title and the line explaining it. */
+    private fun pageTitle(title: Int, intro: String) {
+        list.addView(Ui.text(this, 56, Ui.p.textMid, bold = true).apply {
+            text = getString(title)
+        }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 16.px })
+        list.addView(Ui.text(this, 26, Ui.p.textWeak).apply {
+            text = intro
+        }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 32.px })
+    }
+
+    // Site settings: what the page menu keeps for single sites, a page of its own (PAGE_SITES).
+
+    private fun buildSites() {
+        // Rebuilt after a site is reset: focus stays where it was, on the next site.
+        val focused = list.indexOfChild(list.focusedChild)
+        list.removeAllViews()
+        val sites = siteChoices(this)
+        pageTitle(R.string.site_settings, getString(if (sites.isEmpty()) R.string.site_settings_none else R.string.site_settings_intro))
+        sites.forEach { s -> row(s.site, siteSummary(s), null) { resetSite(s) } }
+        if (sites.size > 1) row(getString(R.string.site_settings_reset_all), null, null) {
+            dialog().setMessage(R.string.site_settings_reset_all_confirm)
+                .setPositiveButton(R.string.reset) { _, _ -> forgetSiteChoices(this); buildSites() }
+                .setNegativeButton(android.R.string.cancel, null).show()
+        }
+        list.getChildAt(if (focused < 0) 2 else focused.coerceAtMost(list.childCount - 1))?.takeIf { it.isFocusable }?.requestFocus()
+    }
+
+    private fun siteSummary(s: SiteChoice) = listOfNotNull(
+        s.zoomStep.takeIf { it != 0 }?.let { getString(R.string.site_zoom, SiteChoice.zoomPercent(it)) },
+        s.userAgent?.let { mode ->
+            val names = resources.getStringArray(R.array.user_agents)
+            getString(R.string.site_browse_as, names[Prefs.UA_MODES.indexOf(mode).coerceAtLeast(0)].removeSuffix("…"))
+        },
+        if (s.adBlockOff) getString(R.string.site_adblock_off) else null,
+        if (s.keysToPage) getString(R.string.site_keys_to_page) else null,
+    ).joinToString(getString(R.string.site_settings_separator))
+
+    private fun resetSite(s: SiteChoice) {
+        dialog().setTitle(s.site)
+            .setMessage(getString(R.string.site_settings_reset_confirm, siteSummary(s)))
+            .setPositiveButton(R.string.reset) { _, _ -> forgetSiteChoices(this, s.site); buildSites() }
+            .setNegativeButton(android.R.string.cancel, null).show()
     }
 
     private fun listStatus(l: FilterList): String {
@@ -480,6 +535,8 @@ class SettingsActivity : Activity() {
             .setNegativeButton(android.R.string.cancel, null).show()
     }
 
+    // "https://" is the start of an address, the same in every language.
+    @SuppressLint("SetTextI18n")
     private fun enterListAddress() {
         val field = EditText(this).apply {
             setText("https://")
@@ -512,6 +569,7 @@ class SettingsActivity : Activity() {
                 Favicons.get(this).clear()
                 prefs.clearDrmAnswers()
                 app.sofabrowser.resumeStore(this).clear()
+                forgetSiteChoices(this)
                 StreamCopyProvider.clear(this)
                 Toast.makeText(this, R.string.cleared, Toast.LENGTH_SHORT).show()
             }.setNegativeButton(android.R.string.cancel, null).show()
@@ -551,5 +609,6 @@ class SettingsActivity : Activity() {
         private val DRM_MODES = listOf(ProtectedMedia.ASK, ProtectedMedia.ALLOW, ProtectedMedia.BLOCK)
         private const val PAGE = "page"
         private const val PAGE_LISTS = "lists"
+        private const val PAGE_SITES = "sites"
     }
 }

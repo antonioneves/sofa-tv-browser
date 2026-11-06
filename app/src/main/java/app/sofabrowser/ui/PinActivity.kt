@@ -86,7 +86,7 @@ class PinActivity : Activity() {
     private fun digit(key: String) {
         if (busy) return
         val wait = if (step == Step.CHECK) SpacePin.waiting(this) else 0
-        if (wait > 0) return show(getString(R.string.pin_wait, wait / 1000 + 1))
+        if (wait > 0) return show((wait / 1000 + 1).toInt().let { resources.getQuantityString(R.plurals.pin_wait, it, it) })
         typed += key
         show(null)
         if (typed.length == SpacePin.LENGTH) submit(typed)

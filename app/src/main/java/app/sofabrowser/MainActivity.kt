@@ -69,6 +69,7 @@ import app.sofabrowser.data.Db
 import app.sofabrowser.data.Favicons
 import app.sofabrowser.data.HistoryRetention
 import app.sofabrowser.data.Site
+import app.sofabrowser.data.SiteChoice
 import app.sofabrowser.downloads.Download
 import app.sofabrowser.downloads.DownloadEngine
 import app.sofabrowser.downloads.Http
@@ -95,7 +96,6 @@ import app.sofabrowser.update.Updater
 import java.util.Locale
 import kotlin.concurrent.thread
 import kotlin.math.pow
-import kotlin.math.roundToInt
 
 /** The single activity for the home screen and the browser; settings and lists are separate screens. */
 open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMenu.Actions, VideoBar.Actions, CursorLayout.Listener,
@@ -599,7 +599,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             blocked = browser.adBlocker.blockedCount,
             desktop = browser.userAgentMode(url) != "mobile",
             pointer = cursor.cursorEnabled,
-            zoomPercent = (100 * 1.25.pow(zoomStep)).roundToInt(),
+            zoomPercent = SiteChoice.zoomPercent(zoomStep),
             canZoomOut = zoomStep > MIN_ZOOM_STEP,
             canZoomIn = zoomStep < MAX_ZOOM_STEP,
             privateMode = browser.privateMode,
@@ -1883,7 +1883,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             StreamCopyProvider.clear(this)
             if (prefs.clearOnExit || wasPrivate) {
                 WebViews.clearBrowsingData(this, null)
-                if (prefs.clearOnExit) { db.clearHistory(); resume.clear() }
+                if (prefs.clearOnExit) { db.clearHistory(); resume.clear(); forgetSiteChoices(this) }
             }
             prefs.privateMode = false
         }

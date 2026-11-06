@@ -3,10 +3,13 @@ package app.sofabrowser
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
+import app.sofabrowser.adblock.Allowlist
+import app.sofabrowser.adblock.Sites
 import app.sofabrowser.browser.ProtectedMedia
 import app.sofabrowser.browser.ResumeStore
 import app.sofabrowser.browser.WatchTarget
 import app.sofabrowser.data.HistoryRetention
+import app.sofabrowser.data.SiteChoice
 import app.sofabrowser.player.PlayerChoices
 
 data class SearchEngine(
@@ -45,6 +48,18 @@ fun siteUserAgents(context: Context) = PrefsMap(context.getSharedPreferences(Spa
 
 /** The page menu's zoom step kept for one site, by registrable domain: 1 is 125%, -1 is 80%; 100% isn't kept. Read fresh. */
 fun siteZooms(context: Context) = PrefsMap(context.getSharedPreferences(Space.name("site_zoom"), Context.MODE_PRIVATE))
+
+/** Every site with a choice of its own from the page menu. */
+fun siteChoices(context: Context) =
+    SiteChoice.collect(siteZooms(context), siteUserAgents(context), Allowlist.all(context), Prefs(context).keysToPageHosts)
+
+/** Forgets the page menu's choices for [site], or for every site: together they name sites that were visited. */
+fun forgetSiteChoices(context: Context, site: String? = null) {
+    fun matches(key: String) = site == null || Sites.of(key.lowercase()) == site
+    listOf(siteZooms(context), siteUserAgents(context)).forEach { saved -> saved.keys.filter(::matches).forEach { saved.remove(it) } }
+    Allowlist.all(context).filter(::matches).forEach { Allowlist.set(context, it, false) }
+    Prefs(context).let { prefs -> prefs.keysToPageHosts.filter(::matches).forEach { prefs.setKeysToPage(it, false) } }
+}
 
 /** User settings. Every default favours privacy; nothing here is ever sent anywhere. */
 class Prefs(context: Context) {
@@ -145,6 +160,7 @@ class Prefs(context: Context) {
     /** Sites driven with D-pad keys sent to the page instead of the pointer (e.g. TV-style web apps). */
     fun keysToPage(host: String) = host in p.getStringSet("keys_to_page", emptySet())!!
     fun setKeysToPage(host: String, on: Boolean) = editSet("keys_to_page", host, on)
+    val keysToPageHosts: Set<String> get() = p.getStringSet("keys_to_page", emptySet())!!
 
     /** "Watch by itself": after a page loads, Watch runs on its own; off by default. */
     var autoWatch: WatchTarget.Auto
@@ -175,7 +191,7 @@ class Prefs(context: Context) {
     private fun editSet(key: String, item: String, on: Boolean) {
         val set = HashSet(p.getStringSet(key, emptySet())!!)
         if (on) set.add(item) else set.remove(item)
-        p.edit().putStringSet(key, set).apply()
+        p.edit().apply { if (set.isEmpty()) remove(key) else putStringSet(key, set) }.apply()
     }
 
     val searchEngine: SearchEngine

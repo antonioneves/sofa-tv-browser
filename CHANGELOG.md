@@ -28,6 +28,10 @@
   home" has its own icon, a TV with a plus, so it no longer looks like "Browse as".
 - **Zoom, per site:** the zoom chosen on a site is kept for that site's pages (in private browsing, only until it
   closes).
+- **Site settings** (Settings → Site settings): lists every site with its own choices (zoom, Browse as, ad blocking
+  turned off, keys going to the site), and resets one site or all of them.
+- Clearing browsing data, now or when Sofa closes, also forgets the choices made for each site.
+- The menu is more solid, so the page behind it no longer shows through its buttons.
 - The home screen no longer has an Exit button: Home or Back on the remote leaves Sofa.
 - Fixed: Sofa could crash when a small download finished the moment it started.
 - Fixed: a dialog button or tile could stay enlarged after focus moved on quickly, and the last button in a dialog
