@@ -179,6 +179,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             }
         }
         applyBannerRejection(view)
+        applyImagesLast(view)
         applySignIns(view)
         HiddenPages.install(view, key, ::onElementPicked)
         applyHidden(view)
@@ -204,6 +205,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         }
         web = null
         bannerScript = null
+        imagesScript = null
         hiddenScript = null
         picking = false
         frames.clear()
@@ -225,6 +227,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             appliedUserAgent = agentKey(mode)
             applyGpc(it)
             applyBannerRejection(it)
+            applyImagesLast(it)
             applySignIns(it)
             applyHidden(it)
         }
@@ -372,6 +375,19 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         bannerScript = WebViewCompat.addDocumentStartJavaScript(view, CookieBanners.script(key.banners, done), setOf("*"))
     }
 
+    private var imagesScript: ScriptHandler? = null
+
+    /** Adds or removes the script that keeps held images out of sight until they load; like the banner script, from the next page on. */
+    private fun applyImagesLast(view: WebView) {
+        imagesScript?.remove()
+        imagesScript = null
+        val key = pageKey ?: return
+        if (!prefs.imagesLast || !WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
+        imagesScript = WebViewCompat.addDocumentStartJavaScript(view, ImagesLast.script(key.images), setOf("*"))
+    }
+
+    // Images are held only until the page has finished, not until its first paint: an image asked for before then
+    // still holds up the page's load event, and the page would finish no sooner than with everything at once.
     private val releaseImagesLater = Runnable { web?.let(::releaseImages) }
 
     /** With "Load images last", a page starts without its images... */
