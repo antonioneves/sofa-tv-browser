@@ -170,5 +170,8 @@ dependencies {
     // Signs the per-page launcher APKs "Add to TV home screen" builds on the TV (Android's own APK signer), Apache-2.0.
     implementation("com.android.tools.build:apksig:9.5.1")
 
+    // The QR code for typing on the phone (Nayuki's QR Code generator, one small class), MIT.
+    implementation("io.nayuki:qrcodegen:1.8.0")
+
     testImplementation("junit:junit:4.13.2")
 }

@@ -32,6 +32,10 @@
   and keeps translating the site's pages as you go, until "Show original" or you leave the site. Hold OK on it to
   choose another language. The page's text goes to Google only when you press it; sites that refuse Google's
   translator can't be translated.
+- **Type on your phone:** the phone button beside the mic on the search screen shows a QR code. Scan it with the
+  phone's camera, type an address or a search on the page that opens, and the TV opens it. The page is served by Sofa
+  itself on your home network, only while the code is on screen and at an address with a random key, so nothing
+  goes through the internet.
 - **Reader view** (page menu, under More): shows just the page's article, in large type on a dark page, without
   menus, ads or sidebars. Up and Down (or Left and Right) turn the pages, and Back returns to the page as it was.
   It uses Mozilla's Readability, built into Sofa, so nothing is sent anywhere.

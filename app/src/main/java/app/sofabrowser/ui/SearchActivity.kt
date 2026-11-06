@@ -5,8 +5,10 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PorterDuff
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -31,8 +33,10 @@ import android.widget.TextView
 import android.widget.Toast
 import app.sofabrowser.Prefs
 import app.sofabrowser.R
+import app.sofabrowser.browser.PhoneLink
 import app.sofabrowser.browser.UrlInput
 import app.sofabrowser.data.Db
+import io.nayuki.qrcodegen.QrCode
 import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
@@ -120,6 +124,7 @@ class SearchActivity : Activity() {
         micIcon = micButton.getChildAt(0) as ImageView
         micHolder.visibility = if (prefs.voiceSearch) View.VISIBLE else View.GONE
         bar.addView(micHolder, LinearLayout.LayoutParams(96.px, 96.px).apply { marginStart = 36.px })
+        bar.addView(squareButton(R.drawable.ic_smartphone, R.string.phone_type) { typeOnPhone() })
         root.addView(bar)
 
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 24.px, 0, 48.px) }
@@ -350,7 +355,56 @@ class SearchActivity : Activity() {
 
     override fun onDestroy() {
         voiceInput.destroy()
+        phoneLink?.stop()
         super.onDestroy()
+    }
+
+    // ---- Typing on the phone: a QR code opens a page served by Sofa on the home network ----
+
+    private var phoneLink: PhoneLink? = null
+
+    private fun typeOnPhone() {
+        var dialog: SofaDialog? = null
+        val page = PhoneLink.Page(getString(R.string.phone_page_title), getString(R.string.search_hint),
+            getString(R.string.phone_send), getString(R.string.phone_sent))
+        val link = PhoneLink(page) { text ->
+            dialog?.dismiss()
+            submit(text)
+        }
+        val address = link.start(this) ?: return Toast.makeText(this, R.string.phone_no_network, Toast.LENGTH_LONG).show()
+        phoneLink?.stop()
+        phoneLink = link
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(ImageView(context).apply { setImageDrawable(qrCode(address)) }, LinearLayout.LayoutParams(320.px, 320.px))
+            addView(Ui.text(context, 24, Ui.p.textMid).apply {
+                text = getString(R.string.phone_how, address)
+                gravity = Gravity.CENTER
+                setPadding(0, 24.px, 0, 0)
+            })
+        }
+        dialog = Ui.dialog(this)
+            .setTitle(R.string.phone_type)
+            .setView(box)
+            .setNegativeButton(R.string.close, null)
+            .setOnDismissListener { link.stop(); if (phoneLink === link) phoneLink = null }
+            .show()
+    }
+
+    /** Black on white with a quiet zone, drawn one pixel per module and scaled up without smoothing. */
+    private fun qrCode(text: String): BitmapDrawable {
+        val qr = QrCode.encodeText(text, QrCode.Ecc.MEDIUM)
+        val quiet = 3
+        val n = qr.size + quiet * 2
+        val pixels = IntArray(n * n) { i ->
+            val x = i % n - quiet
+            val y = i / n - quiet
+            if (x in 0 until qr.size && y in 0 until qr.size && qr.getModule(x, y)) Color.BLACK else Color.WHITE
+        }
+        return BitmapDrawable(resources, Bitmap.createBitmap(pixels, n, n, Bitmap.Config.ARGB_8888)).apply {
+            isFilterBitmap = false
+        }
     }
 
     // BACK while listening only stops listening (TV remotes send BACK as a key; see the manifest).
