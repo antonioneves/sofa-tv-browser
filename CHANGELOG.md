@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Import and export bookmarks** in the HTML file Chrome uses, which Firefox, Edge and Safari also read and write.
+  In Bookmarks, "Import or export" opens a page on the home network for your phone or computer: download Sofa's
+  bookmarks from it, or pick a file exported from another browser to add its bookmarks (folders are flattened, and
+  bookmarks Sofa already has are skipped). When the TV has a file manager, you can also export to a file or import
+  from one on the TV.
+- **The "Type on your phone" page lists your bookmarks and recent pages:** tap one to open it on the TV. It also has
+  the bookmarks file download and import.
 - **Private space** (Settings, off by default): adds a button on the home screen that opens a second
   Sofa behind a 4-digit PIN, with its own bookmarks, history, settings, logins and downloads, kept apart from the rest
   of Sofa. Inside, Sofa is teal instead of blue, the lock shows open, and the search field says "Private space", so

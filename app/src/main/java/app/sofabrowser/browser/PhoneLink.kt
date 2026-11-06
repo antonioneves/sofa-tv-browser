@@ -1,157 +1,143 @@
 package app.sofabrowser.browser
 
 import android.content.Context
-import android.net.ConnectivityManager
 import android.os.Handler
 import android.os.Looper
-import java.io.ByteArrayOutputStream
-import java.io.IOException
-import java.io.InputStream
-import java.net.Inet4Address
-import java.net.InetAddress
-import java.net.NetworkInterface
-import java.net.ServerSocket
-import java.net.Socket
-import java.net.URLDecoder
-import java.security.SecureRandom
-import kotlin.concurrent.thread
+import app.sofabrowser.R
+import app.sofabrowser.browser.HomeServer.Companion.esc
+import app.sofabrowser.browser.HomeServer.Response
+import app.sofabrowser.data.BookmarkFile
+import app.sofabrowser.data.Db
 
 /**
- * Typing on the phone: a tiny web page served by Sofa on the home network, at an address with a random key that only
- * the QR code on the TV shows. What is sent from it goes to [onText] (on the main thread). It runs only while the
- * code is on screen, and nothing passes through anywhere but the home network.
+ * Sofa on the phone: a tiny page on the home network (see [HomeServer]) to type on, to pick a bookmark or a recent
+ * page, and to download the bookmarks as a file Chrome can import or add those of such a file. What is typed or
+ * picked goes to [onText], and how many bookmarks a file added, and the words saying so, to [onImported], both on
+ * the main thread. Nothing
+ * passes through anywhere but the home network.
  */
-class PhoneLink(private val page: Page, private val onText: (String) -> Unit) {
+class PhoneLink(context: Context, private val onText: (String) -> Unit, private val onImported: (Int, String) -> Unit) {
 
-    /** The phone page's words, in the TV's language. */
-    class Page(val title: String, val hint: String, val send: String, val sent: String)
-
-    private val key = (1..KEY_LENGTH).map { KEY_CHARS[random.nextInt(KEY_CHARS.length)] }.joinToString("")
+    private val db = Db.get(context)
+    private val words = Words(context)
     private val main = Handler(Looper.getMainLooper())
-    @Volatile private var server: ServerSocket? = null
+    private val server = HomeServer(MAX_BODY) { r ->
+        when {
+            r.path.isEmpty() && r.method == "GET" -> Response.html(html(null))
+            r.path.isEmpty() && r.method == "POST" -> {
+                val text = HomeServer.formField(String(r.body, Charsets.UTF_8), "t")?.trim().orEmpty()
+                if (text.isEmpty()) Response.html(html(null))
+                else Response.html(html(words.sent)).also { main.post { onText(text) } }
+            }
+            r.path == "/$FILE_NAME" && r.method == "GET" -> Response("200 OK", "text/html; charset=utf-8",
+                BookmarkFile.write(db.bookmarkEntries()).toByteArray(Charsets.UTF_8),
+                listOf("Content-Disposition: attachment; filename=\"$FILE_NAME\""))
+            r.path == "/import" && r.method == "POST" -> {
+                val entries = BookmarkFile.read(String(r.body, Charsets.UTF_8))
+                if (entries == null) Response.text(words.notAFile, "422 Unprocessable Content")
+                else {
+                    val added = db.importBookmarks(entries)
+                    val message = words.added(added)
+                    main.post { onImported(added, message) }
+                    Response.text(message)
+                }
+            }
+            else -> Response.status("404 Not Found")
+        }
+    }
 
     /** Starts serving; the address for the phone, or null without a home network. */
-    fun start(context: Context): String? {
-        val address = lanAddress(context) ?: return null
-        val s = try { ServerSocket(0) } catch (_: IOException) { return null }
-        server = s
-        thread(name = "phone-link", isDaemon = true) {
-            while (!s.isClosed) {
-                val client = try { s.accept() } catch (_: IOException) { break }
-                client.use { runCatching { serve(it) } }
-            }
-        }
-        return "http://${address.hostAddress}:${s.localPort}/$key"
+    fun start(context: Context): String? = server.start(context)
+
+    fun stop() = server.stop()
+
+    /** The page's words, in the TV's language, read once on the main thread. */
+    private class Words(c: Context) {
+        val title = c.getString(R.string.phone_page_title)
+        val hint = c.getString(R.string.search_hint)
+        val send = c.getString(R.string.phone_send)
+        val sent = c.getString(R.string.phone_sent)
+        val bookmarks = c.getString(R.string.bookmarks)
+        val noBookmarks = c.getString(R.string.bookmarks_empty)
+        val recent = c.getString(R.string.bookmarks_page_recent)
+        val file = c.getString(R.string.bookmarks_page_file)
+        val fileText = c.getString(R.string.bookmarks_page_file_text)
+        val download = c.getString(R.string.bookmarks_page_download)
+        val choose = c.getString(R.string.bookmarks_page_choose)
+        val working = c.getString(R.string.bookmarks_page_working)
+        val notAFile = c.getString(R.string.bookmarks_not_a_file)
+        val failed = c.getString(R.string.bookmarks_send_failed)
+        val none = c.getString(R.string.bookmarks_added_none)
+        private val res = c.resources
+        fun added(n: Int) = if (n == 0) none else res.getQuantityString(R.plurals.bookmarks_added, n, n)
     }
 
-    fun stop() {
-        runCatching { server?.close() }
-        server = null
-    }
-
-    private fun serve(socket: Socket) {
-        socket.soTimeout = TIMEOUT_MS
-        val input = socket.getInputStream()
-        val head = readHead(input) ?: return
-        val lines = head.split("\r\n")
-        val (method, path) = lines.first().split(" ").let { if (it.size < 2) return else it[0] to it[1] }
-        val out = socket.getOutputStream()
-        fun reply(status: String, html: String) {
-            val body = html.toByteArray(Charsets.UTF_8)
-            out.write(("HTTP/1.1 $status\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${body.size}\r\n" +
-                "Cache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray(Charsets.US_ASCII))
-            out.write(body)
-            out.flush()
-        }
-        if (path.substringBefore('?') != "/$key") return reply("404 Not Found", "")
-        when (method) {
-            "GET" -> reply("200 OK", html(null))
-            "POST" -> {
-                val length = lines.firstNotNullOfOrNull { line ->
-                    line.takeIf { it.startsWith("content-length:", ignoreCase = true) }?.substringAfter(':')?.trim()?.toIntOrNull()
-                } ?: 0
-                if (length !in 0..MAX_BODY) return reply("413 Content Too Large", "")
-                val body = ByteArray(length)
-                var read = 0
-                while (read < length) {
-                    val n = input.read(body, read, length - read)
-                    if (n < 0) break
-                    read += n
-                }
-                val text = formField(String(body, 0, read, Charsets.UTF_8), "t")?.trim().orEmpty()
-                if (text.isEmpty()) return reply("200 OK", html(null))
-                reply("200 OK", html(page.sent))
-                main.post { onText(text) }
-            }
-            else -> reply("405 Method Not Allowed", "")
-        }
+    /** Pages, each a button that sends its address like typing it would. */
+    private fun list(sites: List<Pair<String, String>>): String = sites.joinToString("", "<form method=\"post\" class=\"list\">", "</form>") { (title, url) ->
+        "<button name=\"t\" value=\"${esc(url)}\"><b>${esc(title.ifBlank { url })}</b><span>${esc(UrlInput.display(url))}</span></button>"
     }
 
     private fun html(done: String?): String {
-        val form = if (done != null) "<p>${esc(done)}</p>" else """
-<form method="post" accept-charset="utf-8">
-<input name="t" type="text" autofocus autocomplete="off" autocapitalize="off" placeholder="${esc(page.hint)}">
-<button type="submit">${esc(page.send)}</button>
-</form>"""
+        val bookmarks = db.bookmarks().map { it.title to it.url }
+        val recent = db.history(RECENT * 4).asSequence()
+            .filter { it.url.startsWith("https://") || it.url.startsWith("http://") }
+            .distinctBy { it.url }.take(RECENT).map { it.title to it.url }.toList()
         return """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(page.title)}</title>
-<style>
-:root { color-scheme: dark; }
-body { margin: 0; padding: 32px 20px; background: #121212; color: #e6e6e6; font: 18px/1.5 system-ui, sans-serif; }
-h1 { font-size: 22px; margin: 0 0 20px; }
-input, button { box-sizing: border-box; width: 100%; font: inherit; border-radius: 12px; padding: 14px 16px; }
-input { border: 1px solid #444; background: #1e1e1e; color: inherit; margin-bottom: 12px; }
-button { border: 0; background: #4f8cff; color: #fff; font-weight: 600; }
+<title>${esc(words.title)}</title>
+<style>${HomeServer.STYLE}
+.done { color: #e6e6e6; background: #1d3a24; border-radius: 12px; padding: 12px 16px; }
+.list button { display: flex; flex-direction: column; align-items: flex-start; text-align: start; margin-bottom: 8px; background: #1e1e1e; color: inherit; font-weight: normal; }
+.list b, .list span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list span { font-size: 15px; color: #9a9a9a; }
+#status { margin-top: 12px; color: #e6e6e6; }
+#file { display: none; }
+label.button { margin-top: 12px; background: #2a2a2a; }
 </style></head>
-<body><h1>${esc(page.title)}</h1>$form</body></html>"""
+<body><main><h1>${esc(words.title)}</h1>
+${if (done != null) "<p class=\"done\">${esc(done)}</p>" else ""}
+<form method="post" accept-charset="utf-8">
+<input name="t" type="text" ${if (done == null) "autofocus" else ""} autocomplete="off" autocapitalize="off" placeholder="${esc(words.hint)}">
+<button type="submit">${esc(words.send)}</button>
+</form>
+<h2>${esc(words.bookmarks)}</h2>
+${if (bookmarks.isEmpty()) "<p>${esc(words.noBookmarks)}</p>" else list(bookmarks)}
+${if (recent.isEmpty()) "" else "<h2>${esc(words.recent)}</h2>" + list(recent)}
+<h2>${esc(words.file)}</h2>
+<p>${esc(words.fileText)}</p>
+<a class="button" id="download" download="$FILE_NAME">${esc(words.download)}</a>
+<label class="button" for="file">${esc(words.choose)}</label>
+<input id="file" type="file" accept=".html,.htm,text/html">
+<p id="status" role="status"></p>
+</main>
+<script>
+const status = document.getElementById('status');
+document.getElementById('download').href = location.pathname + '/$FILE_NAME';
+document.getElementById('file').onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  status.textContent = ${js(words.working)};
+  try {
+    const r = await fetch(location.pathname + '/import', { method: 'POST', body: file });
+    status.textContent = await r.text() || ${js(words.failed)};
+    // The bookmarks above are as they were when the page opened.
+    if (r.ok) setTimeout(() => location.replace(location.pathname), 2000);
+  } catch (_) {
+    status.textContent = ${js(words.failed)};
+  }
+  e.target.value = '';
+};
+</script></body></html>"""
     }
 
+    /** [s] as a JavaScript string inside the page's script. */
+    private fun js(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("<", "\\u003c")
+        .replace("\n", "\\n") + "\""
+
     companion object {
-        private const val KEY_LENGTH = 10
-        private const val KEY_CHARS = "abcdefghijkmnpqrstuvwxyz23456789"
-        private const val TIMEOUT_MS = 10_000
-        private const val MAX_HEAD = 8192
-        private const val MAX_BODY = 16384
-        private val random = SecureRandom()
-
-        /** The request line and headers, up to the blank line; null when the request is too long or cut off. */
-        internal fun readHead(input: InputStream): String? {
-            val buf = ByteArrayOutputStream()
-            var match = 0
-            while (buf.size() < MAX_HEAD) {
-                val b = input.read()
-                if (b < 0) return null
-                buf.write(b)
-                match = when {
-                    b == '\r'.code && match % 2 == 0 -> match + 1
-                    b == '\n'.code && match % 2 == 1 -> match + 1
-                    b == '\r'.code -> 1
-                    else -> 0
-                }
-                if (match == 4) return buf.toString("ISO-8859-1").removeSuffix("\r\n\r\n")
-            }
-            return null
-        }
-
-        /** One field of a form sent as application/x-www-form-urlencoded. */
-        internal fun formField(body: String, name: String): String? = body.split('&').firstNotNullOfOrNull { pair ->
-            val k = pair.substringBefore('=')
-            if (k != name) null else runCatching { URLDecoder.decode(pair.substringAfter('=', ""), "UTF-8") }.getOrNull()
-        }
-
-        internal fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
-
-        /** The TV's IPv4 address on the home network (Wi-Fi or Ethernet). */
-        private fun lanAddress(context: Context): InetAddress? {
-            val cm = context.getSystemService(ConnectivityManager::class.java)
-            val fromNetwork = runCatching {
-                cm?.getLinkProperties(cm.activeNetwork)?.linkAddresses?.map { it.address }
-            }.getOrNull().orEmpty()
-            val all = fromNetwork + runCatching {
-                NetworkInterface.getNetworkInterfaces().toList().filter { it.isUp }.flatMap { it.inetAddresses.toList() }
-            }.getOrDefault(emptyList())
-            return all.firstOrNull { it is Inet4Address && it.isSiteLocalAddress }
-        }
+        const val FILE_NAME = "bookmarks.html"
+        private const val RECENT = 20
+        // Some browsers keep each site's icon inline in a bookmarks file, so a large one can run to a few megabytes.
+        private const val MAX_BODY = 16 * 1024 * 1024
     }
 }

@@ -113,6 +113,36 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         writableDatabase.delete("bookmarks", "url = ?", arrayOf(url))
     }
 
+    /** All bookmarks, newest first, with when each was added. */
+    fun bookmarkEntries(): List<BookmarkFile.Entry> =
+        query("SELECT title, url, created FROM bookmarks ORDER BY created DESC") {
+            BookmarkFile.Entry(it.getString(0), it.getString(1), it.getLong(2))
+        }
+
+    /**
+     * Adds the [entries] not bookmarked yet and returns how many. An entry without a date counts as added now, just
+     * after the one before it, so the list keeps the file's order.
+     */
+    fun importBookmarks(entries: List<BookmarkFile.Entry>): Int {
+        val db = writableDatabase
+        val now = System.currentTimeMillis()
+        var added = 0
+        db.beginTransaction()
+        try {
+            entries.forEachIndexed { i, e ->
+                val row = db.insertWithOnConflict("bookmarks", null, ContentValues().apply {
+                    put("title", e.title.ifBlank { e.url }); put("url", e.url)
+                    put("created", if (e.created > 0) e.created else now - i)
+                }, SQLiteDatabase.CONFLICT_IGNORE)
+                if (row != -1L) added++
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return added
+    }
+
     // History
 
     fun history(limit: Int = 500): List<HistoryEntry> =

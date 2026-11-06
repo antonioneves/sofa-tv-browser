@@ -58,6 +58,31 @@
     <string name="bookmarks_empty">No bookmarks yet. Add one from the menu while browsing.</string>
     <string name="confirm_clear_history">Delete all history?</string>
     <string name="confirm_clear_bookmarks">Delete all bookmarks?</string>
+    <string name="bookmarks_transfer">Import or export</string>
+    <string name="bookmarks_transfer_title">Import or export bookmarks</string>
+    <string name="bookmarks_transfer_how">The file works with Chrome, Firefox, Edge and Safari. Importing adds the bookmarks Sofa doesn\'t have yet, without their folders.</string>
+    <string name="bookmarks_with_phone">With a phone or computer</string>
+    <string name="bookmarks_export_file">Export to a file</string>
+    <string name="bookmarks_import_file">Import from a file</string>
+    <string name="bookmarks_step_open">Scan the code with a phone, or open the address below on a computer</string>
+    <string name="bookmarks_step_export">Download Sofa\'s bookmarks to import into another browser</string>
+    <string name="bookmarks_step_import">Or import a file exported from Chrome to add its bookmarks here</string>
+    <string name="bookmarks_or_open">Address for a phone or computer on the same network</string>
+    <string name="bookmarks_page_recent">Recent pages</string>
+    <string name="bookmarks_page_file">Bookmarks file</string>
+    <string name="bookmarks_page_file_text">Download Sofa\'s bookmarks as a file that Chrome, Firefox, Edge and Safari can import, or import a file exported from one of them. Sofa adds the bookmarks it doesn\'t have yet, without their folders.</string>
+    <string name="bookmarks_page_download">Download bookmarks</string>
+    <string name="bookmarks_page_choose">Import a file</string>
+    <string name="bookmarks_page_working">Adding…</string>
+    <string name="bookmarks_not_a_file">That isn\'t a bookmarks file. In Chrome, open the Bookmark manager and choose Export bookmarks from its menu.</string>
+    <string name="bookmarks_send_failed">The file couldn\'t be sent to the TV</string>
+    <string name="bookmarks_added_none">No new bookmarks: Sofa already has them all</string>
+    <plurals name="bookmarks_added">
+        <item quantity="one">Added %d bookmark</item>
+        <item quantity="other">Added %d bookmarks</item>
+    </plurals>
+    <string name="bookmarks_exported">Bookmarks exported</string>
+    <string name="bookmarks_file_failed">The file couldn\'t be read or saved</string>
 
     <!-- Browse -->
     <string name="home">Home</string>
@@ -132,7 +157,7 @@
     <string name="translate_failed">This page couldn\'t be translated. The site may not allow it, or Google Translate couldn\'t be reached.</string>
     <string name="phone_type">Type on your phone</string>
     <string name="phone_step_scan">Point your phone\'s camera at the code</string>
-    <string name="phone_step_type">Type an address or a search</string>
+    <string name="phone_step_type">Type a search, or pick a bookmark or a recent page</string>
     <string name="phone_step_open">It opens here on the TV</string>
     <string name="phone_or_open">Or type this on a phone on the same network</string>
     <string name="phone_page_title">Send to Sofa on the TV</string>

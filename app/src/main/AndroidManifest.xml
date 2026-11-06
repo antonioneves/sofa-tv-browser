@@ -31,6 +31,15 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" android:mimeType="video/*" />
         </intent>
+        <!-- Bookmarks to and from a file: offered only when the TV has a file picker, which many don't. -->
+        <intent>
+            <action android:name="android.intent.action.CREATE_DOCUMENT" />
+            <data android:mimeType="text/html" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT" />
+            <data android:mimeType="text/html" />
+        </intent>
     </queries>
 
     <!-- Picture-in-picture starts from the video bar or from Home (onUserLeaveHint), as on Android TV; lint's
