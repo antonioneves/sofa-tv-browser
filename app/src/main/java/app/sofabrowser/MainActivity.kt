@@ -57,6 +57,7 @@ import app.sofabrowser.browser.PageDownloads
 import app.sofabrowser.browser.PlayerRequest
 import app.sofabrowser.browser.Playlist
 import app.sofabrowser.browser.ProtectedMedia
+import app.sofabrowser.browser.SignInPages
 import app.sofabrowser.browser.RefreshRateMatch
 import app.sofabrowser.browser.UrlInput
 import app.sofabrowser.browser.VideoBar
@@ -70,6 +71,7 @@ import app.sofabrowser.browser.WebViews
 import app.sofabrowser.data.Db
 import app.sofabrowser.data.Favicons
 import app.sofabrowser.data.HistoryRetention
+import app.sofabrowser.data.SignIns
 import app.sofabrowser.data.Site
 import app.sofabrowser.data.SiteChoice
 import app.sofabrowser.downloads.Download
@@ -985,6 +987,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     // Browser events
 
     override fun onPageStarted(url: String) {
+        offerSignIn()
         if (findBar.showing) closeFind()
         loading = true
         zoomStep = 0
@@ -1022,6 +1025,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     override fun onVisited(url: String) {
+        offerSignIn()
         if (recordHistory && Browser.isWebUrl(url)) db.recordVisit(web?.title?.takeIf { web?.url == url }.orEmpty(), url)
     }
 
@@ -1879,6 +1883,60 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             .setPositiveButton(R.string.allow) { _, _ -> answered = true; browser.setDrmAnswer(origin, true); grant(true) }
             .setNegativeButton(R.string.block) { _, _ -> answered = true; browser.setDrmAnswer(origin, false); grant(false) }
             .setOnDismissListener { if (!answered) grant(false) }
+            .show()
+    }
+
+    // Saved sign-ins (SignInPages, SignIns)
+
+    private data class SentSignIn(val origin: String, val user: String, val password: String)
+
+    /** A password just sent, offered for saving once the page moves on or its form goes away. */
+    private var sentSignIn: SentSignIn? = null
+
+    override fun onSignInSent(origin: String, user: String, password: String) {
+        sentSignIn = SentSignIn(origin, user, password)
+    }
+
+    override fun onSignInFormGone(origin: String) {
+        if (sentSignIn?.origin == origin) offerSignIn()
+    }
+
+    private fun offerSignIn() {
+        val sent = sentSignIn ?: return
+        sentSignIn = null
+        if (browser.privateMode || !prefs.saveSignIns) return
+        val store = SignIns.get(this)
+        if (store.never(sent.origin)) return
+        val saved = store.users(sent.origin).contains(sent.user)
+        if (saved && store.password(sent.origin, sent.user) == sent.password) return
+        val site = Browser.hostOf(sent.origin)?.removePrefix("www.") ?: sent.origin
+        val user = sent.user.ifEmpty { getString(R.string.signin_no_user) }
+        dialog().setTitle(if (saved) R.string.signin_update_title else R.string.signin_save_title)
+            .setMessage(getString(if (saved) R.string.signin_update_message else R.string.signin_save_message, user, site))
+            .setPositiveButton(if (saved) R.string.signin_update else R.string.signin_save) { _, _ ->
+                store.save(sent.origin, sent.user, sent.password)
+                toast(R.string.signin_saved)
+            }
+            .setNegativeButton(R.string.signin_not_now, null)
+            .apply { if (!saved) setNeutralButton(R.string.signin_never) { _, _ -> store.setNever(sent.origin, true) } }
+            .show()
+    }
+
+    /** Fills in nothing by itself: the user picks the sign-in, and it goes only to the page that asked, if still there. */
+    override fun onSignInForm(form: SignInPages.Form) {
+        if (browser.privateMode || !prefs.saveSignIns || SignInPages.origin(web?.url) != form.origin) return
+        val store = SignIns.get(this)
+        val users = store.users(form.origin).takeIf { it.isNotEmpty() } ?: return
+        val site = Browser.hostOf(form.origin)?.removePrefix("www.") ?: form.origin
+        dialog().setTitle(getString(R.string.signin_fill_title, site))
+            .setItems(users.map { it.ifEmpty { getString(R.string.signin_no_user) } }.toTypedArray()) { _, which ->
+                if (SignInPages.origin(web?.url) != form.origin) return@setItems
+                val password = store.password(form.origin, users[which])
+                if (password == null) { toast(R.string.signin_unreadable); return@setItems }
+                form.fill(users[which], password)
+                store.markUsed(form.origin, users[which])
+            }
+            .setNegativeButton(R.string.signin_not_now, null)
             .show()
     }
 

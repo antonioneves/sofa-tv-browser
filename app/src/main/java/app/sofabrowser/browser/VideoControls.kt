@@ -503,6 +503,8 @@ class PageKey {
     val cosmetic = "_" + random(12)
     /** Name of the injected object that receives page downloads. */
     val downloads = "_" + random(12)
+    /** Name of the injected object for saved sign-ins (SignInPages). */
+    val signIns = "_" + random(12)
 
     private companion object {
         val rng = java.security.SecureRandom()

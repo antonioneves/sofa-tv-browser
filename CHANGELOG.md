@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Saved sign-ins** (Settings › Privacy, off by default): after you sign in on a secure (https) site, Sofa offers to
+  save the user name and password, and next time asks whether to fill them in. Passwords are encrypted with a key
+  Android keeps for Sofa, tied to the exact site and user name, and are only filled in after you pick a sign-in in
+  Sofa's own prompt. They're never saved in private browsing, never shown in Settings and never backed up. Settings ›
+  Saved sign-ins lists them, with a site and user name only, and removes one or all.
 - **Start page** (Settings › Browsing, off by default): "Open a page at start" makes Sofa open a chosen page instead
   of the home screen when it starts. Pick one of your bookmarks or type an address. Off, Sofa starts on the home
   screen as before.

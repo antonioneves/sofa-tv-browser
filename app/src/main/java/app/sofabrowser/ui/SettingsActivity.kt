@@ -42,6 +42,7 @@ import app.sofabrowser.browser.WebViews
 import app.sofabrowser.data.Db
 import app.sofabrowser.data.Favicons
 import app.sofabrowser.data.HistoryRetention
+import app.sofabrowser.data.SignIns
 import app.sofabrowser.data.SiteChoice
 import app.sofabrowser.forgetSiteChoices
 import app.sofabrowser.siteChoices
@@ -175,6 +176,12 @@ class SettingsActivity : Activity() {
         row(getString(R.string.drm_setting), getString(R.string.drm_setting_sub), valueText(drmLabel())) { pickDrm() }
         row(getString(R.string.keep_history), getString(R.string.keep_history_sub), valueText(historyLabel())) { pickHistory() }
         switch(R.string.clear_on_exit, R.string.clear_on_exit_sub, prefs::clearOnExit)
+        switch(R.string.save_signins, R.string.save_signins_sub, prefs::saveSignIns) { build() }
+        val signIns = SignIns.get(this)
+        val savedCount = signIns.all().size
+        if (prefs.saveSignIns || savedCount > 0 || signIns.neverSites().isNotEmpty()) {
+            nav(R.string.saved_signins, resources.getQuantityString(R.plurals.saved_signins_count, savedCount, savedCount)) { showSignIns() }
+        }
         nav(R.string.clear_now, null) { clearNow() }
         if (Space.active) {
             nav(R.string.pin_change, null) {
@@ -608,6 +615,47 @@ class SettingsActivity : Activity() {
                 StreamCopyProvider.clear(this)
                 Toast.makeText(this, R.string.cleared, Toast.LENGTH_SHORT).show()
             }.setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    /** Sites and user names only: passwords are never shown, so nobody reads them off the TV. */
+    private fun showSignIns() {
+        val store = SignIns.get(this)
+        val saved = store.all()
+        val never = store.neverSites()
+        fun site(origin: String) = origin.removePrefix("https://").removePrefix("www.")
+        val rows = saved.map { s ->
+            val user = s.user.ifEmpty { getString(R.string.signin_no_user) }
+            SpannableString(site(s.origin) + "\n" + user).apply {
+                val from = length - user.length
+                setSpan(RelativeSizeSpan(0.7f), from, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(ForegroundColorSpan(Ui.p.textWeak), from, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        } + never.map { o ->
+            val note = getString(R.string.signin_never_saved)
+            SpannableString(site(o) + "\n" + note).apply {
+                val from = length - note.length
+                setSpan(RelativeSizeSpan(0.7f), from, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(ForegroundColorSpan(Ui.p.textWeak), from, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+        val d = dialog().setTitle(R.string.saved_signins)
+        if (rows.isEmpty()) d.setMessage(R.string.saved_signins_none)
+        else d.setItems(rows.toTypedArray<CharSequence>()) { _, which ->
+            val label = rows[which].toString().replace('\n', ' ')
+            dialog().setMessage(getString(R.string.signin_remove_confirm, label))
+                .setPositiveButton(R.string.remove) { _, _ ->
+                    if (which < saved.size) store.remove(saved[which].origin, saved[which].user)
+                    else store.setNever(never[which - saved.size], false)
+                    build()
+                    showSignIns()
+                }.setNegativeButton(android.R.string.cancel, null).show()
+        }
+        if (rows.isNotEmpty()) d.setNeutralButton(R.string.signin_remove_all) { _, _ ->
+            dialog().setMessage(R.string.signin_remove_all_confirm)
+                .setPositiveButton(R.string.remove) { _, _ -> store.clear(); build() }
+                .setNegativeButton(android.R.string.cancel, null).show()
+        }
+        d.setPositiveButton(android.R.string.ok, null).show()
     }
 
     private fun about() {

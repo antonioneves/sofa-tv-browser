@@ -147,6 +147,8 @@ class Prefs(context: Context) {
         set(v) = p.edit().putInt("history_days", v).apply()
     /** Clears cookies, site storage, cache and history whenever the app is closed. */
     var clearOnExit by boolean("clear_on_exit", false)
+    /** Offers to save passwords sent on HTTPS pages, and to fill them in again (SignIns); off by default. */
+    var saveSignIns by boolean("save_signins", false)
     /** Shows the way into the private space; off, nothing on screen says there is one. */
     var privateSpace by boolean("private_space", false)
     var safeBrowsing by boolean("safe_browsing", false)

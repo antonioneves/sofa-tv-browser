@@ -42,7 +42,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class Browser(private val context: Context, private val prefs: Prefs, private val host: Host) {
 
-    interface Host {
+    /** Also hears about sign-ins on pages (SignInPages), when "Offer to save sign-ins" is on outside private browsing. */
+    interface Host : SignInPages.Listener {
         fun onPageStarted(url: String)
         fun onPageFinished(url: String)
         /** The new page is about to be drawn for the first time. */
@@ -163,6 +164,8 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             false
         }
         PageDownloads.install(view, key)
+        pageKey = key
+        applySignIns(view)
         InPageBlocking.install(view, key, adBlocker, active = { blocking(pageHost) }) { url ->
             debug("trap link removed: $url")
             adBlocker.countBlocked()
@@ -178,6 +181,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
 
     fun destroy() {
         web?.let {
+            SignInPages.forget(it)
             it.stopLoading()
             (it.parent as? android.view.ViewGroup)?.removeView(it)
             it.destroy()
@@ -203,7 +207,16 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             appliedUserAgent = agentKey(mode)
             applyGpc(it)
             applyBannerRejection(it)
+            applySignIns(it)
         }
+    }
+
+    private var pageKey: PageKey? = null
+
+    /** Never in private browsing: nothing typed there is offered for saving, and nothing saved is filled in. */
+    private fun applySignIns(view: WebView) {
+        val key = pageKey ?: return
+        if (prefs.saveSignIns && !privateMode) SignInPages.install(view, key, host) else SignInPages.remove(view)
     }
 
     /** The site's own "Browse as" choice for [url], or null when it follows the default in Settings. */

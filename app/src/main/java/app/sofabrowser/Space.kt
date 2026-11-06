@@ -11,6 +11,7 @@ import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.WebView
+import app.sofabrowser.data.SignIns
 import app.sofabrowser.data.SpacePin
 import app.sofabrowser.ui.PinActivity
 import java.io.File
@@ -113,6 +114,7 @@ object Space {
         File(context.dataDir, "shared_prefs").list().orEmpty().filter { it.startsWith(PREFIX) }
             .forEach { context.deleteSharedPreferences(it.removeSuffix(".xml")) }
         context.databaseList().filter { it.startsWith(PREFIX) && !it.endsWith("-journal") }.forEach { context.deleteDatabase(it) }
+        SignIns.deleteSpaceKey(PREFIX)
         SpacePin.clear(context)
     }
 
