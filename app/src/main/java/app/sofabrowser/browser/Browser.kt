@@ -29,6 +29,8 @@ import androidx.webkit.WebViewFeature
 import app.sofabrowser.Prefs
 import app.sofabrowser.siteUserAgents
 import app.sofabrowser.siteZooms
+import app.sofabrowser.hiddenElements
+import app.sofabrowser.data.HiddenElements
 import app.sofabrowser.adblock.AdBlocker
 import app.sofabrowser.adblock.Allowlist
 import app.sofabrowser.adblock.InPageBlocking
@@ -104,6 +106,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     private val privateUserAgents = HashMap<String, String>()
     /** Per-site zoom chosen in private browsing, likewise. */
     private val privateZooms = HashMap<String, Int>()
+    private val privateHidden = HashMap<String, String>()
     /** Ad blocking turned off or back on per host in private browsing; read on WebView's network threads too. */
     private val privateAdBlockOff = ConcurrentHashMap<String, Boolean>()
     /** "Keys go to the site" per host in private browsing. */
@@ -166,6 +169,8 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         PageDownloads.install(view, key)
         pageKey = key
         applySignIns(view)
+        HiddenPages.install(view, key, ::onElementPicked)
+        applyHidden(view)
         InPageBlocking.install(view, key, adBlocker, active = { blocking(pageHost) }) { url ->
             debug("trap link removed: $url")
             adBlocker.countBlocked()
@@ -188,11 +193,13 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         }
         web = null
         bannerScript = null
+        hiddenScript = null
+        picking = false
         frames.clear()
         host.onPlaying(false)
         if (isolated) deletePrivateProfile()
         if (privateMode) {
-            privateUserAgents.clear(); privateZooms.clear()
+            privateUserAgents.clear(); privateZooms.clear(); privateHidden.clear()
             privateAdBlockOff.clear(); privateKeysToPage.clear(); privateDrmAnswers.clear()
         }
         appliedUserAgent = null
@@ -208,6 +215,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             applyGpc(it)
             applyBannerRejection(it)
             applySignIns(it)
+            applyHidden(it)
         }
     }
 
@@ -217,6 +225,48 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     private fun applySignIns(view: WebView) {
         val key = pageKey ?: return
         if (prefs.saveSignIns && !privateMode) SignInPages.install(view, key, host) else SignInPages.remove(view)
+    }
+
+    private var hiddenScript: ScriptHandler? = null
+
+    /** Whether the user is choosing parts of the page to hide ([startPicking]). */
+    var picking = false
+        private set
+
+    /** Hides what the user chose for each site, on pages loaded from now on; the page in view keeps what it has. */
+    private fun applyHidden(view: WebView) {
+        hiddenScript?.remove()
+        hiddenScript = null
+        val sites = (if (privateMode) hiddenElements(context).toMap() + privateHidden else hiddenElements(context))
+            .mapValues { HiddenElements.parse(it.value) }.filterValues { it.isNotEmpty() }
+        hiddenScript = HiddenPages.apply(view, sites)
+    }
+
+    /** Lets the user point at parts of the page in view and hide them; false when this WebView can't. */
+    fun startPicking(): Boolean {
+        val view = web ?: return false
+        val key = pageKey ?: return false
+        if (!HiddenPages.supported() || siteOf(view.url) == null) return false
+        picking = true
+        HiddenPages.pick(view, key)
+        return true
+    }
+
+    fun stopPicking() {
+        if (!picking) return
+        picking = false
+        val view = web ?: return
+        pageKey?.let { HiddenPages.stop(view, it) }
+    }
+
+    private fun onElementPicked(pageHost: String, selector: String) {
+        val view = web ?: return
+        val site = Sites.of(pageHost)
+        // Only while the user is picking, and only for the site in view.
+        if (!picking || siteOf(view.url) != site || !HiddenElements.valid(selector)) return
+        if (privateMode) privateHidden[site] = HiddenElements.add(privateHidden[site], selector)
+        else hiddenElements(context).let { it[site] = HiddenElements.add(it[site], selector) }
+        applyHidden(view)
     }
 
     /** The site's own "Browse as" choice for [url], or null when it follows the default in Settings. */
@@ -309,6 +359,8 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             pageHost = AdBlocker.hostOf(url)
             pageUrl = url
             guard.pageStarted()
+            // The picker belongs to the page it was started on.
+            picking = false
             frames.clear()
             host.onPlaying(false)
             host.onPageStarted(url)

@@ -6,7 +6,7 @@ import kotlin.math.roundToInt
 
 /**
  * What the page menu keeps for one site: its zoom step (0 is 100%), its "Browse as" mode (null follows Settings),
- * ad blocking switched off, and the remote's keys sent to the page instead of the pointer.
+ * ad blocking switched off, the remote's keys sent to the page instead of the pointer, and the parts of its pages hidden.
  */
 data class SiteChoice(
     val site: String,
@@ -14,6 +14,8 @@ data class SiteChoice(
     val userAgent: String? = null,
     val adBlockOff: Boolean = false,
     val keysToPage: Boolean = false,
+    /** Parts of its pages hidden from the menu. */
+    val hidden: Int = 0,
 ) {
     companion object {
         /** The zoom shown for [step]: 25% a step, so 1 is 125% and -2 is 64%. */
@@ -24,7 +26,8 @@ data class SiteChoice(
          * by site, ad blocking and keys by host, so www.example.com and example.com come together.
          */
         fun collect(zooms: Map<String, String>, userAgents: Map<String, String>,
-                    adBlockOff: Set<String>, keysToPage: Set<String>): List<SiteChoice> {
+                    adBlockOff: Set<String>, keysToPage: Set<String>,
+                    hidden: Map<String, String> = emptyMap()): List<SiteChoice> {
             val all = HashMap<String, SiteChoice>()
             fun update(key: String, change: (SiteChoice) -> SiteChoice) {
                 val site = Sites.of(key.lowercase())
@@ -34,6 +37,7 @@ data class SiteChoice(
             userAgents.forEach { (key, mode) -> update(key) { it.copy(userAgent = mode) } }
             adBlockOff.forEach { host -> update(host) { it.copy(adBlockOff = true) } }
             keysToPage.forEach { host -> update(host) { it.copy(keysToPage = true) } }
+            hidden.forEach { (key, text) -> HiddenElements.count(text).takeIf { it > 0 }?.let { n -> update(key) { it.copy(hidden = n) } } }
             return all.values.sortedBy { it.site }
         }
     }

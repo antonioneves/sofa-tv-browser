@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Hide parts of a page**: in the menu, "Hide parts of the page", then point at something and press OK to hide it;
+  Back when you are done. Hidden parts stay hidden on that site's pages until you reset the site in
+  Settings › Site settings (which also lists how many parts are hidden). Included in the backup; in the private space
+  they are forgotten when it closes.
 - **Backup**: on the phone page (the one for typing and for bookmarks), download everything you set up as one file
   (settings, bookmarks, history, home tiles, search shortcuts, per-site choices and the ad blocking allowlist) and
   restore it later or on another TV. Restoring adds to what is there and never deletes; the file is checked, and

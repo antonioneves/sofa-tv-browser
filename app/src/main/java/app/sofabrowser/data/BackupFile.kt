@@ -69,6 +69,10 @@ object BackupFile {
     fun cleanPages(raw: List<Pair<String, String>>): List<Pair<String, String>> =
         raw.filter { (_, url) -> webAddress(url) && url.length <= 8192 }.map { (t, u) -> t.take(500) to u }
 
+    /** Sites (host names) with their hidden parts of pages kept to the plain selectors [HiddenElements] allows. */
+    fun cleanHidden(raw: Map<String, String>): Map<String, String> =
+        raw.filterKeys { HOST.matches(it) }.mapValues { HiddenElements.join(HiddenElements.parse(it.value)) }.filterValues { it.isNotEmpty() }
+
     /** A string map (shortcuts, per-site choices) with sane keys and values. */
     fun cleanMap(raw: Map<String, String>): Map<String, String> =
         raw.filter { (k, v) -> k.length in 1..300 && v.length <= 4096 }

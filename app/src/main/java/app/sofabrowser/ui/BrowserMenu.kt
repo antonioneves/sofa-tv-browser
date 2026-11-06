@@ -22,7 +22,7 @@ import app.sofabrowser.Space
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
 
-    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
+    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
     interface Actions {
         fun onAddress()
@@ -148,6 +148,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.TRANSLATE, R.drawable.ic_translate, R.string.translate)
         buttons[Action.TRANSLATE]?.setOnLongClickListener { actions.onActionHeld(Action.TRANSLATE); true }
         add(Action.READER, R.drawable.ic_article, R.string.reader_view)
+        add(Action.HIDE_PARTS, R.drawable.ic_visibility_off, R.string.hide_parts)
         add(Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark)
         add(Action.PIN, R.drawable.ic_add, R.string.pin_to_home)
         // A tile on the TV's home screen would show anyone what's in the private space.

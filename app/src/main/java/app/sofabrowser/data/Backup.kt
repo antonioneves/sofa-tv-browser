@@ -3,6 +3,7 @@ package app.sofabrowser.data
 import android.content.Context
 import app.sofabrowser.Space
 import app.sofabrowser.adblock.Allowlist
+import app.sofabrowser.hiddenElements
 import app.sofabrowser.savedSearchShortcuts
 import app.sofabrowser.siteUserAgents
 import app.sofabrowser.siteZooms
@@ -39,6 +40,7 @@ object Backup {
             .put("search_shortcuts", JSONObject(savedSearchShortcuts(context).toMap()))
             .put("site_user_agents", JSONObject(siteUserAgents(context).toMap()))
             .put("site_zoom", JSONObject(siteZooms(context).toMap()))
+            .put("hidden_elements", JSONObject(hiddenElements(context).toMap()))
             .put("allowlist", JSONArray(Allowlist.all(context).toList()))
             .toString(1)
     }
@@ -80,6 +82,9 @@ object Backup {
         savedSearchShortcuts(context).putAll(strings("search_shortcuts"))
         siteUserAgents(context).putAll(strings("site_user_agents").filterValues { it in app.sofabrowser.Prefs.UA_MODES })
         siteZooms(context).putAll(strings("site_zoom").filterValues { it.toIntOrNull() != null })
+        hiddenElements(context).let { saved ->
+            BackupFile.cleanHidden(strings("hidden_elements")).forEach { (site, text) -> saved[site] = text }
+        }
         root.optJSONArray("allowlist")?.let { a ->
             BackupFile.cleanHosts((0 until a.length()).map { a.opt(it) }).forEach { Allowlist.set(context, it, true) }
         }

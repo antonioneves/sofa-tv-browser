@@ -331,6 +331,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             when (event.keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
                     if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) when {
+                        browser.picking -> browser.stopPicking()
                         cursor.scrollMode -> cursor.setScrollMode(false)
                         web?.canGoBack() == true -> browser.goBack()
                         else -> finish()
@@ -351,6 +352,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         when (event.keyCode) {
             KeyEvent.KEYCODE_BACK -> {
                 if (down && event.repeatCount == 0) when {
+                    browser.picking -> browser.stopPicking()
                     cursor.scrollMode -> cursor.setScrollMode(false)
                     prefs.backGoesBack && web?.canGoBack() == true -> browser.goBack()
                     else -> showMenu()
@@ -669,6 +671,11 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             BrowserMenu.Action.READER -> if (Browser.isWebUrl(url)) {
                 menu?.dismiss()
                 if (reading) leaveReader() else read()
+            }
+            BrowserMenu.Action.HIDE_PARTS -> if (Browser.isWebUrl(url)) {
+                menu?.dismiss()
+                if (!cursor.cursorEnabled) toast(R.string.hide_parts_needs_pointer)
+                else toast(if (browser.startPicking()) R.string.hide_parts_toast else R.string.hide_parts_unsupported)
             }
             BrowserMenu.Action.BOOKMARK -> if (Browser.isWebUrl(url)) {
                 if (db.isBookmarked(url)) db.removeBookmark(url) else db.addBookmark(w.title.orEmpty(), url)

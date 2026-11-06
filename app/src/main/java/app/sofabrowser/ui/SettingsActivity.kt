@@ -534,6 +534,7 @@ class SettingsActivity : Activity() {
         },
         if (s.adBlockOff) getString(R.string.site_adblock_off) else null,
         if (s.keysToPage) getString(R.string.site_keys_to_page) else null,
+        s.hidden.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.site_hidden, it, it) },
     ).joinToString(getString(R.string.site_settings_separator))
 
     private fun resetSite(s: SiteChoice) {

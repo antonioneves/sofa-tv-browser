@@ -197,6 +197,14 @@
     <string name="user_agent_default">Default (%1$s)</string>
     <string name="scroll_mode">Scroll mode</string>
     <string name="scroll_mode_hint">Scroll mode · ↑↓←→ scroll · OK or Back to exit</string>
+    <string name="hide_parts">Hide parts of the page</string>
+    <string name="hide_parts_toast">Point at something and press OK to hide it. Back when you are done. Settings › Site settings brings hidden parts back.</string>
+    <string name="hide_parts_needs_pointer">Bring the pointer back first: this site gets the keys.</string>
+    <string name="hide_parts_unsupported">This page can\'t be edited here.</string>
+    <plurals name="site_hidden">
+        <item quantity="one">%d part hidden</item>
+        <item quantity="other">%d parts hidden</item>
+    </plurals>
     <string name="pointer">Pointer</string>
     <string name="pointer_on">Pointer: on here</string>
     <string name="pointer_off">D-pad keys: on here</string>
