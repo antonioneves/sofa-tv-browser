@@ -13,6 +13,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import app.sofabrowser.R
+import app.sofabrowser.browser.Warmup
 import app.sofabrowser.data.Db
 import app.sofabrowser.data.Site
 
@@ -136,7 +137,11 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         if (active) R.drawable.ic_downloading else R.drawable.ic_download,
         context.getString(if (active) R.string.downloads_active else R.string.downloads))
 
+    /** Whether pointing at a tile gets its site's connection ready (Warmup); not in private browsing. */
+    private var warm = false
+
     fun refresh(privateMode: Boolean, adBlock: Boolean) {
+        warm = !privateMode
         background = Ui.background(privateMode)
         micButton.visibility = if (prefs.voiceSearch) VISIBLE else GONE
         spaceButton.visibility = if (app.sofabrowser.Space.offered(context)) VISIBLE else GONE
@@ -191,6 +196,8 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         sites.forEach { site ->
             line.addView(SiteCard(context, site).apply {
                 setOnClickListener { if (moving == null) listener.onOpen(site.url) }
+                val focus = onFocusChangeListener
+                setOnFocusChangeListener { v, has -> focus?.onFocusChange(v, has); if (has && warm) Warmup.preconnect(site.url) }
                 extra?.invoke(this)
             })
         }

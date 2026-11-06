@@ -35,6 +35,7 @@ import app.sofabrowser.searchShortcuts
 import app.sofabrowser.browser.PhoneLink
 import app.sofabrowser.browser.SearchShortcuts
 import app.sofabrowser.browser.UrlInput
+import app.sofabrowser.browser.Warmup
 import app.sofabrowser.data.Db
 import org.json.JSONArray
 import java.net.HttpURLConnection
@@ -52,6 +53,9 @@ class SearchActivity : Activity() {
     private lateinit var engineLabel: TextView
     private lateinit var list: LinearLayout
     private val handler = Handler(Looper.getMainLooper())
+    private val privateMode by lazy { intent.getBooleanExtra(EXTRA_PRIVATE, false) }
+    private var typedSite: String? = null
+    private val warmTyped = Runnable { Warmup.preconnect(typedSite) }
     private var remoteRequest = 0
     private lateinit var micButton: FrameLayout
     private lateinit var micIcon: ImageView
@@ -66,7 +70,7 @@ class SearchActivity : Activity() {
         prefs = Prefs(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = Ui.background(intent.getBooleanExtra(EXTRA_PRIVATE, false))
+            background = Ui.background(privateMode)
             setPadding(88.px, 80.px, 88.px, 0)
             // The mic halo may grow beyond the button row and into the padding.
             clipToPadding = false
@@ -200,13 +204,19 @@ class SearchActivity : Activity() {
         list.removeAllViews()
         val q = text.trim()
         if (q.isEmpty() || q == intent.getStringExtra(EXTRA_CURRENT_URL)) return
+        // The site OK would open gets its connection ready once the typing pauses, not for every half-typed address.
+        if (!privateMode) {
+            typedSite = UrlInput.resolve(q, prefs.searchEngine, searchShortcuts(this))
+            field.removeCallbacks(warmTyped)
+            field.postDelayed(warmTyped, 400)
+        }
         // A shortcut says where to search, so neither history nor the engine's suggestions apply.
         SearchShortcuts.match(q, searchShortcuts(this))?.let { (shortcut, query) ->
-            addRow(R.drawable.ic_search, getString(R.string.search_shortcut_row, shortcut.name, query), null) { open(shortcut.url(query)) }
+            addRow(R.drawable.ic_search, getString(R.string.search_shortcut_row, shortcut.name, query), null, shortcut.url(query)) { open(shortcut.url(query)) }
             return
         }
         val local = Db.get(this).suggest(q, 4)
-        local.forEach { addRow(R.drawable.ic_history, it.title.ifBlank { it.url }, UrlInput.display(it.url)) { open(it.url) } }
+        local.forEach { addRow(R.drawable.ic_history, it.title.ifBlank { it.url }, UrlInput.display(it.url), it.url) { open(it.url) } }
         val engine = prefs.searchEngine
         val suggestUrl = engine.suggestTemplate
         if (!prefs.searchSuggestions || suggestUrl == null) return
@@ -242,7 +252,8 @@ class SearchActivity : Activity() {
         finish()
     }
 
-    private fun addRow(icon: Int, title: String, subtitle: String?, onClick: () -> Unit) {
+    /** A suggestion; [url], when known, gets its connection ready while the row has the focus. */
+    private fun addRow(icon: Int, title: String, subtitle: String?, url: String? = null, onClick: () -> Unit) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -264,6 +275,7 @@ class SearchActivity : Activity() {
             t.setTextColor(c)
             s?.setTextColor(if (has) Ui.p.onFocusWeak else Ui.p.textWeak)
             img.setColorFilter(c, PorterDuff.Mode.SRC_IN)
+            if (has && !privateMode) Warmup.preconnect(url)
         }
         list.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 94.px))
     }

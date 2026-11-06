@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Sites open sooner**: as Chrome does, Sofa opens the connection to a site while you point at its tile or
+  suggestion or type its address, so the page starts as soon as you press OK. Only a connection, nothing is asked of
+  the site; never in private browsing. Needs a recent Android System WebView.
 - **Hide parts of a page**: in the menu, "Hide parts of the page", then point at something and press OK to hide it;
   Back when you are done; hold OK on the menu button to bring back the last one hidden. Hidden parts stay hidden on that site's pages until you reset the site in
   Settings › Site settings (which also lists how many parts are hidden). Included in the backup; in the private space
