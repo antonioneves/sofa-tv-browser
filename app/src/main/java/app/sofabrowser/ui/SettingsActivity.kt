@@ -26,6 +26,7 @@ import androidx.webkit.WebViewFeature
 import app.sofabrowser.BuildConfig
 import app.sofabrowser.Prefs
 import app.sofabrowser.R
+import app.sofabrowser.Space
 import app.sofabrowser.adblock.AdBlocker
 import app.sofabrowser.adblock.FilterList
 import app.sofabrowser.browser.ExternalPlayer
@@ -147,6 +148,13 @@ class SettingsActivity : Activity() {
         row(getString(R.string.keep_history), getString(R.string.keep_history_sub), valueText(historyLabel())) { pickHistory() }
         switch(R.string.clear_on_exit, R.string.clear_on_exit_sub, prefs::clearOnExit)
         nav(R.string.clear_now, null) { clearNow() }
+        if (Space.active) {
+            nav(R.string.pin_change, null) {
+                startActivity(Intent(this, PinActivity::class.java).putExtra(PinActivity.EXTRA_MODE, PinActivity.MODE_CHANGE))
+            }
+        } else if (Space.supported) {
+            switch(R.string.private_space, R.string.private_space_sub, prefs::privateSpace)
+        }
 
         // Only for copies that no app store keeps up to date (never in the Google Play build).
         if (Updater.offered(this)) {

@@ -7,6 +7,8 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import app.sofabrowser.R
+import app.sofabrowser.Space
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
@@ -16,13 +18,13 @@ import java.io.OutputStream
 /**
  * Where downloads are written. Android 10+: the shared Download folder through MediaStore, kept pending (hidden
  * from other apps) until complete. Older Android: Sofa's own download folder, which needs no storage permission;
- * [DownloadFileProvider] lets other apps open those files.
+ * [DownloadFileProvider] lets other apps open those files. The private space never uses the shared folder.
  *
  * A target is stored as a string: a content:// URI, or an absolute file path.
  */
 object DownloadStorage {
 
-    private val useMediaStore get() = Build.VERSION.SDK_INT >= 29
+    private val useMediaStore get() = Build.VERSION.SDK_INT >= 29 && !Space.active
 
     fun create(context: Context, name: String, mime: String?): String {
         if (useMediaStore) {
@@ -91,11 +93,13 @@ object DownloadStorage {
 
     /** Human-readable save location, for the Downloads screen. */
     fun locationLabel(context: Context): String =
-        if (useMediaStore) Environment.DIRECTORY_DOWNLOADS
+        if (Space.active) context.getString(R.string.private_space)
+        else if (useMediaStore) Environment.DIRECTORY_DOWNLOADS
         else legacyDir(context).absolutePath.removePrefix(Environment.getExternalStorageDirectory().absolutePath + "/")
 
     internal fun legacyDir(context: Context): File =
-        (context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: File(context.filesDir, "downloads")).apply { mkdirs() }
+        if (Space.active) File(Space.files(context), "downloads").apply { mkdirs() }
+        else (context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: File(context.filesDir, "downloads")).apply { mkdirs() }
 
     private fun isUri(target: String) = target.startsWith("content://")
 }

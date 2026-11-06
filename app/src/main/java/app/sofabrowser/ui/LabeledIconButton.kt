@@ -11,13 +11,18 @@ import android.widget.TextView
 /**
  * A round icon button with its label shown underneath only while focused (BrowsHere's top bar and menu style).
  * The button has a fixed width; the label may spill sideways over its neighbours, so hidden labels never make
- * the spacing uneven. On/off state is shown by the icon itself (filled when on, outlined when off).
+ * the spacing uneven. On/off state is shown by the icon itself (filled when on, outlined when off). Without
+ * [labelled], the button is just its circle, and the label is only read out by TalkBack.
  */
 @SuppressLint("ViewConstructor")
-class LabeledIconButton(context: Context, icon: Int, label: String, onClick: () -> Unit) : FrameLayout(context) {
+class LabeledIconButton(context: Context, icon: Int, label: String, private val labelled: Boolean = true, onClick: () -> Unit) : FrameLayout(context) {
     private val circle = FrameLayout(context)
     private val image = ImageView(context)
     private val text: TextView = Ui.text(context, 24, Ui.p.text)
+
+    /** The icon's colour while not focused, instead of the text colour. */
+    var accent: Int? = null
+        set(value) { field = value; tint(hasFocus()) }
 
     /** Called when the button gains focus. */
     var onFocused: (() -> Unit)? = null
@@ -39,11 +44,11 @@ class LabeledIconButton(context: Context, icon: Int, label: String, onClick: () 
         text.text = label
         text.gravity = Gravity.CENTER_HORIZONTAL
         text.maxLines = 1
-        text.visibility = INVISIBLE
+        text.visibility = if (labelled) INVISIBLE else GONE
         addView(text, LayoutParams(LABEL_WIDTH.px, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
             topMargin = 92.px
         })
-        layoutParams = LayoutParams(WIDTH.px, 128.px)
+        layoutParams = LayoutParams(WIDTH.px, if (labelled) 128.px else 80.px)
         tint(false)
         setOnFocusChangeListener { _, has -> focused(has) }
     }
@@ -63,15 +68,15 @@ class LabeledIconButton(context: Context, icon: Int, label: String, onClick: () 
 
     private fun focused(has: Boolean) {
         if (has) onFocused?.invoke()
-        text.visibility = if (has) VISIBLE else INVISIBLE
+        if (labelled) text.visibility = if (has) VISIBLE else INVISIBLE
         tint(has)
         Ui.animateScale(circle, if (has) 1.12f else 1f, has)
     }
 
-    private fun tint(focused: Boolean) = image.setColorFilter(if (focused) Ui.p.onFocus else Ui.p.text)
+    private fun tint(focused: Boolean) = image.setColorFilter(if (focused) Ui.p.onFocus else accent ?: Ui.p.text)
 
     companion object {
         const val WIDTH = 104
-        private const val LABEL_WIDTH = 320
+        const val LABEL_WIDTH = 320
     }
 }

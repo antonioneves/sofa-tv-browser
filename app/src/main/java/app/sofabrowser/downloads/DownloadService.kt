@@ -23,6 +23,7 @@ class DownloadService : Service() {
 
     private val listener: () -> Unit = { update() }
     private lateinit var manager: NotificationManager
+    private var foreground = false
 
     override fun onCreate() {
         super.onCreate()
@@ -39,6 +40,7 @@ class DownloadService : Service() {
         val n = notification()
         if (Build.VERSION.SDK_INT >= 29) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         else startForeground(ID, n)
+        foreground = true
         update()
         return START_NOT_STICKY
     }
@@ -50,6 +52,8 @@ class DownloadService : Service() {
     }
 
     private fun update() {
+        // A quick download can end before onStartCommand; stopping then, before startForeground, crashes Sofa.
+        if (!foreground) return
         if (DownloadEngine.activeCount == 0) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()

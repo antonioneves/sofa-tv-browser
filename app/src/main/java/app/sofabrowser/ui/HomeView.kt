@@ -9,7 +9,6 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -33,15 +32,20 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         fun onTogglePrivate()
         fun onToggleAdBlock()
         fun onSettings()
+        fun onSpace()
         fun onTileMenu(site: Site)
+        fun onMostVisitedMenu(site: Site)
         fun onAddTile()
         fun onDownloads()
-        fun onExit()
     }
 
     private val db = Db.get(context)
     private val prefs = app.sofabrowser.Prefs(context)
-    private val rows = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+    // Draws into its own padding, where the rows reach out so a focused first tile isn't cut.
+    private val rows = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        clipToPadding = false
+    }
     private val scroller = FocusScrollView(context).apply {
         isVerticalScrollBarEnabled = false
         isFillViewport = true
@@ -50,10 +54,12 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
     }
     val searchPill: View
     private val privateButton: LabeledIconButton
+    private val spaceButton: LabeledIconButton
     private val adBlockButton: LabeledIconButton
     private val downloadsButton: LabeledIconButton
     private val micButton: LabeledIconButton
     private var tilesRow: LinearLayout? = null
+    private var mostVisitedRow: LinearLayout? = null
 
     /** When non-null, the tile being moved with Left/Right; OK or Back drops it. */
     private var moving: SiteCard? = null
@@ -82,7 +88,8 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
             background = Ui.fillSelector(Ui.p.fill, Ui.p.focus, 18)
             setPadding(24.px, 0, 24.px, 0)
             val icon = ImageView(context).apply { setImageResource(R.drawable.ic_search) }
-            val hint = Ui.text(context, 32, Ui.p.textHint).apply { text = context.getString(R.string.search_hint) }
+            val hint = Ui.text(context, 32, Ui.p.textHint).apply { text = context.getString(if (app.sofabrowser.Space.active) R.string.search_hint_space else R.string.search_hint)
+            }
             addView(icon, LinearLayout.LayoutParams(40.px, 40.px).apply { marginEnd = 20.px })
             addView(hint)
             setOnFocusChangeListener { _, has ->
@@ -93,7 +100,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
             setOnClickListener { listener.onSearch() }
         }
         top.addView(searchPill, LinearLayout.LayoutParams(760.px, 88.px))
-        fun button(icon: Int, label: Int, onClick: () -> Unit) = LabeledIconButton(context, icon, context.getString(label), onClick)
+        fun button(icon: Int, label: Int, onClick: () -> Unit) = LabeledIconButton(context, icon, context.getString(label), onClick = onClick)
         fun params(start: Int) = LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LayoutParams.WRAP_CONTENT).apply {
             marginStart = start.px
             topMargin = 4.px
@@ -102,6 +109,11 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         top.addView(micButton, params(8))
         top.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
         privateButton = button(R.drawable.ic_private, R.string.private_mode) { listener.onTogglePrivate() }
+        spaceButton = if (app.sofabrowser.Space.active) {
+            button(R.drawable.ic_lock_open, R.string.private_space_leave) { listener.onSpace() }.apply { accent = Ui.SPACE }
+        } else {
+            button(R.drawable.ic_lock, R.string.private_space) { listener.onSpace() }
+        }
         adBlockButton = button(R.drawable.ic_shield, R.string.ad_blocker) { listener.onToggleAdBlock() }
         downloadsButton = button(R.drawable.ic_download, R.string.downloads) { listener.onDownloads() }
         listOf(
@@ -109,9 +121,9 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
             button(R.drawable.ic_history, R.string.history) { listener.onHistory() },
             downloadsButton,
             privateButton,
+            spaceButton,
             adBlockButton,
             button(R.drawable.ic_settings, R.string.settings) { listener.onSettings() },
-            button(R.drawable.ic_exit, R.string.exit_sofa) { listener.onExit() },
         ).forEach { top.addView(it, params(12)) }
 
         column.addView(top)
@@ -127,12 +139,16 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
     fun refresh(privateMode: Boolean, adBlock: Boolean) {
         background = Ui.background(privateMode)
         micButton.visibility = if (prefs.voiceSearch) VISIBLE else GONE
+        spaceButton.visibility = if (app.sofabrowser.Space.offered(context)) VISIBLE else GONE
         privateButton.set(if (privateMode) R.drawable.ic_private_filled else R.drawable.ic_private,
             context.getString(if (privateMode) R.string.private_mode_on else R.string.private_mode_off))
         adBlockButton.set(if (adBlock) R.drawable.ic_shield_filled else R.drawable.ic_shield,
             context.getString(if (adBlock) R.string.adblock_on_short else R.string.adblock_off_short))
         setDownloadsActive(app.sofabrowser.downloads.DownloadEngine.activeCount > 0)
-        val focusedUrl = (findFocus() as? SiteCard)?.site?.url
+        val focused = findFocus() as? SiteCard
+        val focusedUrl = focused?.site?.url
+        val focusedRow = (focused?.parent as? View)?.tag
+        val focusedIndex = (focused?.parent as? ViewGroup)?.indexOfChild(focused) ?: 0
         rows.removeAllViews()
         rows.setPadding(96.px, 24.px, 0, 64.px)
 
@@ -144,13 +160,20 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 setOnClickListener { listener.onAddTile() }
             })
         }
+        mostVisitedRow = null
         if (!privateMode && prefs.showMostVisited) {
-            db.mostVisited(10).takeIf { it.isNotEmpty() }?.let { addRow(R.string.most_visited, it) }
+            db.mostVisited(10).takeIf { it.isNotEmpty() }?.let {
+                mostVisitedRow = addRow(R.string.most_visited, it) { card ->
+                    card.setOnLongClickListener { card.site?.let(listener::onMostVisitedMenu); true }
+                }
+            }
         }
         db.bookmarks().take(12).takeIf { it.isNotEmpty() }?.let { addRow(R.string.bookmarks, it) }
 
+        // A tile that was removed hands the focus to the one that took its place in the row.
         val restore = focusedUrl?.let { url -> findCard { it.site?.url == url } }
-        (restore ?: if (findFocus() == null) tilesRow?.getChildAt(0) else null)?.requestFocus()
+            ?: focusedRow?.let { rows.findViewWithTag<ViewGroup>(it) }?.let { it.getChildAt(minOf(focusedIndex, it.childCount - 1)) }
+        (restore ?: if (focused != null || findFocus() == null) tilesRow?.getChildAt(0) else null)?.requestFocus()
     }
 
     private fun addRow(title: Int, sites: List<Site>, extra: ((SiteCard) -> Unit)? = null): LinearLayout {
@@ -159,10 +182,11 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
             setPadding(0, 32.px, 0, 18.px)
         })
         val line = LinearLayout(context).apply {
+            tag = title
             orientation = LinearLayout.HORIZONTAL
             clipChildren = false
             clipToPadding = false
-            setPadding(8.px, 12.px, 96.px, 12.px)
+            setPadding(24.px, 12.px, 96.px, 12.px)
         }
         sites.forEach { site ->
             line.addView(SiteCard(context, site).apply {
@@ -170,12 +194,13 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 extra?.invoke(this)
             })
         }
-        rows.addView(HorizontalScrollView(context).apply {
+        // Starts 16 px left of the titles, with as much padding inside, so a focused first tile grows without being cut.
+        rows.addView(FocusRowScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             clipChildren = false
             clipToPadding = false
             addView(line)
-        })
+        }, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { marginStart = -16.px })
         return line
     }
 
@@ -198,11 +223,18 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // Menu on a Quick access tile opens its options, like a long press of OK.
+        // Menu on a Quick access or Most visited tile opens its options, like a long press of OK.
         if (moving == null && event.keyCode == KeyEvent.KEYCODE_MENU) {
             val focused = findFocus() as? SiteCard
-            if (focused != null && focused.parent === tilesRow && focused.site != null) {
-                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) listener.onTileMenu(focused.site)
+            val site = focused?.site
+            val open = when {
+                site == null -> null
+                focused.parent === tilesRow -> listener::onTileMenu
+                focused.parent === mostVisitedRow -> listener::onMostVisitedMenu
+                else -> null
+            }
+            if (open != null && site != null) {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) open(site)
                 return true
             }
         }

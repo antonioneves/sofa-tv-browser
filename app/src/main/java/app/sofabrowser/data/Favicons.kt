@@ -12,6 +12,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.util.LruCache
+import app.sofabrowser.Space
 import java.io.File
 import kotlin.concurrent.thread
 
@@ -20,7 +21,7 @@ import kotlin.concurrent.thread
  * sites without a cached icon get a letter tile.
  */
 class Favicons private constructor(private val context: Context) {
-    private val dir = File(context.filesDir, "favicons").apply { mkdirs() }
+    private val dir = File(Space.files(context), "favicons").apply { mkdirs() }
     private val memory = LruCache<String, Bitmap>(64)
 
     fun save(pageUrl: String, icon: Bitmap) {

@@ -37,6 +37,7 @@ class DownloadsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             background = Ui.background(false)
             setPadding(116.px, 72.px, 116.px, 0)
+            clipToPadding = false
         }
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         header.addView(Ui.text(this, 56, p.text, bold = true).apply { text = getString(R.string.downloads) },
@@ -48,12 +49,20 @@ class DownloadsActivity : Activity() {
             setPadding(0, 12.px, 0, 0)
         })
 
-        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 32.px, 0, 72.px); clipChildren = false }
+        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24.px, 32.px, 24.px, 72.px); clipChildren = false; clipToPadding = false }
         val frame = FrameLayout(this)
-        frame.addView(FocusScrollView(this).apply { isVerticalScrollBarEnabled = false; clipChildren = false; addView(list) })
+        // Reaches 24 px into the side margins, with as much padding in the list, so a focused card grows without being cut.
+        frame.addView(FocusScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            clipChildren = false
+            addView(list)
+        })
         empty = Ui.text(this, 32, p.textWeak).apply { text = getString(R.string.downloads_empty); gravity = Gravity.CENTER }
         frame.addView(empty, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        root.addView(frame, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        root.addView(frame, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply {
+            marginStart = -24.px
+            marginEnd = -24.px
+        })
         setContentView(root)
         refresh()
         list.getChildAt(0)?.let { (it as? Row)?.body?.requestFocus() }

@@ -6,6 +6,7 @@
 
     <!-- Home -->
     <string name="search_hint">Search or type a URL</string>
+    <string name="search_hint_space">Private space: search or type a URL</string>
     <string name="voice_search">Voice search</string>
     <string name="voice_prompt">Say a search or a site</string>
     <string name="voice_search_sub">Mic buttons on the home and search screens. On Android 13 and newer, turning it off also gives back the microphone permission when Sofa closes.</string>
@@ -31,10 +32,10 @@
     <string name="bookmarks">Bookmarks</string>
     <string name="history">History</string>
     <string name="settings">Settings</string>
-    <string name="exit_sofa">Exit Sofa</string>
     <string name="quick_access">Quick access</string>
     <string name="most_visited">Most visited</string>
     <string name="add_site">Add site</string>
+    <string name="add_to_quick_access">Add to Quick access</string>
     <string name="back_again_to_exit">Press Back again to exit</string>
     <string name="open">Open</string>
     <string name="move">Move</string>
@@ -69,6 +70,24 @@
     <string name="bookmark_added">Bookmark added</string>
     <string name="bookmark_removed">Bookmark removed</string>
     <string name="pin_to_home">Add to home</string>
+    <string name="private_space">Private space</string>
+    <string name="private_space_sub">Shows a button for a second Sofa behind a PIN, with its own bookmarks, history, settings, logins and downloads. Turning this off hides the button and keeps what\'s inside.</string>
+    <string name="private_space_leave">Leave private space</string>
+    <string name="pin_choose">Choose a PIN</string>
+    <string name="pin_choose_sub">The private space keeps its own bookmarks, history, settings, logins and downloads, apart from the rest of Sofa. Only this PIN opens it.</string>
+    <string name="pin_enter">Enter your PIN</string>
+    <string name="pin_repeat">Enter the same PIN again</string>
+    <string name="pin_mismatch">The PINs didn\'t match. Choose one again.</string>
+    <string name="pin_wrong">Wrong PIN</string>
+    <string name="pin_wait">Too many tries. Try again in %1$d seconds.</string>
+    <string name="pin_current">Enter your current PIN</string>
+    <string name="pin_new">Choose a new PIN</string>
+    <string name="pin_change">Change PIN</string>
+    <string name="pin_changed">PIN changed</string>
+    <string name="pin_forgot">Forgot PIN</string>
+    <string name="pin_forgot_title">Erase the private space?</string>
+    <string name="pin_forgot_message">A forgotten PIN can\'t be recovered. This deletes everything in the private space, including its bookmarks and downloads. The rest of Sofa stays as it is.</string>
+    <string name="pin_forgot_erase">Erase everything</string>
     <string name="tv_shortcut">Add to TV home</string>
     <string name="shortcut_building">Making the TV home tile…</string>
     <string name="shortcut_added">Added to the TV home screen: find it among your apps.</string>

@@ -111,6 +111,8 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
             background = Ui.rounded(if (p.dark) 0xFF252B48.toInt() else 0xFFFFFFFF.toInt(), 44, p.fillFocused, 2)
             setPadding(44.px, 40.px, 44.px, 32.px)
             clipChildren = false
+            // A focused button at the end of the row grows into the padding.
+            clipToPadding = false
         }
         val wide = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 

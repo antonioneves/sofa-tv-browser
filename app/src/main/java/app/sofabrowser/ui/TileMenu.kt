@@ -12,22 +12,16 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import app.sofabrowser.R
 import app.sofabrowser.data.Site
 
 /**
- * The menu for a quick-access tile, opened by holding OK on it: the tile's name and address above a column of
+ * The menu for a home screen tile or a History or Bookmarks card, opened by holding OK on it: the tile's name and address above a column of
  * labelled actions on a rounded sheet, in the same focus style as the browse menu.
  */
-class TileMenu(context: Context, private val site: Site, private val actions: Actions) :
+class TileMenu(context: Context, private val site: Site, private val items: List<Item>) :
     Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
 
-    interface Actions {
-        fun open(site: Site)
-        fun move(site: Site)
-        fun edit(site: Site)
-        fun remove(site: Site)
-    }
+    class Item(val icon: Int, val label: Int, val action: () -> Unit)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,12 +52,7 @@ class TileMenu(context: Context, private val site: Site, private val actions: Ac
             setMargins(16.px, 6.px, 16.px, 20.px)
         })
 
-        val rows = listOf(
-            row(R.drawable.ic_open_in_new, R.string.open) { actions.open(site) },
-            row(R.drawable.ic_swap_vert, R.string.move) { actions.move(site) },
-            row(R.drawable.ic_edit, R.string.edit) { actions.edit(site) },
-            row(R.drawable.ic_delete, R.string.remove) { actions.remove(site) },
-        )
+        val rows = items.map { row(it.icon, it.label, it.action) }
         rows.forEachIndexed { i, row ->
             sheet.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 72.px).apply {
                 if (i > 0) topMargin = 6.px

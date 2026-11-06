@@ -18,6 +18,7 @@ import android.view.animation.OvershootInterpolator
 import android.widget.TextView
 import app.sofabrowser.Prefs
 import app.sofabrowser.R
+import app.sofabrowser.Space
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -26,6 +27,8 @@ import kotlin.math.roundToInt
 class Palette(
     val dark: Boolean,
     val bgTop: Int, val bgMid: Int, val bgBottom: Int, val bgPrivate: Int,
+    /** The background inside the private space, so it can't be taken for the rest of Sofa. */
+    val bgSpaceTop: Int, val bgSpaceMid: Int, val bgSpaceBottom: Int, val sheetSpace: Int,
     /** Primary, secondary, weak and hint text. */
     val text: Int, val textMid: Int, val textWeak: Int, val textHint: Int,
     /** Subtle surface (rows, pills) and card surface, each with a focused variant. */
@@ -51,10 +54,13 @@ object Ui {
 
     const val BRAND = 0xFFFF8A3D.toInt()
     const val SWITCH_ON = 0xFF4560E6.toInt()
+    /** Marks the private space's button while inside it. */
+    const val SPACE = 0xFF3DD6B5.toInt()
 
     val DARK = Palette(
         dark = true,
         bgTop = 0xFF35427C.toInt(), bgMid = 0xFF1B213C.toInt(), bgBottom = 0xFF121626.toInt(), bgPrivate = 0xFF151519.toInt(),
+        bgSpaceTop = 0xFF1C6B62.toInt(), bgSpaceMid = 0xFF113633.toInt(), bgSpaceBottom = 0xFF0B1E1E.toInt(), sheetSpace = 0xF00B2B27.toInt(),
         text = 0xE6F0F0F2.toInt(), textMid = 0xB3F0F0F2.toInt(), textWeak = 0x66F0F0F2, textHint = 0x4DFFFFFF,
         fill = 0x0AFFFFFF, fillFocused = 0x1FFFFFFF, card = 0x14FFFFFF, cardFocused = 0x29FFFFFF,
         focus = 0xE6FFFFFF.toInt(), onFocus = 0xE6000000.toInt(), onFocusWeak = 0x99000000.toInt(),
@@ -68,6 +74,7 @@ object Ui {
     val LIGHT = Palette(
         dark = false,
         bgTop = 0xFFFFFFFF.toInt(), bgMid = 0xFFF1F3F7.toInt(), bgBottom = 0xFFE4E7EE.toInt(), bgPrivate = 0xFFE3E0EC.toInt(),
+        bgSpaceTop = 0xFFE6F7F3.toInt(), bgSpaceMid = 0xFFD3EEE8.toInt(), bgSpaceBottom = 0xFFBFE3DB.toInt(), sheetSpace = 0xF5E3F4F0.toInt(),
         text = 0xF0101318.toInt(), textMid = 0xB3101318.toInt(), textWeak = 0x80101318.toInt(), textHint = 0x66101318,
         fill = 0x0D101318, fillFocused = 0x1A101318, card = 0xCCFFFFFF.toInt(), cardFocused = 0xFFFFFFFF.toInt(),
         focus = 0xF01B1F2A.toInt(), onFocus = 0xF2FFFFFF.toInt(), onFocusWeak = 0xB3FFFFFF.toInt(),
@@ -102,11 +109,11 @@ object Ui {
         else -> DARK
     }
 
-    fun background(private: Boolean): Drawable =
+    fun background(private: Boolean, space: Boolean = Space.active): Drawable =
         if (private) ColorDrawable(p.bgPrivate)
         else GradientDrawable().apply {
             gradientType = GradientDrawable.RADIAL_GRADIENT
-            colors = intArrayOf(p.bgTop, p.bgMid, p.bgBottom)
+            colors = if (space) intArrayOf(p.bgSpaceTop, p.bgSpaceMid, p.bgSpaceBottom) else intArrayOf(p.bgTop, p.bgMid, p.bgBottom)
             setGradientCenter(0.5f, 0f)
             gradientRadius = 1400f * scale
         }
@@ -142,6 +149,8 @@ object Ui {
             PropertyValuesHolder.ofFloat(View.SCALE_X, to),
             PropertyValuesHolder.ofFloat(View.SCALE_Y, to)).apply {
             duration = if (up) 400 else 250
+            // Ends a grow still running, which otherwise outlasts this and leaves the view enlarged.
+            setAutoCancel(true)
             interpolator = if (up) OvershootInterpolator(1.6f) else DecelerateInterpolator(2f)
         }.start()
     }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Private space** (Settings, off by default): adds a button on the home screen that opens a second
+  Sofa behind a 4-digit PIN, with its own bookmarks, history, settings, logins and downloads, kept apart from the rest
+  of Sofa. Inside, Sofa is teal instead of blue, the lock shows open, and the search field says "Private space", so
+  it's always clear which side you are on. Sofa asks for the PIN again whenever it comes back into view. A forgotten PIN can't be recovered, but
+  "Forgot PIN" erases the space to start again. The data is kept in Sofa's app storage and isn't encrypted with the
+  PIN. Needs Android 9 or newer.
 - **Add to TV home:** a new button in the page menu gives the page its own tile among the TV's apps. Sofa makes and
   signs a tiny launcher app on the TV itself (nothing is downloaded or sent), and the tile opens the page in Sofa with
   nothing on screen but the page: no menu, and Back goes back through the page and then leaves to the TV home screen,
@@ -9,6 +15,16 @@
   page's own theme colour and its large icon when it has them, and a wide preview picture of the page (its `og:image`)
   fills the tile when the page has one. The icon and picture are the only things fetched, from the page's own site and
   only when you press the button.
+- **Most visited tiles have a menu:** hold OK (or press Menu) on one to open it, add it to Quick access, or remove it.
+  A removed site keeps its history and comes back only if you visit it often again.
+- **History and Bookmarks:** the delete button beside each card is gone. Hold OK (or press Menu) on a card to open
+  or delete it.
+- The home screen no longer has an Exit button: Home or Back on the remote leaves Sofa.
+- Fixed: Sofa could crash when a small download finished the moment it started.
+- Fixed: a dialog button or tile could stay enlarged after focus moved on quickly, and the last button in a dialog
+  was cut off when enlarged.
+- Fixed: the border of a focused tile at the start or end of a row on the home screen, and of a focused card in
+  History, Bookmarks and Downloads, was cut off.
 
 ## 1.2.2 (2026-10-30)
 

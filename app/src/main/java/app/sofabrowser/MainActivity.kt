@@ -78,6 +78,7 @@ import app.sofabrowser.player.SofaPlayer
 import app.sofabrowser.ui.BrowserMenu
 import app.sofabrowser.ui.DownloadsActivity
 import app.sofabrowser.ui.FindBar
+import app.sofabrowser.ui.PinActivity
 import app.sofabrowser.ui.VoiceInput
 import app.sofabrowser.ui.HomeView
 import app.sofabrowser.ui.PadHelp
@@ -132,6 +133,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Space.sendOut(this, intent, standalone)) return
         Ui.init(this)
         palette = Ui.p
         prefs = Prefs(this)
@@ -691,15 +693,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onHistory() = openList(ListActivity.MODE_HISTORY)
     override fun onSettings() = startActivity(Intent(this, SettingsActivity::class.java))
     override fun onDownloads() = startActivity(Intent(this, DownloadsActivity::class.java))
-
-    /**
-     * Straight to the Android home screen, then closes Sofa. On a box plugged into a TV, the remote's Home key may
-     * go to the TV's own home instead, so this is the reliable way back. Downloads keep running.
-     */
-    override fun onExit() {
-        startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        finish()
-    }
+    override fun onSpace() = if (Space.active) Space.leave(this) else startActivity(Intent(this, PinActivity::class.java))
 
     override fun onToggleAdBlock() {
         prefs.adBlock = !prefs.adBlock
@@ -729,15 +723,29 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     override fun onTileMenu(site: Site) {
-        TileMenu(this, site, object : TileMenu.Actions {
-            override fun open(site: Site) = openUrl(site.url)
-            override fun move(site: Site) = home.startMoving(site)
-            override fun edit(site: Site) = editTile(site)
-            override fun remove(site: Site) {
+        TileMenu(this, site, listOf(
+            TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { openUrl(site.url) },
+            TileMenu.Item(R.drawable.ic_swap_vert, R.string.move) { home.startMoving(site) },
+            TileMenu.Item(R.drawable.ic_edit, R.string.edit) { editTile(site) },
+            TileMenu.Item(R.drawable.ic_delete, R.string.remove) {
                 db.removeTile(site.id)
                 home.refresh(prefs.privateMode, prefs.adBlock)
-            }
-        }).show()
+            },
+        )).show()
+    }
+
+    override fun onMostVisitedMenu(site: Site) {
+        TileMenu(this, site, listOf(
+            TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { openUrl(site.url) },
+            TileMenu.Item(R.drawable.ic_add, R.string.add_to_quick_access) {
+                db.addTile(site.title, site.url)
+                home.refresh(prefs.privateMode, prefs.adBlock)
+            },
+            TileMenu.Item(R.drawable.ic_delete, R.string.remove) {
+                db.removeMostVisited(site)
+                home.refresh(prefs.privateMode, prefs.adBlock)
+            },
+        )).show()
     }
 
     override fun onAddTile() = editTile(null)

@@ -3,11 +3,11 @@ package app.sofabrowser.ui
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
-import android.graphics.PorterDuff
 import android.os.Bundle
 import android.text.TextUtils
 import android.text.format.DateUtils
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -16,6 +16,7 @@ import app.sofabrowser.R
 import app.sofabrowser.browser.UrlInput
 import app.sofabrowser.data.Db
 import app.sofabrowser.data.Favicons
+import app.sofabrowser.data.Site
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
@@ -35,6 +36,7 @@ class ListActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             background = Ui.background(false)
             setPadding(116.px, 72.px, 116.px, 0)
+            clipToPadding = false
         }
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         header.addView(Ui.text(this, 56, Ui.p.text, bold = true).apply {
@@ -52,8 +54,13 @@ class ListActivity : Activity() {
         })
         root.addView(header)
 
-        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 24.px, 0, 72.px); clipChildren = false }
-        val scroll = FocusScrollView(this).apply { isVerticalScrollBarEnabled = false; clipChildren = false; addView(list) }
+        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24.px, 24.px, 24.px, 72.px); clipChildren = false; clipToPadding = false }
+        // Reaches 24 px into the side margins, with as much padding in the list, so a focused card grows without being cut.
+        val scroll = FocusScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            clipChildren = false
+            addView(list)
+        }
         val frame = FrameLayout(this)
         frame.addView(scroll)
         empty = Ui.text(this, 32, Ui.p.textWeak).apply {
@@ -61,7 +68,10 @@ class ListActivity : Activity() {
             gravity = Gravity.CENTER
         }
         frame.addView(empty, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        root.addView(frame, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        root.addView(frame, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply {
+            marginStart = -24.px
+            marginEnd = -24.px
+        })
         setContentView(root)
         load()
     }
@@ -102,6 +112,23 @@ class ListActivity : Activity() {
 
     private fun addRow(title: String, url: String, meta: String?, delete: () -> Unit) {
         val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; clipChildren = false }
+        val open = {
+            setResult(RESULT_OK, Intent().putExtra(SearchActivity.EXTRA_URL, url))
+            finish()
+        }
+        val remove = {
+            delete()
+            val i = list.indexOfChild(line)
+            list.removeView(line)
+            (list.getChildAt(i) as? LinearLayout ?: list.getChildAt(i - 1) as? LinearLayout)?.getChildAt(0)?.requestFocus()
+            empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
+        }
+        val menu = {
+            TileMenu(this, Site(0, title.ifBlank { url }, url), listOf(
+                TileMenu.Item(R.drawable.ic_open_in_new, R.string.open, open),
+                TileMenu.Item(R.drawable.ic_delete, R.string.delete, remove),
+            )).show()
+        }
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -110,10 +137,15 @@ class ListActivity : Activity() {
             background = Ui.fillSelector(Ui.p.fill, Ui.p.fillFocused, 16)
             foreground = Ui.focusBorder(16)
             setPadding(40.px, 0, 40.px, 0)
-            setOnClickListener {
-                setResult(RESULT_OK, Intent().putExtra(SearchActivity.EXTRA_URL, url))
-                finish()
+            setOnClickListener { open() }
+            // Holding OK, or Menu, opens the card's options.
+            setOnLongClickListener { menu(); true }
+            setOnKeyListener { _, keyCode, event ->
+                if (keyCode != KeyEvent.KEYCODE_MENU) return@setOnKeyListener false
+                if (event.action == KeyEvent.ACTION_UP) menu()
+                true
             }
+            setOnFocusChangeListener { v, has -> Ui.animateScale(v, if (has) 1.02f else 1f, has) }
         }
         body.addView(ImageView(this).apply { setImageDrawable(Favicons.get(this@ListActivity).drawable(url, title, 128)) },
             LinearLayout.LayoutParams(64.px, 64.px).apply { marginEnd = 32.px })
@@ -127,32 +159,6 @@ class ListActivity : Activity() {
         })
         body.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         line.addView(body, LinearLayout.LayoutParams(0, 136.px, 1f))
-
-        val remove = FrameLayout(this).apply {
-            isFocusable = true
-            isClickable = true
-            contentDescription = getString(R.string.delete)
-            background = Ui.fillSelector(Ui.p.fillFocused, Ui.p.focus, 40)
-            val img = ImageView(context).apply { setImageResource(R.drawable.ic_delete); setColorFilter(Ui.p.textMid, PorterDuff.Mode.SRC_IN) }
-            addView(img, FrameLayout.LayoutParams(40.px, 40.px, Gravity.CENTER))
-            visibility = View.INVISIBLE
-            setOnFocusChangeListener { _, has ->
-                img.setColorFilter(if (has) Ui.p.onFocus else Ui.p.textMid, PorterDuff.Mode.SRC_IN)
-                if (!has && !body.hasFocus()) visibility = View.INVISIBLE
-            }
-            setOnClickListener {
-                delete()
-                val i = list.indexOfChild(line)
-                list.removeView(line)
-                (list.getChildAt(i) as? LinearLayout ?: list.getChildAt(i - 1) as? LinearLayout)?.getChildAt(0)?.requestFocus()
-                empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
-            }
-        }
-        line.addView(remove, LinearLayout.LayoutParams(80.px, 80.px).apply { marginStart = 24.px })
-        body.setOnFocusChangeListener { v, has ->
-            Ui.animateScale(v, if (has) 1.02f else 1f, has)
-            if (has) remove.visibility = View.VISIBLE else if (!remove.hasFocus()) remove.visibility = View.INVISIBLE
-        }
         list.addView(line, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = 16.px
         })

@@ -6,6 +6,7 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import app.sofabrowser.Space
 import java.io.File
 import java.io.FileNotFoundException
 import java.security.SecureRandom
@@ -40,7 +41,7 @@ class StreamCopyProvider : ContentProvider() {
         private val TOKEN = Regex("[a-z0-9]{24}")
         private const val KEEP = 4
 
-        private fun dir(context: Context) = File(context.cacheDir, "streams").apply { mkdirs() }
+        private fun dir(context: Context) = File(Space.cache(context), "streams").apply { mkdirs() }
 
         /** Stores [playlist] and returns the address to give the player; it ends in .m3u8 for players that look. */
         fun put(context: Context, playlist: String): Uri {

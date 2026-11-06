@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.net.Uri
+import app.sofabrowser.Space
 
 data class Site(val id: Long, val title: String, val url: String)
 
@@ -14,7 +15,7 @@ data class HistoryEntry(val id: Long, val title: String, val url: String, val vi
  * All persistent user data: quick-access tiles, bookmarks and history. Everything stays on the device;
  * there is no sync and no upload.
  */
-class Db private constructor(context: Context) : SQLiteOpenHelper(context, "sofa.db", null, 2) {
+class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space.name("sofa.db"), null, 3) {
 
     private val writer = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
         Thread(r, "history-db").apply { priority = Thread.MIN_PRIORITY }
@@ -27,6 +28,7 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, "sofa
         db.execSQL("CREATE INDEX history_visited ON history (visited)")
         db.execSQL("CREATE INDEX history_url ON history (url)")
         createDownloads(db)
+        createMostVisitedRemoved(db)
         DEFAULT_TILES.forEachIndexed { i, (title, url) ->
             db.insert("tiles", null, ContentValues().apply {
                 put("title", title); put("url", url); put("position", i)
@@ -36,6 +38,12 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, "sofa
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createDownloads(db)
+        if (oldVersion < 3) createMostVisitedRemoved(db)
+    }
+
+    /** Sites taken off Most visited, and when: only visits after that count for them again. */
+    private fun createMostVisitedRemoved(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE most_visited_removed (host TEXT PRIMARY KEY, removed INTEGER NOT NULL)")
     }
 
     /** Downloads, with enough state to resume them (byte offset, validator) after a restart. */
@@ -140,23 +148,39 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, "sofa
         writableDatabase.delete("history", "id = ?", arrayOf(id.toString()))
     }
 
+    // The list of removed sites names visited sites too, so it goes with the history.
     fun clearHistory() {
         writableDatabase.delete("history", null, null)
+        writableDatabase.delete("most_visited_removed", null, null)
     }
 
     /** Removes the pages "Keep history for" no longer keeps ([days] as in HistoryRetention). */
     fun pruneHistory(days: Int) {
         val cutoff = HistoryRetention.cutoff(days, System.currentTimeMillis()) ?: return
         writableDatabase.delete("history", "visited < ?", arrayOf(cutoff.toString()))
+        writableDatabase.delete("most_visited_removed", "removed < ?", arrayOf(cutoff.toString()))
+    }
+
+    /** Takes [site] off Most visited, keeping its history; it comes back only if visited often again. */
+    fun removeMostVisited(site: Site) {
+        val host = Uri.parse(site.url).host?.lowercase() ?: return
+        writableDatabase.insertWithOnConflict("most_visited_removed", null, ContentValues().apply {
+            put("host", host); put("removed", System.currentTimeMillis())
+        }, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     /**
      * Sites visited at least [minVisits] times in the last 30 days, grouped by host so that many pages of one
-     * site count as that site. Hosts already pinned as tiles are left out.
+     * site count as that site. Hosts already pinned as tiles are left out, and so are visits before a site was
+     * removed from the list.
      */
     fun mostVisited(limit: Int, minVisits: Int = 3): List<Site> {
         val since = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
         val pinned = tiles().mapNotNull { hostOf(it.url) }.toSet()
+        val removed = HashMap<String, Long>()
+        readableDatabase.rawQuery("SELECT host, removed FROM most_visited_removed", null).use { c ->
+            while (c.moveToNext()) removed[c.getString(0)] = c.getLong(1)
+        }
         class Agg(val scheme: String, val latest: Long) {
             var count = 0
             var rootTitle: String? = null
@@ -169,6 +193,7 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, "sofa
                 val scheme = uri.scheme
                 val host = uri.host?.lowercase() ?: continue
                 if (scheme != "https" && scheme != "http") continue
+                if (c.getLong(2) <= (removed[host] ?: 0L)) continue
                 val agg = byHost.getOrPut(host) { Agg(scheme, c.getLong(2)) }
                 agg.count++
                 if (agg.rootTitle == null && (uri.path.isNullOrEmpty() || uri.path == "/")) agg.rootTitle = c.getString(0)

@@ -13,8 +13,8 @@ import java.io.File
 import java.io.FileNotFoundException
 
 /**
- * Read-only access to finished downloads for the app that opens them (Android 9 and older only; newer Android
- * uses MediaStore URIs). Not exported: other apps get one file at a time through a URI permission grant.
+ * Read-only access to finished downloads for the app that opens them (Android 9 and older and the private space;
+ * otherwise MediaStore URIs). Not exported: other apps get one file at a time through a URI permission grant.
  */
 class DownloadFileProvider : ContentProvider() {
 

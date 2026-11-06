@@ -9,6 +9,7 @@ import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import app.sofabrowser.BuildConfig
+import app.sofabrowser.Space
 import jp.hazuki.yuzubrowser.adblock.getContentType
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
@@ -49,8 +50,8 @@ class AdBlocker private constructor(private val context: Context) {
 
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "filter-lists").apply { priority = Thread.MIN_PRIORITY } }
     private val main = Handler(Looper.getMainLooper())
-    private val store = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
-    private val dir = File(context.filesDir, "filters")
+    private val store = context.getSharedPreferences(Space.name(STORE), Context.MODE_PRIVATE)
+    private val dir = File(Space.files(context), "filters")
 
     private val blocked = AtomicInteger()
 
@@ -226,8 +227,8 @@ class AdBlocker private constructor(private val context: Context) {
             }
         }
         // First start of this version: Sofa 1.1 had one main list, at an address in Settings.
-        val old = File(context.filesDir, "blocklist.bin")
-        val oldUrl = context.getSharedPreferences("settings", Context.MODE_PRIVATE).getString("blocklist_url", null)
+        val old = File(Space.files(context), "blocklist.bin")
+        val oldUrl = context.getSharedPreferences(Space.name("settings"), Context.MODE_PRIVATE).getString("blocklist_url", null)
         val migrated = FilterList.migrate(oldUrl, old.isFile)
         val custom = migrated.firstOrNull { !it.bundled && it.url == oldUrl }
         val result = if (custom != null && old.isFile) {
@@ -241,7 +242,7 @@ class AdBlocker private constructor(private val context: Context) {
         lists = result
         save()
         old.delete()
-        File(context.filesDir, "blocklist.bin.tmp").delete()
+        File(Space.files(context), "blocklist.bin.tmp").delete()
         return result
     }
 
@@ -422,7 +423,7 @@ class AdBlocker private constructor(private val context: Context) {
          * questions at start, which can't wait for the worker to load the lists ([stronger] reads none before [ready]).
          */
         fun strongerChosen(context: Context): Boolean = runCatching {
-            val json = context.getSharedPreferences(STORE, Context.MODE_PRIVATE).getString(KEY_LISTS, null) ?: return false
+            val json = context.getSharedPreferences(Space.name(STORE), Context.MODE_PRIVATE).getString(KEY_LISTS, null) ?: return false
             FilterList.strongerChosen(FilterList.listFromJson(json))
         }.getOrDefault(false)
     }
@@ -435,7 +436,7 @@ object Allowlist {
 
     @Synchronized
     private fun get(context: Context): Set<String> = cached ?: run {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).all.keys.also { cached = it }
+        context.getSharedPreferences(Space.name(PREFS), Context.MODE_PRIVATE).all.keys.also { cached = it }
     }
 
     fun contains(context: Context, host: String): Boolean =
@@ -447,7 +448,7 @@ object Allowlist {
         val current = get(context).toMutableSet()
         if (allowed) current.add(norm) else current.remove(norm)
         cached = current
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
+        context.getSharedPreferences(Space.name(PREFS), Context.MODE_PRIVATE).edit().apply {
             if (allowed) putBoolean(norm, true) else remove(norm)
         }.apply()
     }

@@ -38,11 +38,17 @@ class PrefsMap(private val p: SharedPreferences,
 }
 
 /** Where long films were left (see ResumeStore), read fresh from its file. */
-fun resumeStore(context: Context) = ResumeStore(PrefsMap(context.getSharedPreferences("resume", Context.MODE_PRIVATE)))
+fun resumeStore(context: Context) = ResumeStore(PrefsMap(context.getSharedPreferences(Space.name("resume"), Context.MODE_PRIVATE)))
+
+/** "Browse as" chosen for one site in the page menu, by registrable domain: one of [Prefs.UA_MODES]. Read fresh. */
+fun siteUserAgents(context: Context) = PrefsMap(context.getSharedPreferences(Space.name("site_user_agents"), Context.MODE_PRIVATE))
+
+/** The page menu's zoom step kept for one site, by registrable domain: 1 is 125%, -1 is 80%; 100% isn't kept. Read fresh. */
+fun siteZooms(context: Context) = PrefsMap(context.getSharedPreferences(Space.name("site_zoom"), Context.MODE_PRIVATE))
 
 /** User settings. Every default favours privacy; nothing here is ever sent anywhere. */
 class Prefs(context: Context) {
-    private val p: SharedPreferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    private val p: SharedPreferences = context.getSharedPreferences(Space.name("settings"), Context.MODE_PRIVATE)
 
     /** The first-run search engine choice has been made. */
     var setupDone by boolean("setup_done", false)
@@ -107,6 +113,8 @@ class Prefs(context: Context) {
         set(v) = p.edit().putInt("history_days", v).apply()
     /** Clears cookies, site storage, cache and history whenever the app is closed. */
     var clearOnExit by boolean("clear_on_exit", false)
+    /** Shows the way into the private space; off, nothing on screen says there is one. */
+    var privateSpace by boolean("private_space", false)
     var safeBrowsing by boolean("safe_browsing", false)
     /** Lets WebView darken pages that have no dark theme of their own. */
     var darkPages by boolean("dark_pages", false)
