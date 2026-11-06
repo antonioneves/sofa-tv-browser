@@ -141,6 +141,7 @@ class SettingsActivity : Activity() {
         switch(R.string.back_goes_back, R.string.back_goes_back_sub, prefs::backGoesBack)
         switch(R.string.javascript, R.string.javascript_sub, prefs::javascript)
         switch(R.string.autoplay, R.string.autoplay_sub, prefs::autoplay)
+        switch(R.string.images_last, R.string.images_last_sub, prefs::imagesLast)
         switch(R.string.sofa_player, R.string.sofa_player_sub, prefs::sofaPlayer)
         switch(R.string.open_in_player, R.string.open_in_player_sub, prefs::openInPlayer)
         row(getString(R.string.auto_watch), getString(R.string.auto_watch_sub),

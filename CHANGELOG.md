@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Load images last** (Settings › Browsing, off by default): a page's pictures are fetched after the rest of it has
+  loaded, so the page is done sooner and the pictures follow. If a page never finishes, they are fetched after 10
+  seconds. Included in the backup.
 - **Hide parts of a page**: in the menu, "Hide parts of the page", then point at something and press OK to hide it;
   Back when you are done; hold OK on the menu button to bring back the last one hidden. Hidden parts stay hidden on that site's pages until you reset the site in
   Settings › Site settings (which also lists how many parts are hidden). Included in the backup; in the private space

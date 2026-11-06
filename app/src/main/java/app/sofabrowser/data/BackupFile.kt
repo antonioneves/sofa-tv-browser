@@ -21,7 +21,7 @@ object BackupFile {
         "translate_language" to T.TEXT, "adblock" to T.BOOL, "auto_update_lists" to T.BOOL,
         "cookies" to T.BOOL, "block_3p_cookies" to T.BOOL, "reject_cookie_banners" to T.BOOL, "send_gpc" to T.BOOL,
         "user_agent" to T.TEXT, "custom_user_agent" to T.TEXT, "back_goes_back" to T.BOOL,
-        "start_page_on" to T.BOOL, "start_page" to T.TEXT, "javascript" to T.BOOL, "autoplay" to T.BOOL,
+        "start_page_on" to T.BOOL, "start_page" to T.TEXT, "javascript" to T.BOOL, "autoplay" to T.BOOL, "images_last" to T.BOOL,
         "match_frame_rate" to T.BOOL, "sofa_player" to T.BOOL, "open_in_player" to T.BOOL,
         "force_external_player" to T.BOOL, "text_zoom" to T.INT, "cursor_speed" to T.INT, "history_days" to T.INT,
         "clear_on_exit" to T.BOOL, "safe_browsing" to T.BOOL, "dark_pages" to T.BOOL, "most_visited" to T.BOOL,
