@@ -145,7 +145,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         // Same trick as BrowsHere: a desktop-ish ~1130-1500 CSS px viewport that stays readable from the sofa.
         view.setInitialScale((85 * if (density >= 1) minOf(density, 2f) else density).toInt())
         WebViews.configure(view, prefs)
-        holdImages(view)
         appliedUserAgent = agentKey(prefs.userAgent)
         applyGpc(view)
         // Fresh random names per view for everything injected into pages (see PageKey).
@@ -179,7 +178,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             }
         }
         applyBannerRejection(view)
-        applyImagesLast(view)
         applySignIns(view)
         HiddenPages.install(view, key, ::onElementPicked)
         applyHidden(view)
@@ -205,7 +203,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         }
         web = null
         bannerScript = null
-        imagesScript = null
         hiddenScript = null
         picking = false
         frames.clear()
@@ -227,7 +224,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             appliedUserAgent = agentKey(mode)
             applyGpc(it)
             applyBannerRejection(it)
-            applyImagesLast(it)
             applySignIns(it)
             applyHidden(it)
         }
@@ -357,7 +353,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     fun load(url: String, headers: Map<String, String> = emptyMap()) {
         val view = web ?: return
         applyUserAgentFor(view, url)
-        holdImages(view)
         view.loadUrl(url, headers)
     }
 
@@ -373,36 +368,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             CookieBanners.current(saved, System.currentTimeMillis()).also { keep -> saved.keys.filter { it !in keep }.forEach { saved.remove(it) } }
         }
         bannerScript = WebViewCompat.addDocumentStartJavaScript(view, CookieBanners.script(key.banners, done), setOf("*"))
-    }
-
-    private var imagesScript: ScriptHandler? = null
-
-    /** Adds or removes the script that keeps held images out of sight until they load; like the banner script, from the next page on. */
-    private fun applyImagesLast(view: WebView) {
-        imagesScript?.remove()
-        imagesScript = null
-        val key = pageKey ?: return
-        if (!prefs.imagesLast || !WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
-        imagesScript = WebViewCompat.addDocumentStartJavaScript(view, ImagesLast.script(key.images), setOf("*"))
-    }
-
-    // Images are held only until the page has finished, not until its first paint: an image asked for before then
-    // still holds up the page's load event, and the page would finish no sooner than with everything at once.
-    private val releaseImagesLater = Runnable { web?.let(::releaseImages) }
-
-    /** With "Load images last", a page starts without its images... */
-    private fun holdImages(view: WebView) {
-        view.removeCallbacks(releaseImagesLater)
-        if (!prefs.imagesLast) return
-        view.settings.blockNetworkImage = true
-        // ...which come when it has finished, or after this long if it never does, so they are never held for good.
-        view.postDelayed(releaseImagesLater, IMAGES_LAST_MAX_MS)
-    }
-
-    /** ...and the held images are fetched now. */
-    private fun releaseImages(view: WebView) {
-        view.removeCallbacks(releaseImagesLater)
-        if (view.settings.blockNetworkImage) view.settings.blockNetworkImage = false
     }
 
     /** The page in view has finished loading; a look that found no banner counts only then, not for a page that was cut short. */
@@ -441,7 +406,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             pageHost = AdBlocker.hostOf(url)
             pageUrl = url
             pageLoaded = false
-            holdImages(view)
             guard.pageStarted()
             // The picker belongs to the page it was started on.
             picking = false
@@ -452,7 +416,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
 
         override fun onPageFinished(view: WebView, url: String) {
             pageLoaded = true
-            releaseImages(view)
             host.onPageFinished(url)
         }
 
@@ -484,7 +447,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             val url = request.url
             return when (url.scheme?.lowercase()) {
                 "http", "https" -> (request.isForMainFrame && blockNavigation(view, request)).also { blocked ->
-                    if (request.isForMainFrame && !blocked) { mainFrameTarget = url.toString(); holdImages(view) }
+                    if (request.isForMainFrame && !blocked) mainFrameTarget = url.toString()
                 } || (request.isForMainFrame && switchUserAgent(view, url.toString()))
                 "about", "data", "blob", "javascript", null -> false
                 "intent" -> {
@@ -781,8 +744,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
 
     companion object {
         private const val PRIVATE_PROFILE = "private"
-        /** The longest "Load images last" holds a page's images back. */
-        private const val IMAGES_LAST_MAX_MS = 10_000L
         private val PRESS_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
             KeyEvent.KEYCODE_BUTTON_A)
         private const val GPC_SCRIPT =

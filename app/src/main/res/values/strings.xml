@@ -335,8 +335,6 @@
     <string name="javascript_sub">Many sites don\'t work without it</string>
     <string name="autoplay">Autoplay media</string>
     <string name="autoplay_sub">Let videos and sound start without a click</string>
-    <string name="images_last">Load images last</string>
-    <string name="images_last_sub">Shows the text and layout of a page first and fetches its pictures once the rest has loaded. Pages show up sooner, pictures a little later</string>
     <string name="match_frame_rate">Match frame rate (experimental)</string>
     <string name="match_frame_rate_sub">Not proven on every TV yet. In fullscreen, the TV switches to the video\'s frame rate, such as 24 or 50 per second, for smoother motion. The screen goes dark for a moment while it switches. Not for videos under 5 minutes.</string>
     <string name="dark_pages">Dark web pages</string>

@@ -29,7 +29,6 @@ object WebViews {
         s.domStorageEnabled = true
         s.cacheMode = WebSettings.LOAD_DEFAULT
         s.mediaPlaybackRequiresUserGesture = !prefs.autoplay
-        if (!prefs.imagesLast) s.blockNetworkImage = false
         s.loadWithOverviewMode = true
         s.useWideViewPort = true
         s.builtInZoomControls = true

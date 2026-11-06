@@ -127,8 +127,6 @@ class Prefs(context: Context) {
     var startPage by string("start_page", "")
     var javascript by boolean("javascript", true)
     var autoplay by boolean("autoplay", true)
-    /** Holds back a page's images until the rest of it has loaded (Browser). Off by default: pictures appear later. */
-    var imagesLast by boolean("images_last", false)
     /** In fullscreen, switch the TV to the video's frame rate (RefreshRateMatch). Off by default: the screen blanks. */
     var matchFrameRate by boolean("match_frame_rate", false)
     /** Sofa Player takes over fullscreen videos whose stream it can play. */
