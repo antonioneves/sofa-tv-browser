@@ -6,6 +6,7 @@ import android.os.Looper
 import app.sofabrowser.R
 import app.sofabrowser.browser.HomeServer.Companion.esc
 import app.sofabrowser.browser.HomeServer.Response
+import app.sofabrowser.data.Backup
 import app.sofabrowser.data.BookmarkFile
 import app.sofabrowser.data.Db
 
@@ -18,6 +19,7 @@ import app.sofabrowser.data.Db
  */
 class PhoneLink(context: Context, private val onText: (String) -> Unit, private val onImported: (Int, String) -> Unit) {
 
+    private val appContext = context.applicationContext
     private val db = Db.get(context)
     private val words = Words(context)
     private val main = Handler(Looper.getMainLooper())
@@ -40,6 +42,16 @@ class PhoneLink(context: Context, private val onText: (String) -> Unit, private 
                     val message = words.added(added)
                     main.post { onImported(added, message) }
                     Response.text(message)
+                }
+            }
+            r.path == "/$BACKUP_NAME" && r.method == "GET" -> Response("200 OK", "application/json; charset=utf-8",
+                Backup.write(appContext).toByteArray(Charsets.UTF_8),
+                listOf("Content-Disposition: attachment; filename=\"$BACKUP_NAME\""))
+            r.path == "/restore" && r.method == "POST" -> {
+                if (!Backup.restore(appContext, String(r.body, Charsets.UTF_8))) Response.text(words.notABackup, "422 Unprocessable Content")
+                else {
+                    main.post { onImported(1, words.restored) }
+                    Response.text(words.restored)
                 }
             }
             else -> Response.status("404 Not Found")
@@ -66,6 +78,12 @@ class PhoneLink(context: Context, private val onText: (String) -> Unit, private 
         val choose = c.getString(R.string.bookmarks_page_choose)
         val working = c.getString(R.string.bookmarks_page_working)
         val notAFile = c.getString(R.string.bookmarks_not_a_file)
+        val backup = c.getString(R.string.backup_page_title)
+        val backupText = c.getString(R.string.backup_page_text)
+        val backupDownload = c.getString(R.string.backup_download)
+        val backupChoose = c.getString(R.string.backup_choose)
+        val restored = c.getString(R.string.backup_restored)
+        val notABackup = c.getString(R.string.backup_not_a_file)
         val failed = c.getString(R.string.bookmarks_send_failed)
         val none = c.getString(R.string.bookmarks_added_none)
         private val res = c.resources
@@ -90,8 +108,8 @@ class PhoneLink(context: Context, private val onText: (String) -> Unit, private 
 .list button { display: flex; flex-direction: column; align-items: flex-start; text-align: start; margin-bottom: 8px; background: #1e1e1e; color: inherit; font-weight: normal; }
 .list b, .list span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list span { font-size: 15px; color: #9a9a9a; }
-#status { margin-top: 12px; color: #e6e6e6; }
-#file { display: none; }
+#status, #status2 { margin-top: 12px; color: #e6e6e6; }
+#file, #restore { display: none; }
 label.button { margin-top: 12px; background: #2a2a2a; }
 </style></head>
 <body><main><h1>${esc(words.title)}</h1>
@@ -109,10 +127,31 @@ ${if (recent.isEmpty()) "" else "<h2>${esc(words.recent)}</h2>" + list(recent)}
 <label class="button" for="file">${esc(words.choose)}</label>
 <input id="file" type="file" accept=".html,.htm,text/html">
 <p id="status" role="status"></p>
+<h2>${esc(words.backup)}</h2>
+<p>${esc(words.backupText)}</p>
+<a class="button" id="backup" download="$BACKUP_NAME">${esc(words.backupDownload)}</a>
+<label class="button" for="restore">${esc(words.backupChoose)}</label>
+<input id="restore" type="file" accept=".json,application/json">
+<p id="status2" role="status"></p>
 </main>
 <script>
 const status = document.getElementById('status');
 document.getElementById('download').href = location.pathname + '/$FILE_NAME';
+document.getElementById('backup').href = location.pathname + '/$BACKUP_NAME';
+document.getElementById('restore').onchange = async (e) => {
+  const file = e.target.files[0];
+  const out = document.getElementById('status2');
+  if (!file) return;
+  out.textContent = ${js(words.working)};
+  try {
+    const r = await fetch(location.pathname + '/restore', { method: 'POST', body: file });
+    out.textContent = await r.text() || ${js(words.failed)};
+    if (r.ok) setTimeout(() => location.replace(location.pathname), 2000);
+  } catch (_) {
+    out.textContent = ${js(words.failed)};
+  }
+  e.target.value = '';
+};
 document.getElementById('file').onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -136,6 +175,7 @@ document.getElementById('file').onchange = async (e) => {
 
     companion object {
         const val FILE_NAME = "bookmarks.html"
+        const val BACKUP_NAME = "sofa-backup.json"
         private const val RECENT = 20
         // Some browsers keep each site's icon inline in a bookmarks file, so a large one can run to a few megabytes.
         private const val MAX_BODY = 16 * 1024 * 1024

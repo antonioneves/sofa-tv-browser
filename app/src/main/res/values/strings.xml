@@ -74,6 +74,12 @@
     <string name="bookmarks_page_download">Download bookmarks</string>
     <string name="bookmarks_page_choose">Import a file</string>
     <string name="bookmarks_page_working">Adding…</string>
+    <string name="backup_page_title">Backup</string>
+    <string name="backup_page_text">Everything you set up in one file: settings, bookmarks, history, home tiles, search shortcuts and the choices for single sites. Saved sign-ins and the PIN stay on this TV. Restoring adds to what is here.</string>
+    <string name="backup_download">Download backup</string>
+    <string name="backup_choose">Restore from a backup</string>
+    <string name="backup_restored">Backup restored.</string>
+    <string name="backup_not_a_file">That isn\'t a Sofa backup.</string>
     <string name="bookmarks_not_a_file">That isn\'t a bookmarks file. In Chrome, open the Bookmark manager and choose Export bookmarks from its menu.</string>
     <string name="bookmarks_send_failed">The file couldn\'t be sent to the TV</string>
     <string name="bookmarks_added_none">No new bookmarks: Sofa already has them all</string>

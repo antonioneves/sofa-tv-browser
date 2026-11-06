@@ -143,6 +143,36 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         return added
     }
 
+    /** Adds the quick-access [pages] (title, address) not among the tiles yet. */
+    fun importTiles(pages: List<Pair<String, String>>) {
+        val have = tiles().map { it.url }.toHashSet()
+        pages.filter { have.add(it.second) }.forEach { (title, url) -> addTile(title.ifBlank { url }, url) }
+    }
+
+    /** Adds the visits not in the history yet (same address, same moment) and returns how many. */
+    fun importHistory(visits: List<HistoryEntry>): Int {
+        val db = writableDatabase
+        var added = 0
+        db.beginTransaction()
+        try {
+            visits.forEach { v ->
+                val known = db.compileStatement("SELECT COUNT(*) FROM history WHERE url = ? AND visited = ?").apply {
+                    bindString(1, v.url); bindLong(2, v.visitedAt)
+                }.simpleQueryForLong() > 0
+                if (!known) {
+                    db.insert("history", null, ContentValues().apply {
+                        put("title", v.title); put("url", v.url); put("visited", v.visitedAt)
+                    })
+                    added++
+                }
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return added
+    }
+
     // History
 
     fun history(limit: Int = 500): List<HistoryEntry> =

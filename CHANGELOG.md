@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Backup**: on the phone page (the one for typing and for bookmarks), download everything you set up as one file
+  (settings, bookmarks, history, home tiles, search shortcuts, per-site choices and the ad blocking allowlist) and
+  restore it later or on another TV. Restoring adds to what is there and never deletes; the file is checked, and
+  anything unknown is ignored. Saved sign-ins and the PIN are not in it.
 - **Saved sign-ins** (Settings › Privacy, off by default): after you sign in on a secure (https) site, Sofa offers to
   save the user name and password, and next time asks whether to fill them in. Passwords are encrypted with a key
   Android keeps for Sofa, tied to the exact site and user name. Saving one, and filling one in after you pick it in
