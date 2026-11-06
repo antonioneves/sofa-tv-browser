@@ -25,6 +25,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.webkit.WebViewFeature
 import app.sofabrowser.BuildConfig
+import app.sofabrowser.PinMemory
 import app.sofabrowser.Prefs
 import app.sofabrowser.R
 import app.sofabrowser.Space
@@ -186,6 +187,7 @@ class SettingsActivity : Activity() {
         nav(R.string.clear_now, null) { clearNow() }
         // Outside the space the PIN also guards saved sign-ins, so it can be changed here once they use it.
         if (Space.active || SpacePin.isSet(this) && (prefs.saveSignIns || savedCount > 0)) {
+            if (!Space.active) row(getString(R.string.pin_remember), getString(R.string.pin_remember_sub), valueText(pinMinutesLabel())) { pickPinMinutes() }
             nav(R.string.pin_change, null) {
                 startActivity(Intent(this, PinActivity::class.java).putExtra(PinActivity.EXTRA_MODE, PinActivity.MODE_CHANGE))
             }
@@ -366,6 +368,19 @@ class SettingsActivity : Activity() {
                 d.dismiss()
                 prefs.historyDays = HistoryRetention.CHOICES[which]
                 Db.get(this).pruneHistory(prefs.historyDays)
+                build()
+            }.show()
+    }
+
+    private fun pinMinutesLabel() = resources.getStringArray(R.array.pin_remember_times)[PinMemory.CHOICES.indexOf(prefs.pinMinutes).coerceAtLeast(0)]
+
+    private fun pickPinMinutes() {
+        dialog().setTitle(R.string.pin_remember)
+            .setSingleChoiceItems(R.array.pin_remember_times, PinMemory.CHOICES.indexOf(prefs.pinMinutes).coerceAtLeast(0)) { d, which ->
+                d.dismiss()
+                prefs.pinMinutes = PinMemory.CHOICES[which]
+                // A shorter time counts from now, not from before.
+                PinMemory.forget()
                 build()
             }.show()
     }

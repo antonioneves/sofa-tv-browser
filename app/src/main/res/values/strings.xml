@@ -119,6 +119,16 @@
     <string name="pin_current">Enter your current PIN</string>
     <string name="pin_new">Choose a new PIN</string>
     <string name="pin_change">Change PIN</string>
+    <string name="pin_remember">Ask for the PIN</string>
+    <string name="pin_remember_sub">For saved sign-ins: after the PIN is entered, don\'t ask again for this long. Closing Sofa, the screen going off or a screensaver starts it over.</string>
+    <string-array name="pin_remember_times">
+        <item>Every time</item>
+        <item>Not for 1 minute</item>
+        <item>Not for 5 minutes</item>
+        <item>Not for 15 minutes</item>
+        <item>Not for 30 minutes</item>
+        <item>Not for 1 hour</item>
+    </string-array>
     <string name="pin_changed">PIN changed</string>
     <string name="pin_forgot">Forgot PIN</string>
     <string name="pin_forgot_title">Erase the private space and saved sign-ins?</string>

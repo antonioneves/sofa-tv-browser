@@ -1001,7 +1001,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         if (requestCode == REQ_PIN) {
             val then = afterPin
             afterPin = null
-            if (resultCode == RESULT_OK) then?.invoke()
+            if (resultCode == RESULT_OK) { PinMemory.remember(); then?.invoke() }
         }
     }
 
@@ -1919,7 +1919,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     /** Runs [then] once Sofa's PIN is entered, or chosen if there's none yet. The private space is behind it already. */
     private fun withSignInPin(then: () -> Unit) {
-        if (Space.active) return then()
+        if (Space.active || PinMemory.valid(prefs.pinMinutes)) return then()
         afterPin = then
         @Suppress("DEPRECATION")
         startActivityForResult(Intent(this, PinActivity::class.java).putExtra(PinActivity.EXTRA_MODE, PinActivity.MODE_SIGNIN), REQ_PIN)

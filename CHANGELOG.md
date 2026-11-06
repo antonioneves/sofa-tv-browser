@@ -10,6 +10,9 @@
   (settings, bookmarks, history, home tiles, search shortcuts, per-site choices, hidden parts of pages, which filter lists are on, the lists you added and the ad blocking allowlist) and
   restore it later or on another TV. Restoring adds to what is there and never deletes; the file is checked, and
   anything unknown is ignored. Saved sign-ins and the PIN are not in it.
+- **Ask for the PIN** (Settings › Privacy, next to Change PIN): choose how long, after you enter Sofa's PIN for a saved
+  sign-in, it isn't asked again: every time (the default), or 1, 5, 15, 30 minutes or an hour. Closing Sofa, the screen
+  going off or a screensaver starting starts it over. Not part of the backup.
 - **Saved sign-ins** (Settings › Privacy, off by default): after you sign in on a secure (https) site, Sofa offers to
   save the user name and password, and next time asks whether to fill them in. Passwords are encrypted with a key
   Android keeps for Sofa, tied to the exact site and user name. Saving one, and filling one in after you pick it in

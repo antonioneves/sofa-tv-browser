@@ -153,6 +153,8 @@ class Prefs(context: Context) {
     var clearOnExit by boolean("clear_on_exit", false)
     /** Offers to save passwords sent on HTTPS pages, and to fill them in again (SignIns); off by default. */
     var saveSignIns by boolean("save_signins", false)
+    /** Minutes Sofa's PIN stays good for saved sign-ins after it was entered (PinMemory); 0 asks every time. */
+    var pinMinutes by int("pin_minutes", 0)
     /** Shows the way into the private space; off, nothing on screen says there is one. */
     var privateSpace by boolean("private_space", false)
     var safeBrowsing by boolean("safe_browsing", false)

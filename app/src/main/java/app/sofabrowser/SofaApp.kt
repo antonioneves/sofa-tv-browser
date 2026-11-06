@@ -13,5 +13,6 @@ class SofaApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Space.watch(this)
+        PinMemory.watch(this)
     }
 }
