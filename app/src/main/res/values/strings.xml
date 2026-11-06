@@ -130,6 +130,19 @@
     <string name="translating">Translating into %1$s…</string>
     <string name="translated">Translated into %1$s with Google. Hold OK on Translate to choose another language.</string>
     <string name="translate_failed">This page couldn\'t be translated. The site may not allow it, or Google Translate couldn\'t be reached.</string>
+    <string name="sleep_timer">Sleep timer</string>
+    <string name="sleep_off">Off</string>
+    <plurals name="sleep_in">
+        <item quantity="one">Stop playback in %d minute</item>
+        <item quantity="other">Stop playback in %d minutes</item>
+    </plurals>
+    <plurals name="sleep_left">
+        <item quantity="one">Sleep timer: %d minute left</item>
+        <item quantity="other">Sleep timer: %d minutes left</item>
+    </plurals>
+    <string name="sleep_soon">Playback stops in a minute</string>
+    <string name="sleep_done">Sleep timer: playback stopped</string>
+    <string name="sleep_cancelled">Sleep timer off</string>
     <string name="find_none">No matches</string>
     <string name="find_count">%1$d of %2$d</string>
     <string name="user_agent">Browse as</string>

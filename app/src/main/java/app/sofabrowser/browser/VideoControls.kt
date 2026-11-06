@@ -376,6 +376,14 @@ object VideoRelay {
         return;
       }
       case 'revealed': { const f = childFrame(e.source); if (f) f.scrollIntoView({ block: 'center', inline: 'center' }); revealed(); return; }
+      // The sleep timer ran out: everything playing in every frame stops, watched or not.
+      case 'sleep': {
+        document.querySelectorAll('video,audio').forEach((x) => x.pause());
+        const v = pick();
+        if (v) v.pause();
+        toChildren(m);
+        return;
+      }
       // Runs right after the app's tap, while this frame still has the tap's user activation; "start" for the video
       // the user just started here (offerStart), whose press still counts.
       case 'go': case 'start': {
@@ -560,6 +568,8 @@ class VideoBar(context: Context, private val actions: Actions) : LinearLayout(co
         fun tracks()
         /** From Sofa Player back to the site's own player. */
         fun sitePlayer()
+        /** Pick when playback stops by itself. */
+        fun sleepTimer()
     }
 
     private val playPause: ImageView
@@ -571,7 +581,12 @@ class VideoBar(context: Context, private val actions: Actions) : LinearLayout(co
     private var state = VideoState(0.0, 0.0, true, 1.0)
 
     private val pip: ImageView
+    private val sleep: ImageView
     private val tracks: ImageView
+
+    /** The sleep timer runs: its button shows fully lit. */
+    var sleeping = false
+        set(v) { field = v; sleep.alpha = if (v) 1f else 0.6f }
     private val site: ImageView
 
     /** Sofa Player plays: its own buttons show, and the pointer (for the page's controls) doesn't. */
@@ -686,6 +701,8 @@ class VideoBar(context: Context, private val actions: Actions) : LinearLayout(co
         pip = button(R.drawable.ic_picture_in_picture_alt, R.string.picture_in_picture) { actions.pictureInPicture() }
             .apply { visibility = GONE }
         buttons.addView(pip)
+        sleep = button(R.drawable.ic_bedtime, R.string.sleep_timer) { actions.sleepTimer() }.apply { alpha = 0.6f }
+        buttons.addView(sleep)
         buttons.addView(button(R.drawable.ic_info, R.string.video_info) { actions.toggleVideoInfo() })
         site = button(R.drawable.ic_desktop_windows, R.string.site_player) { actions.sitePlayer() }.apply { visibility = GONE }
         buttons.addView(site)

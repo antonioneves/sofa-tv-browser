@@ -32,6 +32,9 @@
   and keeps translating the site's pages as you go, until "Show original" or you leave the site. Hold OK on it to
   choose another language. The page's text goes to Google only when you press it; sites that refuse Google's
   translator can't be translated.
+- **Sleep timer:** the moon button in the video controls stops playback after 15 minutes to 2 hours, in Sofa
+  Player and on the page alike. A message comes up a minute before, and the button shows lit while the timer
+  runs. Press it again to change the time or turn it off.
 - **Site settings** (Settings → Site settings): lists every site with its own choices (zoom, Browse as, ad blocking
   turned off, keys going to the site), and resets one site or all of them. Choices made in private browsing,
   including answers to the protected-content prompt, are never saved and are gone when it closes.

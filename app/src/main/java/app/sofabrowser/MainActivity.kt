@@ -1088,6 +1088,43 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             resume = { if (wasPlaying && fullscreen.visibility == View.VISIBLE) command("play") })
     }
 
+    // ---- Sleep timer: playback stops by itself after a while, with a warning a minute before ----
+
+    /** When playback stops, in [SystemClock.elapsedRealtime]; 0 while the timer is off. */
+    private var sleepAt = 0L
+    private val sleepWarning = Runnable { toast(R.string.sleep_soon) }
+    private val sleepNow = Runnable {
+        sleepAt = 0L
+        fullscreen.bar.sleeping = false
+        if (nativeOn) sofaPlayer.command("pause", null)
+        VideoRelay.send(web, "sleep")
+        toast(R.string.sleep_done)
+    }
+
+    override fun sleepTimer() {
+        val left = if (sleepAt > 0) ((sleepAt - SystemClock.elapsedRealtime()) / 60_000 + 1).toInt() else 0
+        val labels = arrayOf(getString(R.string.sleep_off)) +
+            SLEEP_MINUTES.map { resources.getQuantityString(R.plurals.sleep_in, it, it) }
+        dialog()
+            .setTitle(if (left > 0) resources.getQuantityString(R.plurals.sleep_left, left, left) else getString(R.string.sleep_timer))
+            .setSingleChoiceItems(labels, if (left > 0) -1 else 0) { d, i ->
+                d.dismiss()
+                setSleep(if (i == 0) 0 else SLEEP_MINUTES[i - 1])
+            }
+            .show()
+    }
+
+    private fun setSleep(minutes: Int) {
+        cursor.removeCallbacks(sleepNow)
+        cursor.removeCallbacks(sleepWarning)
+        sleepAt = if (minutes > 0) SystemClock.elapsedRealtime() + minutes * 60_000L else 0L
+        fullscreen.bar.sleeping = minutes > 0
+        if (minutes == 0) return toast(R.string.sleep_cancelled)
+        cursor.postDelayed(sleepNow, minutes * 60_000L)
+        cursor.postDelayed(sleepWarning, (minutes - 1) * 60_000L)
+        toast(resources.getQuantityString(R.plurals.sleep_in, minutes, minutes))
+    }
+
     override fun toggleVideoInfo() {
         val info = fullscreen.info
         info.visibility = if (info.visibility == View.VISIBLE) View.GONE else View.VISIBLE
@@ -1970,6 +2007,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     override fun onDestroy() {
+        cursor.removeCallbacks(sleepNow)
+        cursor.removeCallbacks(sleepWarning)
         voiceInput.destroy()
         sofaPlayer.release()
         if (isFinishing) {
@@ -2050,6 +2089,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         private const val AUTO_WATCH_TRIES = 6
         /** Seconds to wait for Google's translator to finish a page before saying it couldn't. */
         private const val TRANSLATE_TRIES = 20
+        private val SLEEP_MINUTES = listOf(15, 30, 45, 60, 90, 120)
         private const val AUTO_WATCH_AGAIN_MS = 1500L
         /** How far the page's video may have passed Sofa Player's first picture and it still swaps in there (ms). */
         private const val SWAP_SLACK_MS = 150L
