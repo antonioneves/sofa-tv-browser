@@ -2,8 +2,10 @@ package app.sofabrowser
 
 import android.app.Activity
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.os.Process
@@ -46,6 +48,39 @@ object Space {
 
     private val live = ArrayList<Activity>()
     private var started = 0
+    private var resumed: Activity? = null
+    /** The PIN screen is on its way: one is enough. */
+    private var asking = false
+
+    private fun lock() {
+        locked = true
+        // Hidden at once, so nothing of the space shows when the screen comes back, even for a frame.
+        live.forEach { if (it !is PinActivity) it.window.decorView.visibility = View.INVISIBLE }
+    }
+
+    private fun askPin(activity: Activity) {
+        if (asking || activity is PinActivity || activity.isFinishing) return
+        asking = true
+        activity.window.decorView.visibility = View.INVISIBLE
+        activity.startActivity(
+            Intent(activity, PinActivity::class.java)
+                .putExtra(PinActivity.EXTRA_MODE, PinActivity.MODE_UNLOCK)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        )
+    }
+
+    /**
+     * A screensaver, or the screen going off, doesn't always stop Sofa; on some TVs it only covers or pauses it. The
+     * space locks all the same, and asks for the PIN as soon as it's back in sight.
+     */
+    private object Dimmer : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_DREAMING_STOPPED -> if (locked) resumed?.let(::askPin)
+                else -> lock()
+            }
+        }
+    }
 
     internal fun start(base: Context) {
         val entering = File(base.filesDir, ENTER)
@@ -55,7 +90,15 @@ object Space {
     }
 
     internal fun watch(app: Application) {
-        if (active) app.registerActivityLifecycleCallbacks(Watcher)
+        if (!active) return
+        app.registerActivityLifecycleCallbacks(Watcher)
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_DREAMING_STARTED)
+            addAction(Intent.ACTION_DREAMING_STOPPED)
+        }
+        if (Build.VERSION.SDK_INT >= 33) app.registerReceiver(Dimmer, filter, Context.RECEIVER_NOT_EXPORTED)
+        else app.registerReceiver(Dimmer, filter)
     }
 
     /** The name of a preferences file or database on this side. */
@@ -91,6 +134,7 @@ object Space {
 
     fun unlock() {
         locked = false
+        asking = false
     }
 
     /**
@@ -127,18 +171,14 @@ object Space {
 
         override fun onActivityStarted(activity: Activity) {
             started++
-            if (!locked || activity is PinActivity) return
             // Before its first frame: nothing of the space shows under the PIN screen as it opens.
-            activity.window.decorView.visibility = View.INVISIBLE
-            activity.startActivity(
-                Intent(activity, PinActivity::class.java)
-                    .putExtra(PinActivity.EXTRA_MODE, PinActivity.MODE_UNLOCK)
-                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            )
+            if (locked) askPin(activity)
         }
 
         override fun onActivityResumed(activity: Activity) {
-            if (!locked) activity.window.decorView.visibility = View.VISIBLE
+            resumed = activity
+            // Paused, not stopped, under a screensaver: it's back without starting again.
+            if (locked) askPin(activity) else activity.window.decorView.visibility = View.VISIBLE
         }
 
         override fun onActivityStopped(activity: Activity) {
@@ -148,9 +188,13 @@ object Space {
 
         override fun onActivityDestroyed(activity: Activity) {
             live -= activity
+            if (resumed === activity) resumed = null
+            if (activity is PinActivity) asking = false
         }
 
-        override fun onActivityPaused(activity: Activity) = Unit
+        override fun onActivityPaused(activity: Activity) {
+            if (resumed === activity) resumed = null
+        }
         override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
     }
 }

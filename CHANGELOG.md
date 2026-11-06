@@ -22,8 +22,9 @@
 - **Private space** (Settings, off by default): adds a button on the home screen that opens a second
   Sofa behind a 4-digit PIN, with its own bookmarks, history, settings, logins and downloads, kept apart from the rest
   of Sofa. Inside, Sofa is teal instead of blue, the lock shows open, and the search field says "Private space", so
-  it's always clear which side you are on. Sofa asks for the PIN again whenever it comes back into view. A forgotten PIN can't be recovered, but
-  "Forgot PIN" erases the space to start again. The data is kept in Sofa's app storage and isn't encrypted with the
+  it's always clear which side you are on. The space locks when you switch to another app, the screen goes off or the
+  screensaver starts (even on TVs where the screensaver only covers Sofa), and Sofa asks for the PIN again when it
+  comes back into view. A forgotten PIN can't be recovered, but "Forgot PIN" erases the space to start again. The data is kept in Sofa's app storage and isn't encrypted with the
   PIN. Needs Android 9 or newer.
 - **Add to TV home:** a new button in the page menu gives the page its own tile among the TV's apps. Sofa makes and
   signs a tiny launcher app on the TV itself (nothing is downloaded or sent), and the tile opens the page in Sofa with
