@@ -33,6 +33,7 @@ import app.sofabrowser.adblock.FilterList
 import app.sofabrowser.browser.ExternalPlayer
 import app.sofabrowser.browser.ProtectedMedia
 import app.sofabrowser.browser.RefreshRateMatch
+import app.sofabrowser.browser.SearchShortcuts
 import app.sofabrowser.browser.StreamCopyProvider
 import app.sofabrowser.browser.WatchTarget
 import app.sofabrowser.browser.WebViews
@@ -110,6 +111,7 @@ class SettingsActivity : Activity() {
         switch(R.string.search_suggestions,
             if (prefs.searchEngine.suggestTemplate == null) R.string.search_suggestions_none else R.string.search_suggestions_sub,
             prefs::searchSuggestions)
+        row(getString(R.string.search_shortcuts), getString(R.string.search_shortcuts_sub), arrow()) { showShortcuts() }
         switch(R.string.voice_search, R.string.voice_search_sub, prefs::voiceSearch) { on ->
             // A switched-off feature shouldn't keep the microphone: Android drops it when Sofa next closes.
             if (!on && Build.VERSION.SDK_INT >= 33 &&
@@ -600,6 +602,23 @@ class SettingsActivity : Activity() {
     }
 
     private fun padded(v: View) = FrameLayout(this).apply { addView(v) }
+
+    private fun showShortcuts() {
+        // The keywords are what to type, so they stand out in the text's full colour.
+        val text = android.text.SpannableStringBuilder(getString(R.string.search_shortcuts_how)).append("\n")
+        SearchShortcuts.ALL.forEach {
+            text.append("\n")
+            val start = text.length
+            text.append(it.keyword)
+            text.setSpan(android.text.style.ForegroundColorSpan(Ui.p.text), start, text.length, 0)
+            text.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), start, text.length, 0)
+            text.append("   ").append(it.name)
+        }
+        dialog().setTitle(R.string.search_shortcuts)
+            .setMessage(text)
+            .setPositiveButton(R.string.close, null)
+            .show()
+    }
 
     private fun dialog() = Ui.dialog(this)
 

@@ -4,7 +4,10 @@ import android.net.Uri
 import android.util.Patterns
 import app.sofabrowser.SearchEngine
 
-/** Turns what the user typed into a URL to load: an address as-is, a bare domain over HTTPS, or a search. */
+/**
+ * Turns what the user typed into a URL to load: a search shortcut's site search, an address as-is, a bare domain
+ * over HTTPS, or a search.
+ */
 object UrlInput {
 
     private val SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
@@ -14,6 +17,7 @@ object UrlInput {
     fun resolve(text: String, engine: SearchEngine): String {
         val t = text.trim()
         if (t.isEmpty()) return ""
+        SearchShortcuts.match(t)?.let { (shortcut, query) -> return shortcut.url(query) }
         if (' ' !in t) {
             if (t.startsWith("http://", true) || t.startsWith("https://", true)) return t
             if (t.startsWith("about:", true) || t.startsWith("view-source:", true)) return t

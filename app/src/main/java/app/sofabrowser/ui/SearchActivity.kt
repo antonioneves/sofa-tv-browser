@@ -34,6 +34,7 @@ import android.widget.Toast
 import app.sofabrowser.Prefs
 import app.sofabrowser.R
 import app.sofabrowser.browser.PhoneLink
+import app.sofabrowser.browser.SearchShortcuts
 import app.sofabrowser.browser.UrlInput
 import app.sofabrowser.data.Db
 import io.nayuki.qrcodegen.QrCode
@@ -201,6 +202,11 @@ class SearchActivity : Activity() {
         list.removeAllViews()
         val q = text.trim()
         if (q.isEmpty() || q == intent.getStringExtra(EXTRA_CURRENT_URL)) return
+        // A shortcut says where to search, so neither history nor the engine's suggestions apply.
+        SearchShortcuts.match(q)?.let { (shortcut, query) ->
+            addRow(R.drawable.ic_search, getString(R.string.search_shortcut_row, shortcut.name, query), null) { open(shortcut.url(query)) }
+            return
+        }
         val local = Db.get(this).suggest(q, 4)
         local.forEach { addRow(R.drawable.ic_history, it.title.ifBlank { it.url }, UrlInput.display(it.url)) { open(it.url) } }
         val engine = prefs.searchEngine

@@ -42,6 +42,9 @@
 - **Sleep timer:** the moon button in the video controls stops playback after 15 minutes to 2 hours, in Sofa
   Player and on the page alike. A message comes up a minute before, and the button shows lit while the timer
   runs. Press it again to change the time or turn it off.
+- **Search shortcuts:** type a keyword and a space before a search to send it straight to one site: `yt` YouTube,
+  `w` Wikipedia (in the TV's language), `imdb` IMDb, `tw` Twitch, `r` Reddit, `map` OpenStreetMap, `g` Google and
+  `ddg` DuckDuckGo. The search screen shows where it will go as you type; Settings → Search shortcuts lists them.
 - **Site settings** (Settings → Site settings): lists every site with its own choices (zoom, Browse as, ad blocking
   turned off, keys going to the site), and resets one site or all of them. Choices made in private browsing,
   including answers to the protected-content prompt, are never saved and are gone when it closes.
