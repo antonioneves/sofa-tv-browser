@@ -28,6 +28,10 @@
   home" has its own icon, a TV with a plus, so it no longer looks like "Browse as".
 - **Zoom, per site:** the zoom chosen on a site is kept for that site's pages (in private browsing, only until it
   closes).
+- **Translate** (page menu, under More): translates the page in place into the TV's language with Google Translate,
+  and keeps translating the site's pages as you go, until "Show original" or you leave the site. Hold OK on it to
+  choose another language. The page's text goes to Google only when you press it; sites that refuse Google's
+  translator can't be translated.
 - **Site settings** (Settings → Site settings): lists every site with its own choices (zoom, Browse as, ad blocking
   turned off, keys going to the site), and resets one site or all of them. Choices made in private browsing,
   including answers to the protected-content prompt, are never saved and are gone when it closes.

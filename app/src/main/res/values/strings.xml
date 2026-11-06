@@ -122,6 +122,14 @@
     <string name="find_previous">Previous match</string>
     <string name="find_next">Next match</string>
     <string name="find_close">Close find</string>
+    <string name="translate">Translate</string>
+    <string name="translate_into">Translate into %1$s</string>
+    <string name="translate_off">Show original</string>
+    <string name="translate_pick">Translate pages into</string>
+    <string name="translate_tv_language">TV language (%1$s)</string>
+    <string name="translating">Translating into %1$s…</string>
+    <string name="translated">Translated into %1$s with Google. Hold OK on Translate to choose another language.</string>
+    <string name="translate_failed">This page couldn\'t be translated. The site may not allow it, or Google Translate couldn\'t be reached.</string>
     <string name="find_none">No matches</string>
     <string name="find_count">%1$d of %2$d</string>
     <string name="user_agent">Browse as</string>

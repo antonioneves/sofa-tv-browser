@@ -22,11 +22,13 @@ import app.sofabrowser.Space
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
 
-    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
+    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
     interface Actions {
         fun onAddress()
         fun onAction(action: Action)
+        /** OK held on [action]'s button; only Translate answers it, with its languages. */
+        fun onActionHeld(action: Action)
     }
 
     data class State(
@@ -48,6 +50,10 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         val allowPending: Boolean,
         /** "Watch by itself" runs on this site (on every site, or this one is chosen). */
         val autoWatchHere: Boolean,
+        /** Pages of this site are being translated. */
+        val translated: Boolean,
+        /** The name of the language Translate translates into. */
+        val translateInto: String,
     )
 
     private val buttons = LinkedHashMap<Action, LabeledIconButton>()
@@ -137,6 +143,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.AUTO_WATCH, R.drawable.ic_autoplay, R.string.auto_watch)
         // This page: look through it, keep it.
         add(Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page)
+        add(Action.TRANSLATE, R.drawable.ic_translate, R.string.translate)
+        buttons[Action.TRANSLATE]?.setOnLongClickListener { actions.onActionHeld(Action.TRANSLATE); true }
         add(Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark)
         add(Action.PIN, R.drawable.ic_add, R.string.pin_to_home)
         // A tile on the TV's home screen would show anyone what's in the private space.
@@ -265,6 +273,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             b.visibility = if (s.privateMode) android.view.View.GONE else android.view.View.VISIBLE
             b.set(R.drawable.ic_autoplay, context.getString(if (s.autoWatchHere) R.string.auto_watch_on else R.string.auto_watch_off))
         }
+        buttons[Action.TRANSLATE]?.set(R.drawable.ic_translate,
+            if (s.translated) context.getString(R.string.translate_off) else context.getString(R.string.translate_into, s.translateInto))
         buttons[Action.USER_AGENT]?.set(if (s.desktop) R.drawable.ic_desktop_windows else R.drawable.ic_smartphone,
             context.getString(R.string.user_agent))
         buttons[Action.POINTER]?.set(if (s.pointer) R.drawable.ic_mouse else R.drawable.ic_keyboard,

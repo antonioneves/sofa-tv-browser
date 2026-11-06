@@ -39,7 +39,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.webkit.WebViewFeature
+import app.sofabrowser.adblock.Sites
 import app.sofabrowser.browser.Browser
+import app.sofabrowser.browser.Translator
 import app.sofabrowser.browser.CursorLayout
 import app.sofabrowser.browser.Decoders
 import app.sofabrowser.browser.ExternalPlayer
@@ -604,6 +606,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             privateMode = browser.privateMode,
             allowPending = browser.pendingAllow() != null,
             autoWatchHere = WatchTarget.autoWatches(prefs.autoWatch, host, prefs.autoWatchSites),
+            translated = translateSite != null && host?.let(Sites::of) == translateSite,
+            translateInto = Translator.name(translateCode(), Locale.getDefault()),
         )
     }
 
@@ -645,6 +649,10 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 menu?.dismiss()
             }
             BrowserMenu.Action.FIND -> { menu?.dismiss(); findBar.open(voice = prefs.voiceSearch && voiceInput.available) }
+            BrowserMenu.Action.TRANSLATE -> if (host != null && Browser.isWebUrl(url)) {
+                menu?.dismiss()
+                if (Sites.of(host) == translateSite) showOriginal() else { translateSite = Sites.of(host); translate(announce = true) }
+            }
             BrowserMenu.Action.BOOKMARK -> if (Browser.isWebUrl(url)) {
                 if (db.isBookmarked(url)) db.removeBookmark(url) else db.addBookmark(w.title.orEmpty(), url)
                 toast(if (db.isBookmarked(url)) R.string.bookmark_added else R.string.bookmark_removed)
@@ -737,6 +745,85 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
 
+    // Translate
+
+    /** The site whose pages are translated as they load, until Show original or another site; null for none. */
+    private var translateSite: String? = null
+    /** The page translation was started on, so a page that reports finishing twice isn't translated twice. */
+    private var translateUrl: String? = null
+    private var pageTranslated = false
+    private var translateTries = 0
+    /** Say when the next translation is done, or that it failed: the user asked for it, it isn't a page of the site. */
+    private var announceTranslation = false
+
+    private val translateCheck = object : Runnable {
+        override fun run() {
+            web?.evaluateJavascript(Translator.DONE) { done ->
+                when {
+                    done == "true" -> {
+                        pageTranslated = true
+                        if (announceTranslation) toast(getString(R.string.translated, translateName()))
+                        announceTranslation = false
+                        menu?.takeIf { it.isShowing }?.update(menuState())
+                    }
+                    ++translateTries < TRANSLATE_TRIES -> cursor.postDelayed(this, 1000)
+                    announceTranslation -> { announceTranslation = false; translateSite = null; toast(R.string.translate_failed) }
+                }
+            }
+        }
+    }
+
+    private fun translateCode() = prefs.translateLanguage.ifEmpty { Translator.codeFor(Locale.getDefault()) ?: "en" }
+    private fun translateName() = Translator.name(translateCode(), Locale.getDefault())
+
+    private fun translate(announce: Boolean) {
+        val w = web ?: return
+        cursor.removeCallbacks(translateCheck)
+        translateUrl = w.url
+        translateTries = 0
+        announceTranslation = announce
+        if (announce) toast(getString(R.string.translating, translateName()))
+        w.evaluateJavascript(Translator.script(translateCode()), null)
+        cursor.postDelayed(translateCheck, 1000)
+    }
+
+    /** Stops translating the site and reloads the page as it was. */
+    private fun showOriginal() {
+        translateSite = null
+        pageTranslated = false
+        cursor.removeCallbacks(translateCheck)
+        web?.evaluateJavascript(Translator.UNDO) { browser.reload() }
+    }
+
+    override fun onActionHeld(action: BrowserMenu.Action) {
+        if (action == BrowserMenu.Action.TRANSLATE) pickTranslateLanguage()
+    }
+
+    /** The languages to translate into, the TV's own first; choosing one translates the page into it. */
+    private fun pickTranslateLanguage() {
+        val display = Locale.getDefault()
+        val collator = java.text.Collator.getInstance(display)
+        val codes = Translator.LANGUAGES.sortedWith(compareBy(collator) { Translator.name(it, display) })
+        val tv = Translator.name(Translator.codeFor(display) ?: "en", display)
+        val labels = arrayOf(getString(R.string.translate_tv_language, tv)) + codes.map { Translator.name(it, display) }
+        val current = prefs.translateLanguage.let { if (it.isEmpty()) 0 else codes.indexOf(it) + 1 }
+        dialog().setTitle(R.string.translate_pick).setSingleChoiceItems(labels, current) { d, which ->
+            d.dismiss()
+            menu?.dismiss()
+            prefs.translateLanguage = if (which == 0) "" else codes[which - 1]
+            val url = web?.url
+            val host = Browser.hostOf(url)
+            if (host == null || !Browser.isWebUrl(url)) return@setSingleChoiceItems
+            translateSite = Sites.of(host)
+            if (!pageTranslated) { translate(announce = true); return@setSingleChoiceItems }
+            // Google's translator can't go from one translation to another reliably: start again from the original.
+            pageTranslated = false
+            announceTranslation = true
+            web?.evaluateJavascript(Translator.UNDO) { browser.reload() }
+        }.show()
+    }
+
+
     // Home actions
 
     override fun onOpen(url: String) = openUrl(url)
@@ -763,6 +850,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         // Stream copies hold what was watched (signed stream addresses); none outlives either side of the switch.
         StreamCopyProvider.clear(this)
         privateChoices = null
+        translateSite = null
         prefs.privateMode = entering
         if (entering) {
             dialog().setTitle(R.string.private_mode)
@@ -857,6 +945,11 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         cursor.cursorEnabled = host == null || !browser.keysToPage(host)
         if (cursor.scrollMode) cursor.setScrollMode(false)
         if (url != autoWatchUrl) { stopAutoWatch(); autoWatchUrl = null }
+        cursor.removeCallbacks(translateCheck)
+        pageTranslated = false
+        translateUrl = null
+        // Translation follows the site's pages, not the user to another site.
+        if (translateSite != null && host?.let(Sites::of) != translateSite) { translateSite = null; announceTranslation = false }
         menu?.takeIf { it.isShowing }?.update(menuState())
     }
 
@@ -868,6 +961,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         progress.scaleX = 0f
         menu?.takeIf { it.isShowing }?.update(menuState())
         if (Browser.isWebUrl(url)) maybeAutoWatch(url)
+        if (translateSite != null && translateUrl != url && Browser.hostOf(url)?.let(Sites::of) == translateSite) {
+            translate(announce = announceTranslation)
+        }
     }
 
     override fun onProgress(percent: Int) {
@@ -1952,6 +2048,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         private const val AUTO_WATCH_SETTLE_MS = 1500L
         /** How many looks Watch by itself takes for a video, [AUTO_WATCH_AGAIN_MS] apart: about 10 s in all. */
         private const val AUTO_WATCH_TRIES = 6
+        /** Seconds to wait for Google's translator to finish a page before saying it couldn't. */
+        private const val TRANSLATE_TRIES = 20
         private const val AUTO_WATCH_AGAIN_MS = 1500L
         /** How far the page's video may have passed Sofa Player's first picture and it still swaps in there (ms). */
         private const val SWAP_SLACK_MS = 150L

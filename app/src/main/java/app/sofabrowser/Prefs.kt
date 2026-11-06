@@ -77,6 +77,8 @@ class Prefs(context: Context) {
     var voiceSearch by boolean("voice_search", true)
     /** The page menu shows its row of actions; only the menu's More button changes it. */
     var menuExpanded by boolean("menu_expanded", false)
+    /** The language pages are translated into, by Translator's codes; "" for the TV's own language. */
+    var translateLanguage by string("translate_language", "")
     var adBlock by boolean("adblock", true)
     /** Downloads the filter lists that are on again every few days (AdBlocker.refreshIfDue); asked at first start. */
     var autoUpdateLists by boolean("auto_update_lists", false)
