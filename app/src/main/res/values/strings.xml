@@ -61,6 +61,8 @@
 
     <!-- Browse -->
     <string name="home">Home</string>
+    <string name="more_actions">More</string>
+    <string name="fewer_actions">Fewer</string>
     <string name="back">Back</string>
     <string name="forward">Forward</string>
     <string name="reload">Reload</string>
@@ -121,6 +123,8 @@
     <string name="find_count">%1$d of %2$d</string>
     <string name="user_agent">Browse as</string>
     <string name="custom_user_agent">Custom user agent</string>
+    <string name="user_agent_site">Browse %1$s as</string>
+    <string name="user_agent_default">Default (%1$s)</string>
     <string name="scroll_mode">Scroll mode</string>
     <string name="scroll_mode_hint">Scroll mode · ↑↓←→ scroll · OK or Back to exit</string>
     <string name="pointer">Pointer</string>
@@ -322,8 +326,8 @@
     <string name="how_to_update_message">Open the app store on your TV and look for \"Android System WebView\", then choose Update. If your TV has no app store, updates come with the TV\'s system updates, so check its settings or the maker\'s website.</string>
 
     <string-array name="user_agents">
-        <item>Desktop</item>
-        <item>Mobile</item>
+        <item>Chrome on Windows</item>
+        <item>Chrome on Android</item>
         <item>WebView default</item>
         <item>iPad</item>
         <item>Smart TV</item>

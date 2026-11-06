@@ -192,7 +192,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         }
         setContentView(root)
 
-        if (!handleIntent(intent)) {
+        if (!restorePage(savedInstanceState) && !handleIntent(intent)) {
             showHome()
             Looper.myQueue().addIdleHandler {
                 if (!isFinishing && !isDestroyed && homeShown && web == null) {
@@ -204,8 +204,34 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         }
     }
 
+    /**
+     * A TV short of memory may close this screen while Bookmarks, History, Downloads or Settings is open over it.
+     * Back then returns to the page that was open, with its history, instead of the home screen. Not a private
+     * page: a recreated screen starts a new session, which never holds the old one's pages.
+     */
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val w = web ?: return
+        if (homeShown || prefs.privateMode || w.url == null) return
+        outState.putString(STATE_URL, w.url)
+        // Android stops an app whose saved state passes about 500 KB, and a long Back history can: past a quarter of
+        // that, only the address is kept.
+        val page = Bundle().also { w.saveState(it) }
+        val size = android.os.Parcel.obtain().run { writeBundle(page); dataSize().also { recycle() } }
+        if (size < MAX_SAVED_PAGE) outState.putBundle(STATE_PAGE, page)
+    }
+
+    private fun restorePage(state: Bundle?): Boolean {
+        val url = state?.getString(STATE_URL) ?: return false
+        ensureWeb()
+        showBrowser()
+        if (state.getBundle(STATE_PAGE)?.let { web?.restoreState(it) } == null) browser.load(url)
+        return true
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (Space.sendOut(this, intent, standalone)) return
         handleIntent(intent)
     }
 
@@ -240,9 +266,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         browser.userNavigation()
         // Older WebViews can't add Sec-GPC to every request; at least send it with navigations we start.
         if (prefs.sendGpc && !WebViewFeature.isFeatureSupported(WebViewFeature.CUSTOM_REQUEST_HEADERS)) {
-            web?.loadUrl(url, mapOf("Sec-GPC" to "1"))
+            browser.load(url, mapOf("Sec-GPC" to "1"))
         } else {
-            web?.loadUrl(url)
+            browser.load(url)
         }
     }
 
@@ -571,9 +597,11 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             bookmarked = url.isNotEmpty() && db.isBookmarked(url),
             adBlockOn = prefs.adBlock && (host == null || !Allowlist.contains(this, host)),
             blocked = browser.adBlocker.blockedCount,
-            desktop = prefs.userAgent != "mobile",
+            desktop = browser.userAgentMode(url) != "mobile",
             pointer = cursor.cursorEnabled,
             zoomPercent = (100 * 1.25.pow(zoomStep)).roundToInt(),
+            canZoomOut = zoomStep > MIN_ZOOM_STEP,
+            canZoomIn = zoomStep < MAX_ZOOM_STEP,
             privateMode = browser.privateMode,
             allowPending = browser.pendingAllow() != null,
             autoWatchHere = WatchTarget.autoWatches(prefs.autoWatch, host, prefs.autoWatchSites),
@@ -650,39 +678,65 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 toast(if (keys) R.string.pointer_off_toast else R.string.pointer_on_toast)
                 menu?.dismiss()
             }
-            BrowserMenu.Action.ZOOM_IN -> if (zoomStep < 6) { w.zoomBy(1.25f); zoomStep++ }
-            BrowserMenu.Action.ZOOM_OUT -> if (zoomStep > -4) { w.zoomBy(0.8f); zoomStep-- }
+            BrowserMenu.Action.ZOOM_IN -> if (zoomStep < MAX_ZOOM_STEP) { zoomTo(w, zoomStep + 1); browser.setSiteZoom(url, zoomStep) }
+            BrowserMenu.Action.ZOOM_OUT -> if (zoomStep > MIN_ZOOM_STEP) { zoomTo(w, zoomStep - 1); browser.setSiteZoom(url, zoomStep) }
             BrowserMenu.Action.SETTINGS -> { menu?.dismiss(); startActivity(Intent(this, SettingsActivity::class.java)) }
             BrowserMenu.Action.DOWNLOADS -> { menu?.dismiss(); onDownloads() }
         }
         menu?.takeIf { it.isShowing }?.update(menuState())
     }
 
+    /**
+     * Zooms by 25% steps. A page opens scaled to fit the screen and WebView can't scale it any smaller, so under
+     * 100% the page's own layout shrinks instead (CSS zoom, like Chrome's page zoom) and more of it fits. Above 100%
+     * the page is magnified.
+     */
+    private fun zoomTo(w: WebView, step: Int) {
+        if (step > 0 || zoomStep > 0) w.zoomBy(if (step > zoomStep) 1.25f else 0.8f)
+        else w.evaluateJavascript("document.documentElement.style.zoom='${1.25.pow(step)}'", null)
+        zoomStep = step
+    }
+
+    /** A site keeps the zoom last chosen on it: a new page of it opens at that zoom, before it is first drawn. */
+    override fun onPageVisible(url: String) {
+        val w = web ?: return
+        val step = browser.siteZoom(url).coerceIn(MIN_ZOOM_STEP, MAX_ZOOM_STEP)
+        if (zoomStep != 0 || step == 0) return
+        if (step > 0) w.zoomBy(1.25.pow(step).toFloat())
+        else w.evaluateJavascript("document.documentElement.style.zoom='${1.25.pow(step)}'", null)
+        zoomStep = step
+        menu?.takeIf { it.isShowing }?.update(menuState())
+    }
+
+    /**
+     * "Browse as" for the page's site, remembered for it; the first choice follows the default in Settings. Off a web
+     * page there is no site, so it changes that default.
+     */
     private fun pickUserAgent() {
+        val url = web?.url
+        if (!Browser.isWebUrl(url)) { startActivity(Intent(this, SettingsActivity::class.java)); menu?.dismiss(); return }
         val labels = resources.getStringArray(R.array.user_agents)
-        val current = Prefs.UA_MODES.indexOf(prefs.userAgent).coerceAtLeast(0)
-        dialog().setTitle(R.string.user_agent)
-            .setSingleChoiceItems(labels, current) { d, which ->
+        val default = labels[Prefs.UA_MODES.indexOf(prefs.userAgent).coerceAtLeast(0)]
+        val site = browser.siteUserAgent(url)
+        val current = if (site == null) 0 else Prefs.UA_MODES.indexOf(site) + 1
+        dialog().setTitle(getString(R.string.user_agent_site, Browser.hostOf(url).orEmpty().removePrefix("www.")))
+            .setSingleChoiceItems(arrayOf(getString(R.string.user_agent_default, default)) + labels, current) { d, which ->
                 d.dismiss()
-                val mode = Prefs.UA_MODES[which]
-                if (mode == "custom") askCustomUserAgent() else setUserAgent(mode)
+                menu?.dismiss()
+                val mode = if (which == 0) null else Prefs.UA_MODES[which - 1]
+                if (mode == "custom") askCustomUserAgent(url!!) else browser.setSiteUserAgent(url!!, mode)
             }.show()
     }
 
-    private fun askCustomUserAgent() {
+    private fun askCustomUserAgent(url: String) {
         val field = EditText(this).apply { setText(prefs.customUserAgent); isSingleLine = true }
         dialog().setTitle(R.string.custom_user_agent).setView(padded(field))
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 prefs.customUserAgent = field.text.toString().trim()
-                setUserAgent("custom")
+                browser.setSiteUserAgent(url, "custom")
             }.setNegativeButton(android.R.string.cancel, null).show()
     }
 
-    private fun setUserAgent(mode: String) {
-        prefs.userAgent = mode
-        web?.let { WebViews.applyUserAgent(it, mode, prefs.customUserAgent); browser.reload() }
-        menu?.dismiss()
-    }
 
     // Home actions
 
@@ -1873,6 +1927,12 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         private const val REQ_URL = 10
         private const val REQ_NOTIFICATIONS = 11
         private const val REQ_MIC = 12
+        private const val STATE_URL = "page_url"
+        private const val STATE_PAGE = "page_state"
+        private const val MAX_SAVED_PAGE = 128 * 1024
+        /** Zoom limits in 25% steps: 64% at the least, about 381% at the most. */
+        private const val MIN_ZOOM_STEP = -2
+        private const val MAX_ZOOM_STEP = 6
         /** The commands Sofa Player takes in place of the page's video. */
         private val PLAYER_COMMANDS = setOf("toggle", "play", "pause", "seekBy", "seekTo", "rate", "subs")
         /** Seconds: shorter videos (trailers, previews, ads) stay with the page's player. */

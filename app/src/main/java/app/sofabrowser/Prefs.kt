@@ -60,6 +60,8 @@ class Prefs(context: Context) {
     var searchSuggestions by boolean("search_suggestions", false)
     /** Shows the mic buttons; voice search runs on the TV's speech service. */
     var voiceSearch by boolean("voice_search", true)
+    /** The page menu shows its row of actions; only the menu's More button changes it. */
+    var menuExpanded by boolean("menu_expanded", false)
     var adBlock by boolean("adblock", true)
     /** Downloads the filter lists that are on again every few days (AdBlocker.refreshIfDue); asked at first start. */
     var autoUpdateLists by boolean("auto_update_lists", false)
@@ -76,8 +78,12 @@ class Prefs(context: Context) {
      * never sends), it is set by few browsers and so makes a visitor easier to single out.
      */
     var sendGpc by boolean("send_gpc", false)
-    /** One of [UA_MODES]. Desktop suits a big screen and the pointer best. */
-    var userAgent by string("user_agent", "desktop")
+    /**
+     * One of [UA_MODES], for every site without its own choice ([siteUserAgents]). Chrome on Android by default:
+     * it is what the TV is, so sites that check the browser against the device (Qwant's bot check among them) let
+     * it in, where they refuse a desktop browser.
+     */
+    var userAgent by string("user_agent", "mobile")
     var customUserAgent by string("custom_user_agent", "")
     /** BACK goes to the previous page when there is one, instead of opening the menu (BrowsHere's behaviour). */
     var backGoesBack by boolean("back_goes_back", false)

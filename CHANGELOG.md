@@ -19,10 +19,24 @@
   A removed site keeps its history and comes back only if you visit it often again.
 - **History and Bookmarks:** the delete button beside each card is gone. Hold OK (or press Menu) on a card to open
   or delete it.
+- **Browse as, per site:** Sofa now browses as Chrome on Android by default, which is what the TV is. Some sites,
+  Qwant among them, took the old desktop disguise for a bot and refused to search. "Browse as" in the menu now
+  chooses for the page's site only, and Sofa remembers it there (in private browsing, only until it closes).
+  Settings → Browse as sets the default for every other site. If you had chosen a mode in Settings yourself, it stays.
+- The menu is one slim row: Home, the address, Back, Forward, Reload, zoom and More. More slides the other actions up
+  below it, grouped by what they do, and folds them away again; the menu opens the way it was left. "Add to TV
+  home" has its own icon, a TV with a plus, so it no longer looks like "Browse as".
+- **Zoom, per site:** the zoom chosen on a site is kept for that site's pages (in private browsing, only until it
+  closes).
 - The home screen no longer has an Exit button: Home or Back on the remote leaves Sofa.
 - Fixed: Sofa could crash when a small download finished the moment it started.
 - Fixed: a dialog button or tile could stay enlarged after focus moved on quickly, and the last button in a dialog
   was cut off when enlarged.
+- Fixed: zoom out did nothing below 100%, though the menu showed a smaller number. It now makes the page smaller,
+  down to 64%, and the zoom buttons grey out at either end.
+- Fixed: the first and last buttons of the menu, and their names, could be cut off at the sides of the screen.
+- Fixed: Back from Bookmarks, History, Downloads or Settings could land on the home screen instead of the page
+  they were opened from, on TVs short of memory. The page now comes back where it was, with its Back history.
 - Fixed: the border of a focused tile at the start or end of a row on the home screen, and of a focused card in
   History, Bookmarks and Downloads, was cut off.
 

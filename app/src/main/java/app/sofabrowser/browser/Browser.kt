@@ -27,6 +27,8 @@ import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import app.sofabrowser.Prefs
+import app.sofabrowser.siteUserAgents
+import app.sofabrowser.siteZooms
 import app.sofabrowser.adblock.AdBlocker
 import app.sofabrowser.adblock.Allowlist
 import app.sofabrowser.adblock.InPageBlocking
@@ -42,6 +44,8 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     interface Host {
         fun onPageStarted(url: String)
         fun onPageFinished(url: String)
+        /** The new page is about to be drawn for the first time. */
+        fun onPageVisible(url: String) {}
         fun onProgress(percent: Int)
         fun onTitle(url: String, title: String)
         fun onIcon(url: String, icon: Bitmap)
@@ -92,6 +96,13 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
      */
     private var mainFrameTarget: String? = null
 
+    /** The "Browse as" mode the view has now, with the custom string when it is "custom". */
+    private var appliedUserAgent: String? = null
+    /** Per-site "Browse as" choices made in private browsing, which are kept only until it closes. */
+    private val privateUserAgents = HashMap<String, String>()
+    /** Per-site zoom chosen in private browsing, likewise. */
+    private val privateZooms = HashMap<String, Int>()
+
     val adBlocker = AdBlocker.get(context)
     private val guard = NavigationGuard()
     /** Set while Sofa taps the page on its own ([unattended]), so the guard doesn't take that tap for the user's. */
@@ -120,6 +131,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         // Same trick as BrowsHere: a desktop-ish ~1130-1500 CSS px viewport that stays readable from the sofa.
         view.setInitialScale((85 * if (density >= 1) minOf(density, 2f) else density).toInt())
         WebViews.configure(view, prefs)
+        appliedUserAgent = agentKey(prefs.userAgent)
         applyGpc(view)
         applyBannerRejection(view)
         // Fresh random names per view for everything injected into pages (see PageKey).
@@ -168,12 +180,82 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         frames.clear()
         host.onPlaying(false)
         if (isolated) deletePrivateProfile()
+        if (privateMode) { privateUserAgents.clear(); privateZooms.clear() }
+        appliedUserAgent = null
         privateMode = false
         isolated = false
     }
 
     fun applySettings() {
-        web?.let { WebViews.configure(it, prefs); applyGpc(it); applyBannerRejection(it) }
+        web?.let {
+            val mode = userAgentMode(it.url)
+            WebViews.configure(it, prefs, mode)
+            appliedUserAgent = agentKey(mode)
+            applyGpc(it)
+            applyBannerRejection(it)
+        }
+    }
+
+    /** The site's own "Browse as" choice for [url], or null when it follows the default in Settings. */
+    fun siteUserAgent(url: String?): String? {
+        val site = siteOf(url) ?: return null
+        // In private browsing "" is a choice of the default, over a saved choice.
+        if (privateMode) privateUserAgents[site]?.let { return it.ifEmpty { null } }
+        return siteUserAgents(context)[site]
+    }
+
+    /** The zoom step kept for [url]'s site, 0 (100%) when none is. */
+    fun siteZoom(url: String?): Int {
+        val site = siteOf(url) ?: return 0
+        return if (privateMode) privateZooms[site] ?: 0 else siteZooms(context)[site]?.toIntOrNull() ?: 0
+    }
+
+    /** Keeps [step] for [url]'s site; private browsing keeps it only until it closes. */
+    fun setSiteZoom(url: String?, step: Int) {
+        val site = siteOf(url) ?: return
+        if (privateMode) { if (step == 0) privateZooms.remove(site) else privateZooms[site] = step; return }
+        val saved = siteZooms(context)
+        if (step == 0) saved.remove(site) else saved[site] = step.toString()
+    }
+
+    /** The "Browse as" mode that [url] loads with. */
+    fun userAgentMode(url: String?): String = siteUserAgent(url) ?: prefs.userAgent
+
+    /**
+     * Remembers [mode] for the site of [url] (null: back to the default in Settings) and reloads the page with it.
+     * Private browsing keeps the choice only until it closes.
+     */
+    fun setSiteUserAgent(url: String, mode: String?) {
+        val site = siteOf(url) ?: return
+        if (privateMode) {
+            privateUserAgents[site] = mode.orEmpty()
+        } else {
+            val saved = siteUserAgents(context)
+            if (mode == null) saved.remove(site) else saved[site] = mode
+        }
+        web?.let { applyUserAgentFor(it, url) }
+        reload()
+    }
+
+    /** Gives [view] the "Browse as" mode of [url]'s site before it loads; true when that changed it. */
+    private fun applyUserAgentFor(view: WebView, url: String?): Boolean {
+        val mode = userAgentMode(url)
+        val key = agentKey(mode)
+        if (key == appliedUserAgent) return false
+        WebViews.applyUserAgent(view, mode, prefs.customUserAgent)
+        appliedUserAgent = key
+        return true
+    }
+
+    private fun agentKey(mode: String) = if (mode == "custom") "custom:${prefs.customUserAgent}" else mode
+
+    private fun siteOf(url: String?): String? = if (isWebUrl(url)) hostOf(url)?.lowercase()?.let(Sites::of) else null
+
+    /** Loads [url] in the view, with the "Browse as" mode of its site. */
+    fun load(url: String, headers: Map<String, String> = emptyMap()) {
+        val view = web ?: return
+        applyUserAgentFor(view, url)
+        view.loadUrl(url, headers)
     }
 
     private var bannerScript: ScriptHandler? = null
@@ -199,6 +281,8 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     @SuppressLint("MissingOnRenderProcessGone")
     private val client = object : WebViewClient() {
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+            // A page that went back or forward on its own got here without passing shouldOverrideUrlLoading.
+            if (isWebUrl(url) && applyUserAgentFor(view, url)) { view.reload(); return }
             pageHost = AdBlocker.hostOf(url)
             pageUrl = url
             guard.pageStarted()
@@ -208,6 +292,8 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         }
 
         override fun onPageFinished(view: WebView, url: String) = host.onPageFinished(url)
+
+        override fun onPageCommitVisible(view: WebView, url: String) = host.onPageVisible(url)
 
         override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
             pageHost = AdBlocker.hostOf(url)
@@ -236,7 +322,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             return when (url.scheme?.lowercase()) {
                 "http", "https" -> (request.isForMainFrame && blockNavigation(view, request)).also { blocked ->
                     if (request.isForMainFrame && !blocked) mainFrameTarget = url.toString()
-                }
+                } || (request.isForMainFrame && switchUserAgent(view, url.toString()))
                 "about", "data", "blob", "javascript", null -> false
                 "intent" -> {
                     // Never launch other apps from web content; follow the page's own web fallback if it has one.
@@ -396,6 +482,21 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         return PanelScale.of(mode.physicalWidth, mode.physicalHeight, dm.widthPixels, dm.heightPixels)
     }
 
+    /**
+     * When the main frame is about to load [url] (a link or a redirect hop, always a GET) from a site that is
+     * browsed as something else, loads it again with that site's mode: a navigation already under way keeps the
+     * user agent it started with. Returns true when it did.
+     */
+    private fun switchUserAgent(view: WebView, url: String): Boolean {
+        if (!applyUserAgentFor(view, url)) return false
+        // Only the origin, as Chrome's default referrer policy sends to another site, and nothing from https to http.
+        val from = pageUrl?.let(Uri::parse)
+        val referer = if (from?.scheme == "https" && url.startsWith("http:")) null
+            else from?.takeIf { it.scheme == "http" || it.scheme == "https" }?.let { "${it.scheme}://${it.authority}/" }
+        view.loadUrl(url, referer?.let { mapOf("Referer" to it) } ?: emptyMap())
+        return true
+    }
+
     /** Loads a window's first address in [view], unless the pop-up rules block it. */
     private fun openWindow(view: WebView, url: String, opener: String?, pressed: String?) {
         val sameSite = opener != null && hostOf(url)?.let { Sites.same(it.lowercase(), opener.lowercase()) } == true
@@ -409,6 +510,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         } else {
             // The window came from a press, so its redirects are the user's too.
             guard.userNavigation()
+            applyUserAgentFor(view, url)
             view.loadUrl(url)
         }
     }
@@ -469,8 +571,16 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     }
 
     // History moves and reloads are the user's own navigations too.
-    fun goBack() { guard.userNavigation(); web?.goBack() }
-    fun goForward() { guard.userNavigation(); web?.goForward() }
+    fun goBack() { guard.userNavigation(); historyStep(-1) }
+    fun goForward() { guard.userNavigation(); historyStep(1) }
+
+    /** Goes [steps] through the history, with the "Browse as" mode of the page it reaches. */
+    private fun historyStep(steps: Int) {
+        val view = web ?: return
+        val list = view.copyBackForwardList()
+        list.getItemAtIndex(list.currentIndex + steps)?.let { applyUserAgentFor(view, it.url) }
+        view.goBackOrForward(steps)
+    }
     fun reload() { guard.userNavigation(); web?.reload() }
 
     /** Whether ad blocking (and with it pop-up and redirect blocking) applies to pages from [pageHost]. */
