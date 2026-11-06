@@ -240,8 +240,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     private fun handleIntent(intent: Intent?): Boolean {
         val url = when (intent?.action) {
             Intent.ACTION_VIEW -> intent.dataString?.takeIf(Browser::isWebUrl)
-            Intent.ACTION_WEB_SEARCH, Intent.ACTION_SEARCH -> intent.getStringExtra("query")?.let { UrlInput.resolve(it, prefs.searchEngine) }
-            Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)?.let { UrlInput.resolve(it, prefs.searchEngine) }
+            Intent.ACTION_WEB_SEARCH, Intent.ACTION_SEARCH -> intent.getStringExtra("query")?.let { UrlInput.resolve(it, prefs.searchEngine, searchShortcuts(this)) }
+            Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)?.let { UrlInput.resolve(it, prefs.searchEngine, searchShortcuts(this)) }
             else -> null
         } ?: return false
         // A link from another app (or a phone remote) may come while the menu is open: the page it opens gets the keys.
@@ -943,7 +943,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(title); addView(address) }
         dialog().setTitle(if (site == null) R.string.add_site else R.string.edit).setView(padded(box))
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                val url = UrlInput.resolve(address.text.toString(), prefs.searchEngine)
+                val url = UrlInput.resolve(address.text.toString(), prefs.searchEngine, searchShortcuts(this))
                 if (!Browser.isWebUrl(url)) return@setPositiveButton
                 val name = title.text.toString().trim().ifEmpty { Db.prettyHost(Browser.hostOf(url).orEmpty()) }
                 if (site == null) db.addTile(name, url) else db.updateTile(site.id, name, url)

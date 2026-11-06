@@ -7,6 +7,7 @@ import app.sofabrowser.adblock.Allowlist
 import app.sofabrowser.adblock.Sites
 import app.sofabrowser.browser.ProtectedMedia
 import app.sofabrowser.browser.ResumeStore
+import app.sofabrowser.browser.SearchShortcuts
 import app.sofabrowser.browser.WatchTarget
 import app.sofabrowser.data.HistoryRetention
 import app.sofabrowser.data.SiteChoice
@@ -48,6 +49,12 @@ fun siteUserAgents(context: Context) = PrefsMap(context.getSharedPreferences(Spa
 
 /** The page menu's zoom step kept for one site, by registrable domain: 1 is 125%, -1 is 80%; 100% isn't kept. Read fresh. */
 fun siteZooms(context: Context) = PrefsMap(context.getSharedPreferences(Space.name("site_zoom"), Context.MODE_PRIVATE))
+
+/** Search shortcuts the user changed, added or removed, by keyword (see SearchShortcuts.all). Read fresh. */
+fun savedSearchShortcuts(context: Context) = PrefsMap(context.getSharedPreferences(Space.name("search_shortcuts"), Context.MODE_PRIVATE))
+
+/** The search shortcuts in use: the built-in ones as changed by the user, then the user's own. */
+fun searchShortcuts(context: Context) = SearchShortcuts.all(savedSearchShortcuts(context))
 
 /** Every site with a choice of its own from the page menu. */
 fun siteChoices(context: Context) =

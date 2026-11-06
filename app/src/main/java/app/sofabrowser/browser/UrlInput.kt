@@ -14,10 +14,10 @@ object UrlInput {
     private val HOST_PORT = Regex("^[^\\s/]+:\\d+(/.*)?$")
     private val IPV4 = Regex("^(25[0-5]|2[0-4]\\d|1?\\d?\\d)(\\.(25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}$")
 
-    fun resolve(text: String, engine: SearchEngine): String {
+    fun resolve(text: String, engine: SearchEngine, shortcuts: List<SearchShortcuts.Shortcut>): String {
         val t = text.trim()
         if (t.isEmpty()) return ""
-        SearchShortcuts.match(t)?.let { (shortcut, query) -> return shortcut.url(query) }
+        SearchShortcuts.match(t, shortcuts)?.let { (shortcut, query) -> return shortcut.url(query) }
         if (' ' !in t) {
             if (t.startsWith("http://", true) || t.startsWith("https://", true)) return t
             if (t.startsWith("about:", true) || t.startsWith("view-source:", true)) return t

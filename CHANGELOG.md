@@ -44,7 +44,9 @@
   runs. Press it again to change the time or turn it off.
 - **Search shortcuts:** type a keyword and a space before a search to send it straight to one site: `yt` YouTube,
   `w` Wikipedia (in the TV's language), `imdb` IMDb, `tw` Twitch, `r` Reddit, `map` OpenStreetMap, `g` Google and
-  `ddg` DuckDuckGo. The search screen shows where it will go as you type; Settings → Search shortcuts lists them.
+  `ddg` DuckDuckGo. The search screen shows where it will go as you type. Settings → Search shortcuts lists them, and there
+  you can add your own (any site's search address, with `%s` for the words), change one's address, or remove one;
+  removed built-in ones can be restored.
 - **Site settings** (Settings → Site settings): lists every site with its own choices (zoom, Browse as, ad blocking
   turned off, keys going to the site), and resets one site or all of them. Choices made in private browsing,
   including answers to the protected-content prompt, are never saved and are gone when it closes.

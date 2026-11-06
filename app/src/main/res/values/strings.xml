@@ -254,7 +254,17 @@
     <string name="search_suggestions_none">Your search engine doesn\'t offer suggestions Sofa can use</string>
     <string name="search_shortcuts">Search shortcuts</string>
     <string name="search_shortcuts_sub">Type yt cats to search YouTube for cats</string>
-    <string name="search_shortcuts_how">Type a shortcut, a space and what to look for, and the search goes straight to that site instead of your search engine.</string>
+    <string name="search_shortcuts_how">Type a shortcut, a space and what to look for, and the search goes straight to that site. Choose a shortcut to change or remove it.</string>
+    <string name="search_shortcut_add">Add shortcut</string>
+    <string name="search_shortcut_restore">Restore built-in ones</string>
+    <string name="search_shortcut_title">%1$s · %2$s</string>
+    <string name="search_shortcut_change">Change address</string>
+    <string name="search_shortcut_remove">Remove</string>
+    <string name="search_shortcut_keyword">Shortcut: one word to type before a search</string>
+    <string name="search_shortcut_address" formatted="false">Search address, with %s where the search goes</string>
+    <string name="search_shortcut_invalid" formatted="false">The address must start with https:// or http:// and contain %s</string>
+    <string name="search_shortcut_bad_keyword">A shortcut is one word of up to %d letters</string>
+    <string name="search_shortcut_taken">“%s” is already a shortcut</string>
     <string name="search_shortcut_row">Search %1$s for “%2$s”</string>
     <string name="custom_search_engine" formatted="false">Search URL, with %s for the query</string>
     <string name="custom_search_invalid" formatted="false">The address must start with https:// and contain %s</string>

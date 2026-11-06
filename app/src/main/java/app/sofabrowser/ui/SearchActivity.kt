@@ -33,6 +33,7 @@ import android.widget.TextView
 import android.widget.Toast
 import app.sofabrowser.Prefs
 import app.sofabrowser.R
+import app.sofabrowser.searchShortcuts
 import app.sofabrowser.browser.PhoneLink
 import app.sofabrowser.browser.SearchShortcuts
 import app.sofabrowser.browser.UrlInput
@@ -192,7 +193,7 @@ class SearchActivity : Activity() {
     }
 
     private fun submit(text: String) {
-        val url = UrlInput.resolve(text, prefs.searchEngine)
+        val url = UrlInput.resolve(text, prefs.searchEngine, searchShortcuts(this))
         if (url.isEmpty()) return
         setResult(RESULT_OK, Intent().putExtra(EXTRA_URL, url))
         finish()
@@ -203,7 +204,7 @@ class SearchActivity : Activity() {
         val q = text.trim()
         if (q.isEmpty() || q == intent.getStringExtra(EXTRA_CURRENT_URL)) return
         // A shortcut says where to search, so neither history nor the engine's suggestions apply.
-        SearchShortcuts.match(q)?.let { (shortcut, query) ->
+        SearchShortcuts.match(q, searchShortcuts(this))?.let { (shortcut, query) ->
             addRow(R.drawable.ic_search, getString(R.string.search_shortcut_row, shortcut.name, query), null) { open(shortcut.url(query)) }
             return
         }

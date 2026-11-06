@@ -43,6 +43,8 @@ import app.sofabrowser.data.HistoryRetention
 import app.sofabrowser.data.SiteChoice
 import app.sofabrowser.forgetSiteChoices
 import app.sofabrowser.siteChoices
+import app.sofabrowser.savedSearchShortcuts
+import app.sofabrowser.searchShortcuts
 import app.sofabrowser.player.PlayerChoices
 import app.sofabrowser.update.Updater
 
@@ -595,7 +597,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun askText(title: Int, current: String, done: (String) -> Unit) {
-        val field = EditText(this).apply { setText(current); isSingleLine = true }
+        val field = EditText(this).apply { setText(current); isSingleLine = true; setSelection(current.length) }
         dialog().setTitle(title).setView(padded(field))
             .setPositiveButton(android.R.string.ok) { _, _ -> done(field.text.toString().trim()) }
             .setNegativeButton(android.R.string.cancel, null).show()
@@ -604,20 +606,69 @@ class SettingsActivity : Activity() {
     private fun padded(v: View) = FrameLayout(this).apply { addView(v) }
 
     private fun showShortcuts() {
+        val saved = savedSearchShortcuts(this)
+        val shortcuts = SearchShortcuts.all(saved)
         // The keywords are what to type, so they stand out in the text's full colour.
-        val text = android.text.SpannableStringBuilder(getString(R.string.search_shortcuts_how)).append("\n")
-        SearchShortcuts.ALL.forEach {
-            text.append("\n")
-            val start = text.length
-            text.append(it.keyword)
-            text.setSpan(android.text.style.ForegroundColorSpan(Ui.p.text), start, text.length, 0)
-            text.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), start, text.length, 0)
-            text.append("   ").append(it.name)
+        val rows = shortcuts.map {
+            android.text.SpannableStringBuilder(it.keyword).apply {
+                setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, length, 0)
+                append("   ").append(it.name)
+            }
         }
-        dialog().setTitle(R.string.search_shortcuts)
-            .setMessage(text)
-            .setPositiveButton(R.string.close, null)
+        val d = dialog().setTitle(R.string.search_shortcuts)
+            .setMessage(R.string.search_shortcuts_how)
+            .setItems(rows.toTypedArray()) { _, which -> editShortcut(shortcuts[which]) }
+            .setPositiveButton(R.string.search_shortcut_add) { _, _ -> addShortcut() }
+            .setNegativeButton(R.string.close, null)
+        if (SearchShortcuts.BUILT_IN.any { it.keyword in saved }) {
+            d.setNeutralButton(R.string.search_shortcut_restore) { _, _ ->
+                SearchShortcuts.BUILT_IN.forEach { saved.remove(it.keyword) }
+                showShortcuts()
+            }
+        }
+        d.show()
+    }
+
+    private fun editShortcut(shortcut: SearchShortcuts.Shortcut) {
+        dialog().setTitle(getString(R.string.search_shortcut_title, shortcut.keyword, shortcut.name))
+            .setMessage(shortcut.template)
+            .setPositiveButton(R.string.search_shortcut_change) { _, _ ->
+                askShortcutAddress(shortcut.template) { savedSearchShortcuts(this)[shortcut.keyword] = it }
+            }
+            .setNeutralButton(R.string.search_shortcut_remove) { _, _ ->
+                // A built-in shortcut is remembered as removed; an added one is simply forgotten.
+                val saved = savedSearchShortcuts(this)
+                if (shortcut.builtIn) saved[shortcut.keyword] = "" else saved.remove(shortcut.keyword)
+                showShortcuts()
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> showShortcuts() }
             .show()
+    }
+
+    private fun addShortcut() {
+        askText(R.string.search_shortcut_keyword, "") { text ->
+            val keyword = SearchShortcuts.keywordOf(text)
+            when {
+                keyword == null -> {
+                    Toast.makeText(this, getString(R.string.search_shortcut_bad_keyword, SearchShortcuts.MAX_KEYWORD), Toast.LENGTH_LONG).show()
+                    showShortcuts()
+                }
+                searchShortcuts(this).any { it.keyword == keyword } -> {
+                    Toast.makeText(this, getString(R.string.search_shortcut_taken, keyword), Toast.LENGTH_LONG).show()
+                    showShortcuts()
+                }
+                else -> askShortcutAddress("https://") { savedSearchShortcuts(this)[keyword] = it }
+            }
+        }
+    }
+
+    /** Asks for a search address and saves it with [save], then shows the list again either way. */
+    private fun askShortcutAddress(current: String, save: (String) -> Unit) {
+        askText(R.string.search_shortcut_address, current) {
+            if (SearchShortcuts.validTemplate(it)) save(it)
+            else Toast.makeText(this, R.string.search_shortcut_invalid, Toast.LENGTH_LONG).show()
+            showShortcuts()
+        }
     }
 
     private fun dialog() = Ui.dialog(this)
