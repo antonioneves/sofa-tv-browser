@@ -2,19 +2,24 @@ package app.sofabrowser.ui
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PorterDuff
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.text.TextUtils
 import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
+import android.widget.AbsListView
+import android.widget.BaseAdapter
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.TextView
 import app.sofabrowser.R
 import app.sofabrowser.browser.UrlInput
@@ -25,18 +30,27 @@ import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
 
-/** History or bookmarks as one focusable list. Returns the chosen URL in [SearchActivity.EXTRA_URL]. */
+/**
+ * History or bookmarks as one focusable list. Returns the chosen URL in [SearchActivity.EXTRA_URL].
+ *
+ * Only the rows on screen exist as views (a [ListView]), and an icon is looked up when its row is shown, so a list of
+ * thousands of imported bookmarks costs about what a screenful does.
+ */
 class ListActivity : Activity() {
 
     private val db by lazy { Db.get(this) }
     private val history get() = intent.getStringExtra(EXTRA_MODE) == MODE_HISTORY
-    private lateinit var list: LinearLayout
+    private lateinit var list: ListView
     private lateinit var empty: View
+    private val adapter = Rows()
+
+    private sealed interface Item
+    private class Header(val label: String) : Item
+    private class Entry(val title: String, val url: String, val meta: String?, val bookmark: Boolean, val delete: () -> Unit) : Item
 
     // Selecting bookmarks to delete several at once: OK ticks a row instead of opening it.
     private var selecting = false
     private val selected = LinkedHashSet<String>()
-    private val checks = HashMap<String, ImageView>()
     private lateinit var selectButton: TextView
     private lateinit var selectAllButton: TextView
     private lateinit var deleteSelectedButton: TextView
@@ -70,15 +84,20 @@ class ListActivity : Activity() {
         header.addView(deleteAllButton)
         root.addView(header)
 
-        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24.px, 24.px, 24.px, 72.px); clipChildren = false; clipToPadding = false }
         // Reaches 24 px into the side margins, with as much padding in the list, so a focused card grows without being cut.
-        val scroll = FocusScrollView(this).apply {
+        list = FocusListView(this).apply {
+            itemsCanFocus = true
+            selector = ColorDrawable(Color.TRANSPARENT)
+            divider = ColorDrawable(Color.TRANSPARENT)
+            dividerHeight = 16.px
             isVerticalScrollBarEnabled = false
             clipChildren = false
-            addView(list)
+            clipToPadding = false
+            setPadding(24.px, 24.px, 24.px, 72.px)
+            adapter = this@ListActivity.adapter
         }
         val frame = FrameLayout(this)
-        frame.addView(scroll)
+        frame.addView(list)
         empty = Ui.text(this, 32, Ui.p.textWeak).apply {
             text = getString(if (history) R.string.history_empty else R.string.bookmarks_empty)
             gravity = Gravity.CENTER
@@ -100,51 +119,97 @@ class ListActivity : Activity() {
         // A delete stays red-orange, brighter when focused; the other buttons are tonal, inverted when focused.
         background = if (danger) Ui.fillSelector(Ui.DANGER_IDLE, Ui.DANGER, 12) else Ui.fillSelector(Ui.p.fillFocused, Ui.p.focus, 12)
         setPadding(32.px, 14.px, 32.px, 14.px)
-        if (!danger) setOnFocusChangeListener { v, has -> (v as android.widget.TextView).setTextColor(if (has) Ui.p.onFocus else Ui.p.textMid) }
+        if (!danger) setOnFocusChangeListener { v, has -> (v as TextView).setTextColor(if (has) Ui.p.onFocus else Ui.p.textMid) }
         setOnClickListener { click() }
     }
 
-    private fun load() {
-        list.removeAllViews()
-        checks.clear()
+    /** Reads the list again; the focus goes to the row at [focusAt] (the first row when null), or the nearest one. */
+    private fun load(focusAt: Int? = null) {
+        val items = ArrayList<Item>()
         if (history) {
             var lastHeader: String? = null
+            val time = DateFormat.getTimeInstance(DateFormat.SHORT)
             db.history().forEach { h ->
                 val header = dayLabel(h.visitedAt)
                 if (header != lastHeader) {
-                    addHeader(header)
+                    items += Header(header)
                     lastHeader = header
                 }
-                addRow(h.title, h.url, DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(h.visitedAt))) {
-                    db.removeHistory(h.id)
-                }
+                items += Entry(h.title, h.url, time.format(Date(h.visitedAt)), bookmark = false) { db.removeHistory(h.id) }
             }
         } else {
             // Two sections: the bookmarks in Quick access, in their order, then the rest.
             val pinned = db.pinned()
             val pinnedUrls = pinned.map { it.url }.toSet()
             val rest = db.bookmarks().filter { it.url !in pinnedUrls }
-            if (pinned.isNotEmpty()) addHeader(getString(R.string.quick_access))
-            pinned.forEach { b -> addRow(b.title, b.url, null, bookmark = true) { db.removeBookmark(b.url) } }
-            if (rest.isNotEmpty()) addHeader(getString(R.string.bookmarks))
-            rest.forEach { b -> addRow(b.title, b.url, null, bookmark = true) { db.removeBookmark(b.url) } }
+            if (pinned.isNotEmpty()) items += Header(getString(R.string.quick_access))
+            pinned.forEach { b -> items += Entry(b.title, b.url, null, bookmark = true) { db.removeBookmark(b.url) } }
+            if (rest.isNotEmpty()) items += Header(getString(R.string.bookmarks))
+            rest.forEach { b -> items += Entry(b.title, b.url, null, bookmark = true) { db.removeBookmark(b.url) } }
         }
-        empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
-        selected.retainAll(checks.keys)
+        adapter.items = items
+        adapter.notifyDataSetChanged()
+        empty.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
+        selected.retainAll(items.mapNotNullTo(HashSet()) { (it as? Entry)?.url })
         updateHeader()
-        list.getChildAt((0 until list.childCount).firstOrNull { list.getChildAt(it) is LinearLayout } ?: 0)
-            ?.let { (it as? LinearLayout)?.getChildAt(0)?.requestFocus() }
+        focusRow(focusAt ?: items.indexOfFirst { it is Entry })
     }
 
-    private fun addHeader(text: String) {
-        list.addView(Ui.text(this, 30, Ui.p.textWeak).apply { this.text = text; setPadding(0, 36.px, 0, 20.px) })
+    private val entries get() = adapter.items.filterIsInstance<Entry>()
+
+    /**
+     * Focus on the row at [position] (or the nearest row after it, else before it), scrolled into sight; [top] keeps it
+     * that far from the list's top, as a deleted row's neighbour stays where the deleted row was.
+     */
+    private fun focusRow(position: Int, top: Int? = null) {
+        val items = adapter.items
+        if (items.isEmpty() || position < 0) return
+        val from = position.coerceAtMost(items.size - 1)
+        val at = (from until items.size).firstOrNull { items[it] is Entry } ?: (from downTo 0).firstOrNull { items[it] is Entry } ?: return
+        if (top != null) list.setSelectionFromTop(at, top) else list.setSelection(at)
+        list.post { list.getChildAt(at - list.firstVisiblePosition)?.findViewWithTag<View>(BODY)?.requestFocus() }
     }
 
-    /** Gives the focus to the row at [index], or the nearest one after it, else before it; headers are skipped. */
-    private fun focusRowNear(index: Int) {
-        val rows = (0 until list.childCount).filter { list.getChildAt(it) is LinearLayout }
-        val at = rows.firstOrNull { it >= index } ?: rows.lastOrNull() ?: return
-        (list.getChildAt(at) as LinearLayout).getChildAt(0)?.requestFocus()
+    private fun remove(entry: Entry) = guardHistory {
+        val at = adapter.items.indexOf(entry).takeIf { it >= 0 } ?: return@guardHistory
+        val top = list.getChildAt(at - list.firstVisiblePosition)?.top
+        entry.delete()
+        if (entry.bookmark) {
+            // Read again, so a section that has run out of rows loses its header.
+            load(at)
+            return@guardHistory
+        }
+        val items = ArrayList(adapter.items).apply { removeAt(at) }
+        // A day heading with no visit left under it goes too, and what followed moves up one more place.
+        var next = at
+        if (items.getOrNull(at - 1) is Header && items.getOrNull(at) !is Entry) { items.removeAt(at - 1); next = at - 1 }
+        adapter.items = items
+        adapter.notifyDataSetChanged()
+        empty.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
+        focusRow(next, top)
+    }
+
+    /** Adding a bookmark to Quick access (or removing it) moves it to the other section, so the list is read again. */
+    private fun togglePin(entry: Entry) {
+        val at = adapter.items.indexOf(entry)
+        if (db.isPinned(entry.url)) db.unpin(entry.url) else db.pin(entry.title, entry.url)
+        load(at)
+    }
+
+    private fun open(entry: Entry) {
+        setResult(RESULT_OK, Intent().putExtra(SearchActivity.EXTRA_URL, entry.url))
+        finish()
+    }
+
+    private fun showMenu(entry: Entry) {
+        val items = mutableListOf(TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { open(entry) })
+        if (entry.bookmark) {
+            val pinned = db.isPinned(entry.url)
+            items.add(TileMenu.Item(if (pinned) R.drawable.ic_star_filled else R.drawable.ic_star,
+                if (pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access) { togglePin(entry) })
+        }
+        items.add(TileMenu.Item(R.drawable.ic_delete, R.string.delete) { remove(entry) }.danger())
+        TileMenu(this, Site(0, entry.title.ifBlank { entry.url }, entry.url), items).show()
     }
 
     private fun dayLabel(t: Long): String {
@@ -159,117 +224,133 @@ class ListActivity : Activity() {
         }
     }
 
-    private fun addRow(title: String, url: String, meta: String?, bookmark: Boolean = false, delete: () -> Unit) {
-        val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; clipChildren = false }
-        val open = {
-            setResult(RESULT_OK, Intent().putExtra(SearchActivity.EXTRA_URL, url))
-            finish()
-        }
-        val remove = { guardHistory {
-            delete()
-            val i = list.indexOfChild(line)
-            if (bookmark) {
-                // Rebuilt, so a section that has run out of rows loses its header.
-                load()
-                focusRowNear(i)
-            } else {
-                list.removeView(line)
-                (list.getChildAt(i) as? LinearLayout ?: list.getChildAt(i - 1) as? LinearLayout)?.getChildAt(0)?.requestFocus()
-                empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
+    /** The list's rows: headings and entries, each kind made once per visible slot and reused. */
+    private inner class Rows : BaseAdapter() {
+        var items: List<Item> = emptyList()
+
+        override fun getCount() = items.size
+        override fun getItem(position: Int) = items[position]
+        override fun getItemId(position: Int) = position.toLong()
+        override fun getViewTypeCount() = 2
+        override fun getItemViewType(position: Int) = if (items[position] is Header) 0 else 1
+        override fun areAllItemsEnabled() = false
+        override fun isEnabled(position: Int) = items[position] is Entry
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+            when (val item = items[position]) {
+                is Header -> ((convertView as? TextView) ?: headerView()).apply { text = item.label }
+                is Entry -> ((convertView as? RowView) ?: RowView(this@ListActivity)).apply { bind(item) }
             }
-        } }
-        // Adding a bookmark to Quick access (or removing it) moves it to the other section, so the list is rebuilt.
-        val togglePin = {
-            val i = list.indexOfChild(line)
-            if (db.isPinned(url)) db.unpin(url) else db.pin(title, url)
-            load()
-            focusRowNear(i)
+
+        private fun headerView() = Ui.text(this@ListActivity, 30, Ui.p.textWeak).apply {
+            setPadding(0, 20.px, 0, 4.px)
+            layoutParams = AbsListView.LayoutParams(AbsListView.LayoutParams.MATCH_PARENT, AbsListView.LayoutParams.WRAP_CONTENT)
         }
-        val menu = {
-            val items = mutableListOf(TileMenu.Item(R.drawable.ic_open_in_new, R.string.open, open))
-            if (bookmark) {
-                val pinned = db.isPinned(url)
-                items.add(TileMenu.Item(if (pinned) R.drawable.ic_star_filled else R.drawable.ic_star,
-                    if (pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access, togglePin))
-            }
-            items.add(TileMenu.Item(R.drawable.ic_delete, R.string.delete, remove).danger())
-            TileMenu(this, Site(0, title.ifBlank { url }, url), items).show()
+    }
+
+    /** One entry: OK opens the page (or ticks it while selecting); holding OK, or Menu, opens its options. */
+    private inner class RowView(context: Context) : LinearLayout(context) {
+        private var entry: Entry? = null
+        private val icon = ImageView(context)
+        private val title = Ui.text(context, 34, Ui.p.text).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+        private val meta = Ui.text(context, 24, Ui.p.textWeak).apply {
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.MIDDLE
+            setPadding(0, 10.px, 0, 0)
         }
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        // While selecting, a checkbox at the end of the card shows whether the bookmark is ticked.
+        private val check = ImageView(context).apply { visibility = View.GONE }
+        private val body = LinearLayout(context).apply {
+            tag = BODY
+            orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             isFocusable = true
             isClickable = true
             background = Ui.fillSelector(Ui.p.fill, Ui.p.fillFocused, 16)
             foreground = Ui.focusBorder(16)
             setPadding(40.px, 0, 40.px, 0)
-            setOnClickListener { if (bookmark && selecting) toggle(url) else open() }
-            // Holding OK, or Menu, opens the card's options.
-            setOnLongClickListener { menu(); true }
+            setOnClickListener {
+                val e = entry ?: return@setOnClickListener
+                if (e.bookmark && selecting) toggle(e.url) else open(e)
+            }
+            setOnLongClickListener { entry?.let(::showMenu); true }
             setOnKeyListener { _, keyCode, event ->
                 if (keyCode != KeyEvent.KEYCODE_MENU) return@setOnKeyListener false
-                if (event.action == KeyEvent.ACTION_UP) menu()
+                if (event.action == KeyEvent.ACTION_UP) entry?.let(::showMenu)
                 true
             }
             setOnFocusChangeListener { v, has -> Ui.animateScale(v, if (has) 1.02f else 1f, has) }
         }
-        body.addView(ImageView(this).apply { setImageDrawable(Favicons.get(this@ListActivity).drawable(url, title, 128)) },
-            LinearLayout.LayoutParams(64.px, 64.px).apply { marginEnd = 32.px })
-        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        texts.addView(Ui.text(this, 34, Ui.p.text).apply { text = title.ifBlank { url }; maxLines = 1; ellipsize = TextUtils.TruncateAt.END })
-        texts.addView(Ui.text(this, 24, Ui.p.textWeak).apply {
-            text = listOfNotNull(meta, UrlInput.display(url)).joinToString("  ·  ")
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.MIDDLE
-            setPadding(0, 10.px, 0, 0)
-        })
-        body.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        // While selecting, a checkbox at the end of the card shows whether the bookmark is ticked.
-        if (bookmark) {
-            val box = ImageView(this).apply { visibility = View.GONE }
-            checks[url] = box
-            body.addView(box, LinearLayout.LayoutParams(48.px, 48.px).apply { marginStart = 32.px })
-            updateCheck(url)
+
+        init {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            clipChildren = false
+            layoutParams = AbsListView.LayoutParams(AbsListView.LayoutParams.MATCH_PARENT, AbsListView.LayoutParams.WRAP_CONTENT)
+            body.addView(icon, LayoutParams(64.px, 64.px).apply { marginEnd = 32.px })
+            val texts = LinearLayout(context).apply { orientation = VERTICAL }
+            texts.addView(title)
+            texts.addView(meta)
+            body.addView(texts, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            body.addView(check, LayoutParams(48.px, 48.px).apply { marginStart = 32.px })
+            addView(body, LayoutParams(0, 136.px, 1f))
         }
-        line.addView(body, LinearLayout.LayoutParams(0, 136.px, 1f))
-        list.addView(line, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            bottomMargin = 16.px
-        })
+
+        fun bind(e: Entry) {
+            entry = e
+            icon.setImageDrawable(Favicons.get(context).drawable(e.url, e.title, 128))
+            title.text = e.title.ifBlank { e.url }
+            meta.text = listOfNotNull(e.meta, UrlInput.display(e.url)).joinToString("  ·  ")
+            showCheck()
+            // A reused row starts as an unfocused one.
+            if (!body.hasFocus()) { body.scaleX = 1f; body.scaleY = 1f }
+        }
+
+        fun showCheck() {
+            val e = entry ?: return
+            val on = e.url in selected
+            check.visibility = if (e.bookmark && selecting) View.VISIBLE else View.GONE
+            check.setImageResource(if (on) R.drawable.ic_check_box else R.drawable.ic_check_box_outline_blank)
+            check.setColorFilter(if (on) Ui.BRAND else Ui.p.textMid, PorterDuff.Mode.SRC_IN)
+        }
+    }
+
+    /** A list that keeps the focused row [margin] away from its top and bottom edges, as [FocusScrollView] does. */
+    private class FocusListView(context: Context, private val margin: Int = 120.px) : ListView(context) {
+        // ListView keeps this much of the next row in sight when the arrows move focus (its "scroll preview").
+        override fun getVerticalFadingEdgeLength() = margin
+    }
+
+    /** The checkboxes of the rows in sight; the others are drawn right when they come into view. */
+    private fun refreshChecks() {
+        for (i in 0 until list.childCount) (list.getChildAt(i) as? RowView)?.showCheck()
     }
 
     private fun setSelecting(on: Boolean) {
         selecting = on
         if (!on) selected.clear()
-        checks.keys.forEach(::updateCheck)
+        refreshChecks()
         updateHeader()
-        if (on) focusRowNear(0) else selectButton.requestFocus()
+        if (on) focusRow(list.firstVisiblePosition) else selectButton.requestFocus()
     }
 
     private fun toggle(url: String) {
         if (!selected.add(url)) selected.remove(url)
-        updateCheck(url)
+        refreshChecks()
         updateHeader()
     }
 
     private fun selectAll() {
-        selected.addAll(checks.keys)
-        checks.keys.forEach(::updateCheck)
+        entries.mapTo(selected) { it.url }
+        refreshChecks()
         updateHeader()
-    }
-
-    private fun updateCheck(url: String) {
-        val box = checks[url] ?: return
-        val on = url in selected
-        box.visibility = if (selecting) View.VISIBLE else View.GONE
-        box.setImageResource(if (on) R.drawable.ic_check_box else R.drawable.ic_check_box_outline_blank)
-        box.setColorFilter(if (on) Ui.BRAND else Ui.p.textMid, PorterDuff.Mode.SRC_IN)
     }
 
     /** The buttons of the bookmarks screen: Select and Delete all, or while selecting Select all, Delete selected and Cancel. */
     private fun updateHeader() {
         if (history) return
         fun show(v: View, on: Boolean) { v.visibility = if (on) View.VISIBLE else View.GONE }
-        show(selectButton, !selecting && list.childCount > 0)
+        show(selectButton, !selecting && adapter.items.isNotEmpty())
         show(deleteAllButton, !selecting)
         show(selectAllButton, selecting)
         show(deleteSelectedButton, selecting)
@@ -313,7 +394,7 @@ class ListActivity : Activity() {
             .setMessage(if (history) R.string.confirm_clear_history else R.string.confirm_clear_bookmarks)
             .setDestructive()
             .setPositiveButton(R.string.delete_all) { _, _ ->
-                if (history) db.clearHistory() else db.bookmarks().forEach { db.removeBookmark(it.url) }
+                if (history) db.clearHistory() else db.clearBookmarks()
                 load()
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -324,5 +405,6 @@ class ListActivity : Activity() {
         const val EXTRA_MODE = "mode"
         const val MODE_HISTORY = "history"
         const val MODE_BOOKMARKS = "bookmarks"
+        private const val BODY = "body"
     }
 }

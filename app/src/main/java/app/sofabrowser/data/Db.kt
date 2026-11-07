@@ -121,9 +121,11 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
 
     // Bookmarks
 
-    fun bookmarks(): List<Site> = query("SELECT id, title, url FROM bookmarks ORDER BY created DESC") {
-        Site(it.getLong(0), it.getString(1), it.getString(2))
-    }
+    /** Newest first; [limit] of them when the caller shows only a few (the start page), all when it is 0. */
+    fun bookmarks(limit: Int = 0): List<Site> =
+        query("SELECT id, title, url FROM bookmarks ORDER BY created DESC" + if (limit > 0) " LIMIT $limit" else "") {
+            Site(it.getLong(0), it.getString(1), it.getString(2))
+        }
 
     /** The newest [limit] bookmarks that are not pinned to Quick access, the most recently added first. */
     fun recentBookmarks(limit: Int): List<Site> = query(
@@ -151,6 +153,10 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         query("SELECT title, url, created FROM bookmarks ORDER BY created DESC") {
             BookmarkFile.Entry(it.getString(0), it.getString(1), it.getLong(2))
         }
+
+    fun clearBookmarks() {
+        writableDatabase.delete("bookmarks", null, null)
+    }
 
     /**
      * Adds the [entries] not bookmarked yet and returns how many. An entry without a date counts as added now, just
