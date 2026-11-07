@@ -59,8 +59,7 @@ class Favicons private constructor(private val context: Context) {
         val letter = (title.firstOrNull { it.isLetterOrDigit() } ?: host.firstOrNull() ?: '?').uppercaseChar()
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        val hue = ((host.hashCode() and 0x7fffffff) % 360).toFloat()
-        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.HSVToColor(floatArrayOf(hue, 0.45f, 0.62f)) }
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tileColor(url) }
         c.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), size * 0.22f, size * 0.22f, bg)
         val fg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
@@ -72,11 +71,20 @@ class Favicons private constructor(private val context: Context) {
         return bmp
     }
 
-    private fun key(url: String): String? =
-        runCatching { Uri.parse(url).host }.getOrNull()?.lowercase()?.removePrefix("www.")
-            ?.filter { it.isLetterOrDigit() || it == '.' || it == '-' }?.takeIf { it.isNotEmpty() }
+    /** The cached icon for [pageUrl] as the PNG it is kept in, or null. */
+    fun png(pageUrl: String): ByteArray? =
+        key(pageUrl)?.let { File(dir, "$it.png") }?.takeIf { it.exists() }?.let { runCatching { it.readBytes() }.getOrNull() }
 
     companion object {
+        /** The site an icon is kept for: [url]'s host without "www.", in letters, digits, dots and dashes only. */
+        fun key(url: String): String? =
+            runCatching { Uri.parse(url).host }.getOrNull()?.lowercase()?.removePrefix("www.")
+                ?.filter { it.isLetterOrDigit() || it == '.' || it == '-' }?.takeIf { it.isNotEmpty() }
+
+        /** The colour of [url]'s letter tile, from its site. */
+        fun tileColor(url: String): Int =
+            Color.HSVToColor(floatArrayOf((((key(url) ?: url).hashCode() and 0x7fffffff) % 360).toFloat(), 0.45f, 0.62f))
+
         @SuppressLint("StaticFieldLeak") // holds the application context only
         @Volatile private var instance: Favicons? = null
 

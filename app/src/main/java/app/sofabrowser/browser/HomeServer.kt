@@ -126,19 +126,6 @@ class HomeServer(private val maxBody: Int, private val handle: (Request) -> Resp
 
         internal fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
-        /** The style the pages share: dark, large and easy to tap. */
-        internal const val STYLE = """
-:root { color-scheme: dark; }
-body { margin: 0; padding: 32px 20px; background: #121212; color: #e6e6e6; font: 18px/1.5 system-ui, sans-serif; }
-main { max-width: 560px; margin: 0 auto; }
-h1 { font-size: 22px; margin: 0 0 20px; }
-h2 { font-size: 18px; margin: 32px 0 4px; }
-p { margin: 0 0 12px; color: #b0b0b0; }
-input, button, .button { display: block; box-sizing: border-box; width: 100%; font: inherit; border-radius: 12px; padding: 14px 16px; text-align: center; text-decoration: none; }
-input { border: 1px solid #444; background: #1e1e1e; color: inherit; margin-bottom: 12px; text-align: start; }
-button, .button { border: 0; background: #4f8cff; color: #fff; font-weight: 600; cursor: pointer; }
-"""
-
         /** The TV's IPv4 address on the home network (Wi-Fi or Ethernet). */
         private fun lanAddress(context: Context): InetAddress? {
             val cm = context.getSystemService(ConnectivityManager::class.java)
