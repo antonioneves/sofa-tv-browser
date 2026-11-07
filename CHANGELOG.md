@@ -4,6 +4,7 @@
 
 - **More cookie banners turned down**: the cookie banner check now also finds "Reject all" on banners drawn in a shadow
   root, such as consentmanager's (test.de and others). Sites it had already looked at are looked at once more.
+  A banner whose only button is "OK", with nothing to turn down (testdaf.de), gets its OK clicked.
 - **Sites open sooner**: as Chrome does, Sofa opens the connection to a site while you point at its tile or
   suggestion or type its address, so the page starts as soon as you press OK. Only a connection, nothing is asked of
   the site; never in private browsing. Needs a recent Android System WebView.

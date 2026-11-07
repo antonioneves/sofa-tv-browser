@@ -6,7 +6,7 @@ import org.junit.Test
 
 class CookieBannersTest {
     private val day = 24L * 60 * 60 * 1000
-    private val now = 1_794_009_336_000L + 100 * day
+    private val now = 1_794_009_690_000L + 100 * day
 
     @Test
     fun sitesAreLeftAloneForThirtyDays() {
@@ -22,8 +22,8 @@ class CookieBannersTest {
 
     @Test
     fun sitesLookedAtBeforeTheCheckLearnedMoreAreLookedAtAgain() {
-        val looked = mapOf("before.com" to "1794009335999", "after.com" to "1794009336000")
-        assertEquals(listOf("after.com"), CookieBanners.current(looked, 1_794_009_336_000L + day))
+        val looked = mapOf("before.com" to "1794009689999", "after.com" to "1794009690000")
+        assertEquals(listOf("after.com"), CookieBanners.current(looked, 1_794_009_690_000L + day))
     }
 
     @Test

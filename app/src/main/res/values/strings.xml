@@ -406,7 +406,7 @@
     <string name="third_party_cookies">Block third-party cookies</string>
     <string name="third_party_cookies_sub">Stops embedded content from tracking you across sites</string>
     <string name="cookie_banners">Reject cookie banners</string>
-    <string name="cookie_banners_sub">Clicks "Reject all" or "Only necessary" on cookie banners for you, and never "Accept". Applies to the next page; a banner worded in an unusual way stays.</string>
+    <string name="cookie_banners_sub">Clicks "Reject all" or "Only necessary" on cookie banners for you, and never "Accept"; a banner whose only button is "OK" gets its OK. Applies to the next page; a banner worded in an unusual way stays.</string>
     <string name="gpc">Global Privacy Control</string>
     <string name="gpc_sub">Asks sites not to sell or share your data. Off by default: few browsers send it, so it can make you easier to recognise. Do Not Track is never sent.</string>
     <string name="safe_browsing">Google Safe Browsing</string>

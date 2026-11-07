@@ -8,6 +8,7 @@ package app.sofabrowser.browser
  * also within the shadow roots some banners are drawn in.
  * It clicks that and nothing else: never "Accept", never "Manage", and it gives up after about 13 seconds or three
  * clicks. A button must be visible and sit near cookie or consent wording, so "Decline" on an invitation stays alone.
+ * The one exception is a banner whose only button is "OK": with nothing to turn down, that OK is clicked.
  *
  * A site is looked at once: after a click (the site keeps the answer in its cookies) or after a full look found
  * nothing in a page that finished loading, the script tells Sofa, which leaves that site alone for [RECHECK_DAYS] days, or until its cookies are
@@ -19,8 +20,8 @@ object CookieBanners {
     const val RECHECK_DAYS = 30L
     private const val RECHECK_MS = RECHECK_DAYS * 24 * 60 * 60 * 1000
 
-    /** When the check last learned to find more banners (2026-11-07, inside shadow roots): sites looked at before are looked at again. */
-    private const val LEARNED_MS = 1_794_009_336_000L
+    /** When the check last learned to find more banners (2026-11-07: inside shadow roots, a lone OK): sites looked at before are looked at again. */
+    private const val LEARNED_MS = 1_794_009_690_000L
 
     /** The sites of [looked] (site -> when, in ms) to leave alone at [now]. */
     fun current(looked: Map<String, String>, now: Long): List<String> =
@@ -77,8 +78,6 @@ object CookieBanners {
     const raw = el.value && el.tagName === 'INPUT' ? el.value : el.textContent || el.getAttribute('aria-label') || el.title || '';
     return raw.length > 200 ? '' : raw.replace(/\s+/g, ' ').trim().toLowerCase().replace(/[.!]+$/, '');
   };
-  // A rejection button counts only inside something that talks about cookies or consent, so "Decline" on an
-  // invitation or "Deny" in a game is left alone.
   // Up one level, from the top of a shadow root to the element that holds it.
   const up = (n) => n.parentElement || (n.parentNode && n.parentNode.host) || null;
   // Some banners keep their buttons in a shadow root (consentmanager), out of reach of the document's own search.
@@ -87,12 +86,28 @@ object CookieBanners {
     for (let i = 0; i < out.length; i++) for (const el of out[i].querySelectorAll('*')) if (el.shadowRoot) out.push(el.shadowRoot);
     return out;
   };
-  const inBanner = (el) => {
+  // A button counts only inside something that talks about cookies or consent, so "Decline" on an invitation or
+  // "Deny" in a game is left alone. That something is the banner.
+  const banner = (el) => {
     for (let n = up(el), i = 0; n && i < 7; n = up(n), i++) {
       const t = n.textContent;
-      if (t.length < 4000 && CONSENT.test(t)) return true;
+      if (t.length < 4000 && CONSENT.test(t)) return n;
     }
-    return false;
+    return null;
+  };
+  // A banner that only says "OK" leaves nothing to turn down, so that OK is clicked; but only if the banner offers no
+  // other choice: no other button, nor a link to accept, reject or pick ("Settings"). A link to read more is no choice.
+  const OK = new Set(['ok', 'okay', 'got it', 'i understand', 'understood', 'verstanden', 'alles klar', 'ich habe verstanden',
+    'compris', "j'ai compris", 'entendido', 'entendi', 'ho capito', 'begrepen']);
+  const CHOICE = /accept|akzept|zustimm|allow|erlaub|agree|setting|einstell|manage|verwalt|anpass|custom|preferen|option|detail|auswähl|reject|ablehn|decline|refus|deny|recha|rifiut|weiger/i;
+  const loneOk = (el) => {
+    const box = banner(el);
+    if (!box) return false;
+    for (const other of box.querySelectorAll(CANDIDATES)) {
+      if (other === el || el.contains(other) || other.contains(el) || !shown(other)) continue;
+      if (other.tagName !== 'A' || other.getAttribute('role') === 'button' || CHOICE.test(label(other))) return false;
+    }
+    return true;
   };
   const click = (el) => {
     seen.add(el);
@@ -107,14 +122,17 @@ object CookieBanners {
       try { el = root.querySelector(sel); } catch (e) { continue; }
       if (el && !seen.has(el) && shown(el)) { click(el); return true; }
     }
+    const oks = [];
     for (const root of all) for (const el of root.querySelectorAll(CANDIDATES)) {
       if (seen.has(el)) continue;
       const text = label(el);
+      if (OK.has(text)) { oks.push(el); continue; }
       if (!WORDS.has(text)) continue;
-      if (!shown(el) || !inBanner(el)) continue;
+      if (!shown(el) || !banner(el)) continue;
       click(el);
       return true;
     }
+    for (const el of oks) if (shown(el) && loneOk(el)) { click(el); return true; }
     return false;
   };
   // Banners come late and often inside frames, so look a few times as the page loads, then stop.
