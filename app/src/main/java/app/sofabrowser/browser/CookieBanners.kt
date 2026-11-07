@@ -8,7 +8,8 @@ package app.sofabrowser.browser
  * also within the shadow roots some banners are drawn in.
  * It clicks that and nothing else: never "Accept", never "Manage", and it gives up after about 13 seconds or three
  * clicks. A button must be visible and sit near cookie or consent wording, so "Decline" on an invitation stays alone.
- * The one exception is a banner whose only button is "OK": with nothing to turn down, that OK is clicked.
+ * The one exception is a banner whose only button is "OK": with nothing to turn down, that OK is clicked. A page the
+ * banner scrolled down as it opened goes back to its top, unless the user already moved it.
  *
  * A site is looked at once: after a click (the site keeps the answer in its cookies) or after a full look found
  * nothing in a page that finished loading, the script tells Sofa, which leaves that site alone for [RECHECK_DAYS] days, or until its cookies are
@@ -109,12 +110,17 @@ object CookieBanners {
     }
     return true;
   };
+  // Some banners take the focus as they open (Google's), which scrolls the page under them to the bottom; once the
+  // banner is gone the page is put back at its top, unless the user moved it themselves or it opened at an anchor.
+  let moved = false;
+  for (const type of ['keydown', 'wheel', 'touchstart', 'mousedown']) addEventListener(type, (e) => { if (e.isTrusted) moved = true; }, { capture: true, passive: true });
   const click = (el) => {
     seen.add(el);
     clicks++;
     el.click();
     tell(true);
-  };
+    // The banner may take a moment to go, and move the page again as it does.
+    if (window === window.top) for (const wait of [300, 1000, 2000]) setTimeout(() => { if (!moved && !location.hash && scrollY > 0) scrollTo(0, 0); }, wait);  };
   const attempt = () => {
     const all = roots();
     for (const sel of KNOWN) for (const root of all) {
