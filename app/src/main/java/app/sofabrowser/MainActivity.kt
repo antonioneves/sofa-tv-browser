@@ -2054,18 +2054,24 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         // The page fetches its manifests again first; reading the rest takes the network: off the main thread, then back.
         browser.fetchInPage(StreamResolver.manifestsToRead(candidates), PAGE_FETCH_MS) { fromPage ->
             thread(name = "play-in") {
-                val resolved = if (candidates.isEmpty()) null
-                else StreamResolver(userAgent, cookies::getCookie, ::streamLog).resolve(candidates, fromPage, checkOutside = true)
-                runOnUiThread { if (!isDestroyed) handOver(video, resolved, userAgent, cookies::getCookie) }
+                val blocker = browser.adBlocker
+                val resolver = StreamResolver(userAgent, cookies::getCookie, ::streamLog) { blocker.siteListed(it) != null }
+                val resolved = if (candidates.isEmpty()) null else resolver.resolve(candidates, fromPage, checkOutside = true)
+                // Where the stream leads beyond the addresses Sofa holds (redirects, variant playlists): only with a
+                // Site filters list on, which is the only reason to look, so other presses cost no extra request.
+                val further = if (blocker.sitesOn && video?.protected != true) resolver.blockedAlong(direct, video?.page, resolved) else null
+                runOnUiThread { if (!isDestroyed) handOver(video, resolved, userAgent, cookies::getCookie, further) }
             }
         }
     }
 
     /** Why "Play in…" opened nothing: over the video when it is fullscreen, where a toast goes unseen. */
-    private fun playInMessage(res: Int) {
+    private fun playInMessage(res: Int) = playInMessage(getString(res))
+
+    private fun playInMessage(text: String) {
         playInSince = 0L
-        streamLog("Play in: ${getString(res)}")
-        if (fullscreen.visibility == View.VISIBLE) fullscreen.notice(getString(res)) else toast(res)
+        streamLog("Play in: $text")
+        if (fullscreen.visibility == View.VISIBLE) fullscreen.notice(text) else toast(text)
     }
 
     /** What Sofa read to find a page's stream, in the log of test builds. */
@@ -2073,8 +2079,16 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         if (BuildConfig.DEBUG) android.util.Log.d("SofaStream", message)
     }
 
-    private fun handOver(video: VideoSource?, resolved: StreamResolver.Resolved?, userAgent: String, cookie: (String) -> String?) {
+    /** [further]: an address beyond the stream's own that Site filters block ([StreamResolver.blockedAlong]), or null. */
+    private fun handOver(video: VideoSource?, resolved: StreamResolver.Resolved?, userAgent: String, cookie: (String) -> String?, further: String?) {
         val stream = video?.src?.takeIf(Browser::isWebUrl) ?: resolved?.url
+        // The other app fetches on its own, past Site filters: nothing that leads to a blocked site goes to it (the
+        // stream, its master's addresses, its subtitles, and [further]: redirects, variant playlists' segments).
+        val wanted = listOfNotNull(stream) + resolved?.let(::streamAddresses).orEmpty() + video?.subtitles.orEmpty().map { it.url }
+        browser.adBlocker.siteListedIn(wanted + listOfNotNull(further))?.let { (url, list) ->
+            playInMessage(siteBlockedText(url, list))
+            return
+        }
         // What the page's player sent for this stream (PageHeaders), for players that read headers. Only on this press.
         val headers = stream?.let {
             if (resolved == null) PageHeaders.forRequest(it, video?.page, userAgent, cookie, media = true)
@@ -2183,8 +2197,12 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         val userAgent = w.settings.userAgentString.orEmpty()
         val cookies = WebViews.cookieManager(w)
         val direct = video.src.takeIf(Browser::isWebUrl)
+        val blocked = { url: String -> browser.adBlocker.siteListed(url) != null }
         if (direct != null) {
-            startSofaPlayer(SofaPlayer.Source(direct, StreamResolver.Kind.FILE, video.page, null, userAgent, cookies::getCookie, media = true, video.subtitles), video)
+            if (siteBlocked(listOf(direct) + video.subtitles.map { it.url })) return
+            val hops = StreamResolver(userAgent, cookies::getCookie, ::streamLog, blocked)
+            startSofaPlayer(SofaPlayer.Source(direct, StreamResolver.Kind.FILE, video.page, null, userAgent, cookies::getCookie, media = true,
+                video.subtitles, blocked = blocked, blockedHop = { hops.blockedHop(it, video.page, media = true) }), video)
             return
         }
         val candidates = browser.streams.candidates()
@@ -2197,7 +2215,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         }
         browser.fetchInPage(StreamResolver.manifestsToRead(candidates), PAGE_FETCH_MS) { fromPage ->
             thread(name = "sofa-player") {
-                val resolver = StreamResolver(userAgent, cookies::getCookie, ::streamLog)
+                val resolver = StreamResolver(userAgent, cookies::getCookie, ::streamLog, blocked)
                 val resolved = resolver.resolve(candidates, fromPage, checkOutside = false)
                     // Which pictures are HDR, when the master doesn't say, so Auto can keep to what the TV shows.
                     ?.let { r -> r.copy(playlist = r.playlist?.let { resolver.withReadRanges(it, r.frame) }) }
@@ -2209,12 +2227,31 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                         notForPlayer(getString(if (resolved == null) R.string.sofa_player_why_unreadable else R.string.sofa_player_why_no_stream))
                         return@runOnUiThread
                     }
+                    if (siteBlocked(streamAddresses(resolved) + video.subtitles.map { it.url })) return@runOnUiThread
                     startSofaPlayer(SofaPlayer.Source(resolved.url, resolved.kind, resolved.frame, resolved.playlist, userAgent,
-                        cookies::getCookie, media = false, video.subtitles, video.width, video.height), video)
+                        cookies::getCookie, media = false, video.subtitles, video.width, video.height, blocked,
+                        blockedHop = { resolver.blockedHop(it, resolved.frame, media = false) }), video)
                 }
             }
         }
     }
+
+    /**
+     * Whether Site filters block one of [urls] (the video, its playlists, its subtitles): then Sofa Player isn't
+     * started and the notice says why, over the video. The page's own requests for them are blocked already.
+     */
+    private fun siteBlocked(urls: List<String>): Boolean {
+        val (url, list) = browser.adBlocker.siteListedIn(urls) ?: return false
+        notForPlayer(siteBlockedText(url, list), once = false)
+        return true
+    }
+
+    private fun siteBlockedText(url: String, list: FilterList) =
+        getString(R.string.video_site_blocked, Browser.hostOf(url) ?: url, SettingsActivity.siteListName(this, list))
+
+    /** The stream's address and, for HLS, every address its playlist lists: what Site filters must let through. */
+    private fun streamAddresses(resolved: StreamResolver.Resolved): List<String> =
+        listOf(resolved.url) + resolved.playlist?.let(Playlist::addresses).orEmpty()
 
     private fun startSofaPlayer(source: SofaPlayer.Source, video: VideoSource) {
         if (fullscreen.visibility != View.VISIBLE) return
@@ -2314,6 +2351,15 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         // seek to the very end of a paused video fires no "ended". Sofa Player was tried already, so it won't come back.
         override fun onEnded() {
             if (nativeOn) backToPage(play = true, before = END_FOR_PAGE_S)
+        }
+
+        // A playlist or segment the stream lists (or a redirect) is on a blocked site. The page's own requests for it
+        // are blocked too, so its video doesn't play on: back to the page, paused, with the reason over it.
+        override fun onSiteBlocked(url: String) {
+            streamLog("Sofa Player stopped: Site filters $url")
+            val list = browser.adBlocker.siteListed(url)
+            backToPage(play = false)
+            if (list != null) notForPlayer(siteBlockedText(url, list), once = false)
         }
 
         override fun onError(reason: String, detail: String?, ready: Boolean) {
@@ -2673,6 +2719,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             ?: if (inPage) "download$extension" else URLUtil.guessFileName(url, contentDisposition, mimeType))
         val private = browser.privateMode
         val page = web?.url
+        val blockedBy = if (Browser.isWebUrl(url)) browser.adBlocker.siteListed(url) else null
         when {
             url.startsWith("data:") -> confirmDownload(name, length, Browser.hostOf(page)) {
                 thread(name = "data-url") {
@@ -2690,6 +2737,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                         .onFailure { toast(getString(R.string.download_failed, it.message)) }
                 }
             }
+            // A link's own address (link menu, Download link) never reached Site filters; WebView's own downloads did.
+            blockedBy != null ->
+                toast(getString(R.string.download_site_blocked, Browser.hostOf(url) ?: url, SettingsActivity.siteListName(this, blockedBy)))
             Browser.isWebUrl(url) -> confirmDownload(name, length, Browser.hostOf(url)) {
                 val cookies = web?.let { WebViews.cookieManager(it).getCookie(url) }
                 DownloadEngine.enqueue(url, name, mime, length, page, userAgent ?: web?.settings?.userAgentString, cookies, private)
