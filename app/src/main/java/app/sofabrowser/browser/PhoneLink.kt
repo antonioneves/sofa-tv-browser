@@ -13,7 +13,7 @@ import app.sofabrowser.data.Db
 /**
  * Sofa on the phone: a tiny page on the home network (see [HomeServer]) to type on, to pick a bookmark or a recent
  * page, and to download the bookmarks as a file Chrome can import or add those of such a file. What is typed or
- * picked goes to [onText], and how many bookmarks a file added, and the words saying so, to [onImported], both on
+ * picked goes to [onText]; each of these is a tab of its own (Open, Bookmarks, History, Export), and how many bookmarks a file added, and the words saying so, to [onImported], both on
  * the main thread. Nothing
  * passes through anywhere but the home network.
  */
@@ -69,9 +69,12 @@ class PhoneLink(context: Context, private val onText: (String) -> Unit, private 
         val hint = c.getString(R.string.search_hint)
         val send = c.getString(R.string.phone_send)
         val sent = c.getString(R.string.phone_sent)
+        val open = c.getString(R.string.phone_tab_open)
         val bookmarks = c.getString(R.string.bookmarks)
         val noBookmarks = c.getString(R.string.bookmarks_empty)
-        val recent = c.getString(R.string.bookmarks_page_recent)
+        val history = c.getString(R.string.history)
+        val noHistory = c.getString(R.string.history_empty)
+        val export = c.getString(R.string.phone_tab_export)
         val file = c.getString(R.string.bookmarks_page_file)
         val fileText = c.getString(R.string.bookmarks_page_file_text)
         val download = c.getString(R.string.bookmarks_page_download)
@@ -90,8 +93,8 @@ class PhoneLink(context: Context, private val onText: (String) -> Unit, private 
         fun added(n: Int) = if (n == 0) none else res.getQuantityString(R.plurals.bookmarks_added, n, n)
     }
 
-    /** Pages, each a button that sends its address like typing it would. */
-    private fun list(sites: List<Pair<String, String>>): String = sites.joinToString("", "<form method=\"post\" class=\"list\">", "</form>") { (title, url) ->
+    /** Pages, each a button that sends its address like typing it would, coming back to the [tab] it was picked in. */
+    private fun list(sites: List<Pair<String, String>>, tab: String): String = sites.joinToString("", "<form method=\"post\" action=\"#$tab\" class=\"list\">", "</form>") { (title, url) ->
         "<button name=\"t\" value=\"${esc(url)}\"><b>${esc(title.ifBlank { url })}</b><span>${esc(UrlInput.display(url))}</span></button>"
     }
 
@@ -111,16 +114,27 @@ class PhoneLink(context: Context, private val onText: (String) -> Unit, private 
 #status, #status2 { margin-top: 12px; color: #e6e6e6; }
 #file, #restore { display: none; }
 label.button { margin-top: 12px; background: #2a2a2a; }
+nav { position: sticky; top: 0; display: flex; gap: 6px; padding: 8px 0; margin-bottom: 16px; background: #121212; }
+nav a { flex: 1; padding: 10px 4px; border-radius: 12px; background: #1e1e1e; color: #b0b0b0; text-align: center; text-decoration: none; font-size: 16px; }
+nav a.on { background: #4f8cff; color: #fff; font-weight: 600; }
+section > h2:first-child { margin-top: 0; }
 </style></head>
 <body><main><h1>${esc(words.title)}</h1>
 ${if (done != null) "<p class=\"done\">${esc(done)}</p>" else ""}
-<form method="post" accept-charset="utf-8">
+<nav><a href="#open">${esc(words.open)}</a><a href="#bookmarks">${esc(words.bookmarks)}</a><a href="#history">${esc(words.history)}</a><a href="#export">${esc(words.export)}</a></nav>
+<section id="tab-open">
+<form method="post" action="#open" accept-charset="utf-8">
 <input name="t" type="text" ${if (done == null) "autofocus" else ""} autocomplete="off" autocapitalize="off" placeholder="${esc(words.hint)}">
 <button type="submit">${esc(words.send)}</button>
 </form>
-<h2>${esc(words.bookmarks)}</h2>
-${if (bookmarks.isEmpty()) "<p>${esc(words.noBookmarks)}</p>" else list(bookmarks)}
-${if (recent.isEmpty()) "" else "<h2>${esc(words.recent)}</h2>" + list(recent)}
+</section>
+<section id="tab-bookmarks">
+${if (bookmarks.isEmpty()) "<p>${esc(words.noBookmarks)}</p>" else list(bookmarks, "bookmarks")}
+</section>
+<section id="tab-history">
+${if (recent.isEmpty()) "<p>${esc(words.noHistory)}</p>" else list(recent, "history")}
+</section>
+<section id="tab-export">
 <h2>${esc(words.file)}</h2>
 <p>${esc(words.fileText)}</p>
 <a class="button" id="download" download="$FILE_NAME">${esc(words.download)}</a>
@@ -133,8 +147,20 @@ ${if (recent.isEmpty()) "" else "<h2>${esc(words.recent)}</h2>" + list(recent)}
 <label class="button" for="restore">${esc(words.backupChoose)}</label>
 <input id="restore" type="file" accept=".json,application/json">
 <p id="status2" role="status"></p>
+</section>
 </main>
 <script>
+// One tab at a time, the one in the address, so a page picked or a file sent comes back to where it was.
+const tabs = ['open', 'bookmarks', 'history', 'export'];
+const show = () => {
+  const on = tabs.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'open';
+  for (const t of tabs) document.getElementById('tab-' + t).hidden = t !== on;
+  for (const a of document.querySelectorAll('nav a')) a.classList.toggle('on', a.getAttribute('href') === '#' + on);
+};
+addEventListener('hashchange', () => { show(); scrollTo(0, 0); });
+show();
+// Loads the page anew in the same tab: a fresh address, as reloading would send again a page just picked.
+const again = () => location.replace(location.pathname + '?' + Date.now() + location.hash);
 const status = document.getElementById('status');
 document.getElementById('download').href = location.pathname + '/$FILE_NAME';
 document.getElementById('backup').href = location.pathname + '/$BACKUP_NAME';
@@ -146,7 +172,7 @@ document.getElementById('restore').onchange = async (e) => {
   try {
     const r = await fetch(location.pathname + '/restore', { method: 'POST', body: file });
     out.textContent = await r.text() || ${js(words.failed)};
-    if (r.ok) setTimeout(() => location.replace(location.pathname), 2000);
+    if (r.ok) setTimeout(again, 2000);
   } catch (_) {
     out.textContent = ${js(words.failed)};
   }
@@ -160,7 +186,7 @@ document.getElementById('file').onchange = async (e) => {
     const r = await fetch(location.pathname + '/import', { method: 'POST', body: file });
     status.textContent = await r.text() || ${js(words.failed)};
     // The bookmarks above are as they were when the page opened.
-    if (r.ok) setTimeout(() => location.replace(location.pathname), 2000);
+    if (r.ok) setTimeout(again, 2000);
   } catch (_) {
     status.textContent = ${js(words.failed)};
   }
