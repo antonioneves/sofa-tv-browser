@@ -241,7 +241,7 @@ class ListActivity : Activity() {
         }, onImported = { added, message ->
             Toast.makeText(this, message, Toast.LENGTH_LONG).show()
             if (added > 0) load()
-        })
+        }, onChanged = { load() })
         val address = link.start(this) ?: return Toast.makeText(this, R.string.phone_no_network, Toast.LENGTH_LONG).show()
         phoneLink?.stop()
         phoneLink = link

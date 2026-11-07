@@ -183,6 +183,9 @@
     <string name="phone_sent">Sent. Look at the TV.</string>
     <string name="phone_tab_open">Open</string>
     <string name="phone_tab_export">Export</string>
+    <string name="phone_swipe_hint">Swipe a page aside to remove it.</string>
+    <string name="phone_removed">Removed</string>
+    <string name="phone_undo">Undo</string>
     <string name="phone_no_network">Connect the TV to your home network first</string>
     <string name="close">Close</string>
     <string name="reader_view">Reader view</string>

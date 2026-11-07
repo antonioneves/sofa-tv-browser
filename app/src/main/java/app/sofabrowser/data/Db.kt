@@ -208,6 +208,11 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         writableDatabase.delete("history", "id = ?", arrayOf(id.toString()))
     }
 
+    /** Removes every visit to [url]. */
+    fun removeHistoryOf(url: String) {
+        writableDatabase.delete("history", "url = ?", arrayOf(url))
+    }
+
     // The list of removed sites names visited sites too, so it goes with the history.
     fun clearHistory() {
         writableDatabase.delete("history", null, null)
