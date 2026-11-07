@@ -115,7 +115,7 @@ class PhoneLink(context: Context, private val onText: (String) -> Unit, private 
 #file, #restore { display: none; }
 label.button { margin-top: 12px; background: #2a2a2a; }
 nav { position: sticky; top: 0; display: flex; gap: 6px; padding: 8px 0; margin-bottom: 16px; background: #121212; }
-nav a { flex: 1; padding: 10px 4px; border-radius: 12px; background: #1e1e1e; color: #b0b0b0; text-align: center; text-decoration: none; font-size: 16px; }
+nav a { flex: 1 1 auto; padding: 10px 4px; white-space: nowrap; border-radius: 12px; background: #1e1e1e; color: #b0b0b0; text-align: center; text-decoration: none; font-size: 16px; }
 nav a.on { background: #4f8cff; color: #fff; font-weight: 600; }
 section > h2:first-child { margin-top: 0; }
 </style></head>
