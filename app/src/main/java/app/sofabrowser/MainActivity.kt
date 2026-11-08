@@ -2202,7 +2202,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             if (siteBlocked(listOf(direct) + video.subtitles.map { it.url })) return
             val hops = StreamResolver(userAgent, cookies::getCookie, ::streamLog, blocked)
             startSofaPlayer(SofaPlayer.Source(direct, StreamResolver.Kind.FILE, video.page, null, userAgent, cookies::getCookie, media = true,
-                video.subtitles, blocked = blocked, blockedHop = { hops.blockedHop(it, video.page, media = true) }), video)
+                video.subtitles, blocked = blocked, land = { if (browser.adBlocker.sitesOn) hops.land(it, video.page, media = true) else it }), video)
             return
         }
         val candidates = browser.streams.candidates()
@@ -2230,7 +2230,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                     if (siteBlocked(streamAddresses(resolved) + video.subtitles.map { it.url })) return@runOnUiThread
                     startSofaPlayer(SofaPlayer.Source(resolved.url, resolved.kind, resolved.frame, resolved.playlist, userAgent,
                         cookies::getCookie, media = false, video.subtitles, video.width, video.height, blocked,
-                        blockedHop = { resolver.blockedHop(it, resolved.frame, media = false) }), video)
+                        land = { if (browser.adBlocker.sitesOn) resolver.land(it, resolved.frame, media = false) else it }), video)
                 }
             }
         }
