@@ -96,7 +96,6 @@ class SearchActivity : Activity() {
             setOnClickListener { pickEngine() }
             setOnFocusChangeListener { v, has -> (v as TextView).setTextColor(if (has) Ui.p.onFocus else Ui.p.textMid) }
         }
-        box.addView(engineLabel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 96.px))
         field = EditText(this).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_PX, 32.px.toFloat())
             setTextColor(Ui.p.text)
@@ -114,10 +113,15 @@ class SearchActivity : Activity() {
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                override fun afterTextChanged(s: Editable?) = suggest(s.toString())
+                override fun afterTextChanged(s: Editable?) {
+                    updateEngineVisibility(s.toString())
+                    suggest(s.toString())
+                }
             })
         }
         box.addView(field, LinearLayout.LayoutParams(0, 96.px, 1f))
+        // The engine sits at the end of the field, and only while what is typed is a search, not a link.
+        box.addView(engineLabel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 96.px))
         bar.addView(box, LinearLayout.LayoutParams(0, 96.px, 1f))
         bar.addView(squareButton(R.drawable.ic_search, R.string.search) { submit(field.text.toString()) })
         // The mic sits on a halo that grows with the voice level. The holder and the bar let the halo draw
@@ -184,6 +188,12 @@ class SearchActivity : Activity() {
         engineLabel.compoundDrawablePadding = 16.px
     }
 
+    private fun updateEngineVisibility(text: String) {
+        val t = text.trim()
+        val isLink = t.isNotEmpty() && UrlInput.resolve(t, prefs.searchEngine, searchShortcuts(this)) != prefs.searchEngine.searchUrl(t)
+        engineLabel.visibility = if (isLink) View.GONE else View.VISIBLE
+    }
+
     private fun pickEngine() {
         val engines = Prefs.ENGINES
         val current = engines.indexOfFirst { it.id == prefs.searchEngineId }
@@ -192,6 +202,7 @@ class SearchActivity : Activity() {
             .setSingleChoiceItems(engines.map { it.name }.toTypedArray(), current) { d, which ->
                 prefs.searchEngineId = engines[which].id
                 updateEngineLabel()
+                updateEngineVisibility(field.text.toString())
                 d.dismiss()
                 field.requestFocus()
             }.show()
