@@ -895,6 +895,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onOpen(url: String) = openUrl(url)
     override fun onSearch() = startSearch(voice = false, current = null)
     override fun onVoiceSearch() = startSearch(voice = true, current = null)
+    override fun onPhoneSearch() = startSearch(voice = false, current = null, phone = true)
     override fun onBookmarks() = openList(ListActivity.MODE_BOOKMARKS)
     override fun onHistory() = openList(ListActivity.MODE_HISTORY)
     override fun onSettings() = startActivity(Intent(this, SettingsActivity::class.java))
@@ -978,11 +979,12 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     // Other screens
 
-    private fun startSearch(voice: Boolean, current: String?) {
+    private fun startSearch(voice: Boolean, current: String?, phone: Boolean = false) {
         menu?.dismiss()
         @Suppress("DEPRECATION")
         startActivityForResult(Intent(this, SearchActivity::class.java)
             .putExtra(SearchActivity.EXTRA_VOICE, voice)
+            .putExtra(SearchActivity.EXTRA_PHONE, phone)
             .putExtra(SearchActivity.EXTRA_PRIVATE, prefs.privateMode)
             .putExtra(SearchActivity.EXTRA_CURRENT_URL, current), REQ_URL)
         // Cross-fade: the search screen keeps the sofa and the field where the home screen has them.

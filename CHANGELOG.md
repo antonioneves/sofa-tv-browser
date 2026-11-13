@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Type on your phone from the home screen**: a phone button next to the microphone opens the search screen with
+  the QR code ready.
 - **Search opens in place**: the search screen keeps the sofa in its corner and the field where the home screen's
   search pill is, and the two screens fade into each other instead of jumping. The search engine's name now sits at
   the end of the field, and goes away while you type a link.

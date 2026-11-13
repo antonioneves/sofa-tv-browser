@@ -28,6 +28,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         fun onOpen(url: String)
         fun onSearch()
         fun onVoiceSearch()
+        fun onPhoneSearch()
         fun onBookmarks()
         fun onHistory()
         fun onTogglePrivate()
@@ -59,6 +60,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
     private val adBlockButton: LabeledIconButton
     private val downloadsButton: LabeledIconButton
     private val micButton: LabeledIconButton
+    private val phoneButton: LabeledIconButton
     private var tilesRow: LinearLayout? = null
     private var mostVisitedRow: LinearLayout? = null
 
@@ -108,6 +110,8 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         }
         micButton = button(R.drawable.ic_mic, R.string.voice_search) { listener.onVoiceSearch() }
         top.addView(micButton, params(8))
+        phoneButton = button(R.drawable.ic_smartphone, R.string.phone_search) { listener.onPhoneSearch() }
+        top.addView(phoneButton, params(12))
         top.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
         privateButton = button(R.drawable.ic_private, R.string.private_mode) { listener.onTogglePrivate() }
         spaceButton = if (app.sofabrowser.Space.active) {

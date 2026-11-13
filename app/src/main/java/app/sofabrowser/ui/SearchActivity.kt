@@ -150,6 +150,8 @@ class SearchActivity : Activity() {
         field.setText(prefill(intent.getStringExtra(EXTRA_CURRENT_URL)))
         field.setSelection(field.text.length)
         if (intent.getBooleanExtra(EXTRA_VOICE, false) && prefs.voiceSearch) voice() else showKeyboard()
+        // From the home screen's phone button: go straight to the QR code.
+        if (intent.getBooleanExtra(EXTRA_PHONE, false)) field.post { typeOnPhone() }
     }
 
     private fun squareButton(icon: Int, label: Int, onClick: () -> Unit) = FrameLayout(this).apply {
@@ -442,6 +444,7 @@ class SearchActivity : Activity() {
         const val EXTRA_URL = "url"
         const val EXTRA_CURRENT_URL = "current"
         const val EXTRA_VOICE = "voice"
+        const val EXTRA_PHONE = "phone"
         const val EXTRA_PRIVATE = "private"
         private const val REQ_VOICE = 1
         private const val REQ_MIC = 2
