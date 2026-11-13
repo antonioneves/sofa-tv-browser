@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Search opens in place**: the search screen keeps the sofa in its corner and the field where the home screen's
+  search pill is, and the two screens fade into each other instead of jumping.
 - **The phone page in tabs**: the page a phone opens to send things to the TV is split into Open, Bookmarks,
   History and Export, instead of one long page. Picking a page or sending a file comes back to the same tab.
   It now looks like Sofa on the TV: its colours and theme, light or dark, the sofa logo, and each site with its

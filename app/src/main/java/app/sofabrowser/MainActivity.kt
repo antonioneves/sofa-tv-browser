@@ -985,6 +985,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             .putExtra(SearchActivity.EXTRA_VOICE, voice)
             .putExtra(SearchActivity.EXTRA_PRIVATE, prefs.privateMode)
             .putExtra(SearchActivity.EXTRA_CURRENT_URL, current), REQ_URL)
+        // Cross-fade: the search screen keeps the sofa and the field where the home screen has them.
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.screen_fade_in, R.anim.screen_fade_out)
     }
 
     private fun openList(mode: String) {

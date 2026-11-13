@@ -71,13 +71,17 @@ class SearchActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = Ui.background(privateMode)
-            setPadding(88.px, 80.px, 88.px, 0)
+            // The bar sits where the home screen's top bar does: the sofa stays put in its corner and the field
+            // takes over from the search pill while the two screens cross-fade.
+            setPadding(64.px, 32.px, 64.px, 0)
             // The mic halo may grow beyond the button row and into the padding.
             clipToPadding = false
             clipChildren = false
         }
 
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        bar.addView(ImageView(this).apply { setImageResource(R.drawable.ic_sofa) },
+            LinearLayout.LayoutParams(64.px, 64.px).apply { marginEnd = 32.px })
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -365,6 +369,13 @@ class SearchActivity : Activity() {
         if (requestCode != REQ_VOICE) return
         val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
         if (resultCode == RESULT_OK && !spoken.isNullOrBlank()) submit(spoken) else showKeyboard()
+    }
+
+    /** Leaves with the same cross-fade it arrived with. */
+    override fun finish() {
+        super.finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.screen_fade_in, R.anim.screen_fade_out)
     }
 
     override fun onStop() {
