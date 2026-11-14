@@ -16,9 +16,10 @@ import app.sofabrowser.R
 import app.sofabrowser.Space
 
 /**
- * The browse menu, opened with BACK: one slim row with Home, the address pill, back, forward, reload, zoom and More.
- * More slides a row of labelled action buttons up below it, and folds it away again; the menu keeps that choice.
- * Like BrowsHere's, it remembers the last button used and doesn't hide on its own.
+ * The browse menu, opened with BACK: a slim vertical bar on the left edge of the screen, with Home, the address,
+ * back, forward, reload, zoom and More, one under the other. More slides a second column of action buttons out beside
+ * it, and folds it away again; the menu keeps that choice. The focused button's name shows in a small label beside
+ * it. Like BrowsHere's, the menu remembers the last button used and doesn't hide on its own.
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
 
@@ -59,7 +60,10 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     )
 
     private val buttons = LinkedHashMap<Action, LabeledIconButton>()
-    private lateinit var address: TextView
+    private lateinit var address: LabeledIconButton
+    /** The name of the focused button, floating beside it. */
+    private lateinit var tip: TextView
+    private var tipFor: android.view.View? = null
     private lateinit var zoomLabel: TextView
     private lateinit var more: LabeledIconButton
     private lateinit var actionsPane: android.view.View
@@ -70,75 +74,67 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         super.onCreate(savedInstanceState)
         window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            // The whole screen, the sheet at its foot: the sheet then grows smoothly as More opens it, where a window
+            // The whole screen, the bar at its left edge: the bar then widens smoothly as More opens it, where a window
             // fitted to it would jump to its new size.
             setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
             setDimAmount(0f)
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         }
         val root = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
             background = GradientDrawable().apply {
                 setColor(if (Space.active) Ui.p.sheetSpace else Ui.p.sheet)
-                cornerRadii = FloatArray(8) { if (it < 4) 16.px.toFloat() else 0f }
+                // Rounded where it faces the page: the top right and bottom right corners.
+                cornerRadii = FloatArray(8) { if (it in 2..5) 16.px.toFloat() else 0f }
             }
-            setPadding(72.px, 24.px, 72.px, 24.px)
-            // The focused button's scaled circle may reach into the padding.
-            clipToPadding = false
+            clipChildren = false
         }
 
-        val addressRow = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; clipChildren = false }
-        address = Ui.text(context, 30, Ui.p.textMid).apply {
-            isFocusable = true
-            isClickable = true
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.MIDDLE
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(32.px, 0, 32.px, 0)
-            background = Ui.fillSelector(Ui.p.fillFocused, Ui.p.focus, 44)
-            setCompoundDrawablesRelative(tinted(R.drawable.ic_search), null, null, null)
-            compoundDrawablePadding = 20.px
-            setOnFocusChangeListener { v, has ->
-                (v as TextView).setTextColor(if (has) Ui.p.onFocus else Ui.p.textMid)
-                v.compoundDrawablesRelative[0]?.setTint(if (has) Ui.p.onFocus else Ui.p.textMid)
-            }
-            setOnClickListener { dismiss(); actions.onAddress() }
-        }
-        root.addView(addressRow)
-
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.TOP
+        fun column() = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, 48.px, 0, 48.px)
+            // The focused button's scaled square may reach into the padding.
             clipChildren = false
             clipToPadding = false
         }
-        fun add(action: Action, icon: Int, label: Int, into: LinearLayout = row, gap: Int = 28) {
-            // Beside the address, the icons speak for themselves: a label there would crowd the row below.
-            val b = LabeledIconButton(context, icon, context.getString(label), labelled = into == row) { actions.onAction(action) }
+        val bar = column()
+        val list = column()
+        fun place(b: LabeledIconButton, into: LinearLayout, gap: Int) {
+            b.onFocused = b.onFocused.let { was -> { was?.invoke(); showTip(b) } }
+            into.addView(b, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = gap.px
+            })
+        }
+        fun add(action: Action, icon: Int, label: Int, into: LinearLayout = list, gap: Int = 16) {
+            // The icons speak for themselves; the name of the focused one shows beside it.
+            val b = LabeledIconButton(context, icon, context.getString(label), labelled = false) { actions.onAction(action) }
             b.onFocused = { lastFocused = action }
             buttons[action] = b
-            into.addView(b, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                marginEnd = gap.px
-            })
+            place(b, into, gap)
         }
         // Home stays in reach with the actions folded away.
         // The sofa is Sofa's home: orange at rest, like on the start screen.
-        add(Action.HOME, R.drawable.ic_sofa, R.string.home, addressRow)
+        add(Action.HOME, R.drawable.ic_sofa, R.string.home, bar, 28)
         buttons[Action.HOME]?.accent = Ui.BRAND
-        addressRow.addView(address, LinearLayout.LayoutParams(0, 80.px, 1f).apply { marginEnd = 28.px })
-        // Moving about the page, beside its address.
-        add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, addressRow, 16)
-        add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, addressRow, 16)
-        add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, addressRow, 16)
-        add(Action.ZOOM_OUT, R.drawable.ic_zoom_out, R.string.zoom_out, addressRow, 0)
+        // The address: the bar is too slim to spell it out, so it shows in the label while this button is focused.
+        address = LabeledIconButton(context, R.drawable.ic_search, context.getString(R.string.search_hint), labelled = false) {
+            dismiss(); actions.onAddress()
+        }
+        place(address, bar, 28)
+        // Moving about the page.
+        add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, bar)
+        add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar)
+        add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, bar)
+        add(Action.ZOOM_OUT, R.drawable.ic_zoom_out, R.string.zoom_out, bar, 0)
         zoomLabel = Ui.text(context, 26, Ui.p.textMid).apply { gravity = Gravity.CENTER; text = context.getString(R.string.percent, 100) }
-        addressRow.addView(zoomLabel, LinearLayout.LayoutParams(100.px, 88.px))
-        add(Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in, addressRow, 28)
-        more = LabeledIconButton(context, R.drawable.ic_keyboard_arrow_up, context.getString(R.string.more_actions), labelled = false) {
+        bar.addView(zoomLabel, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, 56.px))
+        add(Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in, bar, 28)
+        more = LabeledIconButton(context, R.drawable.ic_chevron_right, context.getString(R.string.more_actions), labelled = false) {
             prefs.menuExpanded = !expanded
             setExpanded(prefs.menuExpanded)
         }
-        addressRow.addView(more, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT))
+        place(more, bar, 0)
 
         // Grouped by what they act on.
         // Watching, the action a TV is most often used for, first.
@@ -168,26 +164,57 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // How the remote moves about pages.
         add(Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode)
         add(Action.POINTER, R.drawable.ic_mouse, R.string.pointer)
-        add(Action.SETTINGS, R.drawable.ic_settings, R.string.settings)
+        add(Action.SETTINGS, R.drawable.ic_settings, R.string.settings, gap = 0)
 
-        // The row scrolls through the sheet's side padding to the screen edge, and a focused button keeps room for
-        // its label (wider than the button) plus the padding, so neither icon nor label is ever cut.
-        row.setPadding(72.px, 32.px, 72.px - 28.px, 0)
-        actionsPane = FocusRowScrollView(context, ((LabeledIconButton.LABEL_WIDTH - LabeledIconButton.WIDTH) / 2 + 72).px).apply {
-            isHorizontalScrollBarEnabled = false
+        // The second column scrolls from the top of the screen to its foot; a focused button keeps some room from
+        // both, so it is never cut.
+        actionsPane = FocusScrollView(context, 96.px).apply {
+            isVerticalScrollBarEnabled = false
             clipChildren = false
-            clipToPadding = false
-            addView(row)
+            addView(list, android.widget.FrameLayout.LayoutParams(COLUMN.px, ViewGroup.LayoutParams.WRAP_CONTENT))
             visibility = android.view.View.GONE
+            // The label follows its button as the column scrolls.
+            setOnScrollChangeListener { _, _, _, _, _ -> placeTip() }
         }
-        // Below the slim row, as before: opening it lifts the sheet, the slim row with it.
-        root.addView(actionsPane, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            marginStart = -72.px
-            marginEnd = -72.px
-        })
+        root.addView(bar, LinearLayout.LayoutParams(COLUMN.px, LinearLayout.LayoutParams.MATCH_PARENT))
+        // Beside the bar: opening it widens the sheet.
+        root.addView(actionsPane, LinearLayout.LayoutParams(COLUMN.px, LinearLayout.LayoutParams.MATCH_PARENT))
+        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeTip() }
+
+        tip = Ui.text(context, 26, Ui.p.text).apply {
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.MIDDLE
+            maxWidth = 900.px
+            background = Ui.rounded(if (Space.active) Ui.p.sheetSpace else Ui.p.sheet, 12)
+            setPadding(24.px, 14.px, 24.px, 14.px)
+            visibility = android.view.View.INVISIBLE
+        }
         setContentView(android.widget.FrameLayout(context).apply {
-            addView(root, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+            addView(root, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START))
+            addView(tip, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         })
+    }
+
+    /** Shows [button]'s name beside it; the address button's is the page's address. */
+    private fun showTip(button: android.view.View) {
+        tipFor = button
+        tip.text = button.contentDescription
+        tip.visibility = android.view.View.VISIBLE
+        // Placed once the button is where a scroll or a layout leaves it.
+        tip.post { placeTip() }
+    }
+
+    private fun placeTip() {
+        val button = tipFor ?: return
+        val frame = tip.parent as? android.view.View ?: return
+        if (!button.isAttachedToWindow || frame.height == 0) return
+        tip.text = button.contentDescription
+        tip.measure(android.view.View.MeasureSpec.makeMeasureSpec(900.px, android.view.View.MeasureSpec.AT_MOST),
+            android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED))
+        val at = IntArray(2).also { button.getLocationInWindow(it) }
+        val origin = IntArray(2).also { frame.getLocationInWindow(it) }
+        tip.x = (at[0] - origin[0] + button.width + 28.px).toFloat()
+        tip.y = (at[1] - origin[1] + (button.height - tip.measuredHeight) / 2).coerceIn(8.px, maxOf(8.px, frame.height - tip.measuredHeight - 8.px)).toFloat()
     }
 
     private val prefs = app.sofabrowser.Prefs(context)
@@ -210,36 +237,37 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
     private var paneAnimator: android.animation.ValueAnimator? = null
 
-    /** Shows or hides the actions; from More ([animate]) the sheet grows or shrinks to fit, with focus following. */
+    /** Shows or hides the second column; from More ([animate]) the sheet widens or narrows to fit, with focus following. */
     private fun setExpanded(open: Boolean, animate: Boolean = true) {
         if (!::actionsPane.isInitialized) return
         val changed = open != expanded || paneAnimator?.isRunning == true
         expanded = open
-        more.set(if (open) R.drawable.ic_keyboard_arrow_down else R.drawable.ic_keyboard_arrow_up,
-            context.getString(if (open) R.string.fewer_actions else R.string.more_actions))
+        // One chevron, pointing at where the column comes from or goes back to.
+        more.set(R.drawable.ic_chevron_right, context.getString(if (open) R.string.fewer_actions else R.string.more_actions))
+        more.scaleX = if (open) -1f else 1f
+        placeTip()
         paneAnimator?.cancel()
         val pane = actionsPane
+        val full = COLUMN.px
         if (!open && animate && pane.hasFocus()) more.requestFocus()
         if (!animate || !changed) {
-            pane.layoutParams.height = LinearLayout.LayoutParams.WRAP_CONTENT
+            pane.layoutParams.width = full
             pane.alpha = 1f
             pane.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
             pane.requestLayout()
             return
         }
-        // From the height it has now (part way, if it was moving) to its full height or none.
-        val from = if (pane.visibility == android.view.View.VISIBLE) pane.height else 0
-        pane.measure(android.view.View.MeasureSpec.makeMeasureSpec(maxOf(pane.width, 1), android.view.View.MeasureSpec.UNSPECIFIED),
-            android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED))
-        val to = if (open) pane.measuredHeight else 0
+        // From the width it has now (part way, if it was moving) to its full width or none.
+        val from = if (pane.visibility == android.view.View.VISIBLE) pane.width else 0
+        val to = if (open) full else 0
         pane.visibility = android.view.View.VISIBLE
-        pane.layoutParams.height = from
+        pane.layoutParams.width = from
         pane.requestLayout()
         paneAnimator = android.animation.ValueAnimator.ofInt(from, to).apply {
             duration = 200
             interpolator = android.view.animation.DecelerateInterpolator()
             addUpdateListener {
-                pane.layoutParams.height = it.animatedValue as Int
+                pane.layoutParams.width = it.animatedValue as Int
                 pane.alpha = if (to > 0) it.animatedFraction else 1f - it.animatedFraction
                 pane.requestLayout()
             }
@@ -248,7 +276,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
                 override fun onAnimationCancel(animation: android.animation.Animator) { cancelled = true }
                 override fun onAnimationEnd(animation: android.animation.Animator) {
                     if (cancelled) return
-                    pane.layoutParams.height = LinearLayout.LayoutParams.WRAP_CONTENT
+                    pane.layoutParams.width = full
                     pane.alpha = 1f
                     if (!open) pane.visibility = android.view.View.GONE
                     pane.requestLayout()
@@ -262,7 +290,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
     fun update(s: State) {
         if (!::address.isInitialized) return
-        address.text = s.address.ifEmpty { context.getString(R.string.search_hint) }
+        address.set(R.drawable.ic_search, s.address.ifEmpty { context.getString(R.string.search_hint) })
         buttons[Action.ALLOW_ONCE]?.visibility = if (s.allowPending) android.view.View.VISIBLE else android.view.View.GONE
         buttons[Action.BACK]?.setEnabledLook(s.canGoBack)
         buttons[Action.FORWARD]?.setEnabledLook(s.canGoForward)
@@ -292,6 +320,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // At either end of the zoom, focus moves to the other zoom button instead of falling out of the row.
         zoomLimit(Action.ZOOM_OUT, s.canZoomOut, Action.ZOOM_IN)
         zoomLimit(Action.ZOOM_IN, s.canZoomIn, Action.ZOOM_OUT)
+        // The focused button may have a new name (Reload to Stop, the page's address).
+        placeTip()
     }
 
     private fun zoomLimit(action: Action, enabled: Boolean, other: Action) {
@@ -301,8 +331,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         if (focused && !enabled) buttons[other]?.requestFocus()
     }
 
-    private fun tinted(res: Int) = context.getDrawable(res)?.mutate()?.apply {
-        setBounds(0, 0, 40.px, 40.px)
-        setTint(Ui.p.textMid)
+    private companion object {
+        /** Design pixels: the width of the bar, and of the column More opens beside it. */
+        const val COLUMN = 136
     }
 }

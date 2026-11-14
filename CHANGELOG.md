@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **The menu is a bar on the left**: the menu on the Back key is now a slim vertical bar at the left edge of the
+  screen, with Home, the address, back, forward, reload, zoom and More one under the other. More opens the other
+  actions in a second column beside it. The name of the button you are on shows in a small label next to it; on the
+  address button that label is the page's address.
 - **Select bookmarks to delete**: "Select" in the bookmarks list lets you tick bookmarks with OK, "Select all", and
   "Delete selected" removes them after you confirm. Back or Cancel leaves selecting.
 - **Bookmarks in the settings**: under Browsing, "Bookmarks" opens the list to manage them, and "Import or export
