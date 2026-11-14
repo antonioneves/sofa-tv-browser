@@ -149,6 +149,10 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         background = Ui.background(privateMode)
         micButton.visibility = if (prefs.voiceSearch) VISIBLE else GONE
         spaceButton.visibility = if (app.sofabrowser.Space.offered(context)) VISIBLE else GONE
+        // With the Private Space button there is one more icon, so the search pill gives up some width to keep them all on screen.
+        searchPill.layoutParams = (searchPill.layoutParams as LinearLayout.LayoutParams).apply {
+            width = (if (spaceButton.visibility == VISIBLE) 640 else 760).px
+        }
         privateButton.set(if (privateMode) R.drawable.ic_private_filled else R.drawable.ic_private,
             context.getString(if (privateMode) R.string.private_mode_on else R.string.private_mode_off))
         adBlockButton.set(if (adBlock) R.drawable.ic_shield_filled else R.drawable.ic_shield,
