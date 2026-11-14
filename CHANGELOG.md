@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Find in page from the phone**: the phone page has a Find tab, with the find icon in its bar, when you open it
+  from the search screen over a web page. Type what to look for there and the TV closes the search screen and opens
+  the page's find bar on it, with the matches highlighted. The find bar has a phone button too: it shows the QR code
+  for the phone page on its Find tab, and what you type there is looked for on the page with the find bar still open.
 - **The orange sofa in messages**: the small messages Sofa shows at the bottom of the screen carry the orange sofa
   in front of the text, instead of the app icon Android draws on them.
 - **Bookmark and Quick access in the menu**: on a page that is in Quick access the Bookmark line reads "Bookmarked ·

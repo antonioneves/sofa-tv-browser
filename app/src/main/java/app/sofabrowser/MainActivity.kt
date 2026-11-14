@@ -55,6 +55,7 @@ import app.sofabrowser.browser.FullscreenLayer
 import app.sofabrowser.browser.GamePad
 import app.sofabrowser.browser.LinkMenu
 import app.sofabrowser.browser.PageDownloads
+import app.sofabrowser.browser.PhoneLink
 import app.sofabrowser.browser.PlayerRequest
 import app.sofabrowser.browser.Playlist
 import app.sofabrowser.browser.ProtectedMedia
@@ -93,6 +94,8 @@ import app.sofabrowser.ui.ListActivity
 import app.sofabrowser.ui.Palette
 import app.sofabrowser.ui.SearchActivity
 import app.sofabrowser.ui.SettingsActivity
+import app.sofabrowser.ui.PhoneCard
+import app.sofabrowser.ui.SofaDialog
 import app.sofabrowser.ui.SofaToast
 import app.sofabrowser.shortcut.TvShortcut
 import app.sofabrowser.ui.TileMenu
@@ -1029,6 +1032,10 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQ_URL && resultCode == RESULT_OK) data?.getStringExtra(SearchActivity.EXTRA_URL)?.let(::openUrl)
+        // What the phone typed to find on the page: the find bar opens on it, once the page is showing again.
+        if (requestCode == REQ_URL && resultCode == RESULT_OK) data?.getStringExtra(SearchActivity.EXTRA_FIND)?.let { query ->
+            findBar.post { if (web != null) findBar.openWith(query, voice = prefs.voiceSearch && voiceInput.available) }
+        }
         if (requestCode == REQ_PIN) {
             val then = afterPin
             afterPin = null
@@ -2189,6 +2196,29 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         else -> voiceInput.start()
     }
 
+    private var phoneLink: PhoneLink? = null
+
+    /** The phone's page on its Find tab: what is typed there is looked for on this page, with the find bar staying open. */
+    override fun findByPhone() {
+        var card: SofaDialog? = null
+        val link = PhoneLink(this,
+            onText = { text -> card?.dismiss(); openUrl(UrlInput.resolve(text, prefs.searchEngine, searchShortcuts(this))) },
+            onImported = { _, message -> toast(message) },
+            onFind = { text -> card?.dismiss(); findBar.setQuery(text) },
+            startOnFind = true)
+        val address = link.start(this) ?: return toast(R.string.phone_no_network)
+        phoneLink?.stop()
+        phoneLink = link
+        card = dialog()
+            .setTitle(R.string.phone_type)
+            .setView(PhoneCard.view(this, address,
+                listOf(R.string.phone_step_scan, R.string.phone_step_find, R.string.phone_step_found).map(::getString),
+                getString(R.string.phone_or_open)))
+            .setNegativeButton(R.string.close, null)
+            .setOnDismissListener { link.stop(); if (phoneLink === link) phoneLink = null }
+            .show()
+    }
+
     override fun closeFind() {
         voiceInput.cancel()
         findBar.close()
@@ -2210,6 +2240,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     override fun onDestroy() {
+        phoneLink?.stop()
         cursor.removeCallbacks(sleepNow)
         cursor.removeCallbacks(sleepWarning)
         voiceInput.destroy()

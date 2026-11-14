@@ -32,6 +32,7 @@ import android.widget.Toast
 import app.sofabrowser.Prefs
 import app.sofabrowser.R
 import app.sofabrowser.searchShortcuts
+import app.sofabrowser.browser.Browser
 import app.sofabrowser.browser.PhoneLink
 import app.sofabrowser.browser.SearchShortcuts
 import app.sofabrowser.browser.UrlInput
@@ -408,10 +409,19 @@ class SearchActivity : Activity() {
 
     private fun typeOnPhone() {
         var dialog: SofaDialog? = null
+        // Over a web page the phone can also type what to find on it: the page's own bar then opens on that text.
+        val page = intent.getStringExtra(EXTRA_CURRENT_URL)?.takeIf(Browser::isWebUrl)
+        val onFind: ((String) -> Unit)? = page?.let {
+            { text: String ->
+                dialog?.dismiss()
+                setResult(RESULT_OK, Intent().putExtra(EXTRA_FIND, text))
+                finish()
+            }
+        }
         val link = PhoneLink(this, onText = { text ->
             dialog?.dismiss()
             submit(text)
-        }, onImported = { _, message -> SofaToast.makeText(this, message, Toast.LENGTH_LONG).show() })
+        }, onImported = { _, message -> SofaToast.makeText(this, message, Toast.LENGTH_LONG).show() }, onFind = onFind)
         val address = link.start(this) ?: return SofaToast.makeText(this, R.string.phone_no_network, Toast.LENGTH_LONG).show()
         phoneLink?.stop()
         phoneLink = link
@@ -443,6 +453,8 @@ class SearchActivity : Activity() {
     companion object {
         const val EXTRA_URL = "url"
         const val EXTRA_CURRENT_URL = "current"
+        /** Returned instead of an address when the phone typed what to find on the page. */
+        const val EXTRA_FIND = "find"
         const val EXTRA_VOICE = "voice"
         const val EXTRA_PHONE = "phone"
         const val EXTRA_PRIVATE = "private"

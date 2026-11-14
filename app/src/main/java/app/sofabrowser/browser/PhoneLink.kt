@@ -17,7 +17,8 @@ import java.util.Locale
  * Sofa on the phone: a tiny page on the home network (see [HomeServer]) to type on, to pick a bookmark or a recent
  * page, and to download the bookmarks as a file Chrome can import or add those of such a file. What is typed or
  * picked goes to [onText]; each of these is a tab of its own (Open, Bookmarks, History, Export), and how many bookmarks a file added, and the words saying so, to [onImported], both on
- * the main thread. A bookmark or page swiped aside on the phone is removed, and [onChanged] told, also on the main
+ * the main thread. With [onFind] the page has a Find tab too, to type what to look for on the page the TV shows;
+ * what is typed there goes to [onFind] on the main thread. A bookmark or page swiped aside on the phone is removed, and [onChanged] told, also on the main
  * thread. The page looks like the TV's screens, in their theme, with each site's icon from [Favicons].
  * Nothing passes through anywhere but the home network.
  */
@@ -26,6 +27,9 @@ class PhoneLink(
     private val onText: (String) -> Unit,
     private val onImported: (Int, String) -> Unit,
     private val onChanged: () -> Unit = {},
+    private val onFind: ((String) -> Unit)? = null,
+    /** The page opens on its Find tab, as when it was asked for from the find bar. */
+    private val startOnFind: Boolean = false,
 ) {
 
     private val appContext = context.applicationContext
@@ -36,8 +40,13 @@ class PhoneLink(
         when {
             r.path.isEmpty() && r.method == "GET" -> Response.html(html(null))
             r.path.isEmpty() && r.method == "POST" -> {
-                val text = HomeServer.formField(String(r.body, Charsets.UTF_8), "t")?.trim().orEmpty()
-                if (text.isEmpty()) Response.html(html(null))
+                val body = String(r.body, Charsets.UTF_8)
+                val find = HomeServer.formField(body, "f")?.trim()
+                val text = HomeServer.formField(body, "t")?.trim().orEmpty()
+                if (find != null && onFind != null) {
+                    if (find.isEmpty()) Response.html(html(null)) else Response.html(html(words.findSent)).also { main.post { onFind.invoke(find) } }
+                }
+                else if (text.isEmpty()) Response.html(html(null))
                 else Response.html(html(words.sent)).also { main.post { onText(text) } }
             }
             r.path == "/$FILE_NAME" && r.method == "GET" -> Response("200 OK", "text/html; charset=utf-8",
@@ -96,6 +105,10 @@ class PhoneLink(
         val send = c.getString(R.string.phone_send)
         val sent = c.getString(R.string.phone_sent)
         val open = c.getString(R.string.phone_tab_open)
+        val findTab = c.getString(R.string.phone_tab_find)
+        val findHint = c.getString(R.string.find_in_page)
+        val findSend = c.getString(R.string.phone_find_send)
+        val findSent = c.getString(R.string.phone_find_sent)
         val bookmarks = c.getString(R.string.bookmarks)
         val noBookmarks = c.getString(R.string.bookmarks_empty)
         val history = c.getString(R.string.history)
@@ -169,13 +182,14 @@ $STYLE
 <body><main>
 <header>$LOGO<h1>${esc(words.title)}</h1></header>
 ${if (done != null) "<p class=\"done\">${esc(done)}</p>" else ""}
-<nav><a href="#open">$SEARCH_ICON<span>${esc(words.open)}</span></a><a href="#bookmarks">$BOOKMARKS_ICON<span>${esc(words.bookmarks)}</span></a><a href="#history">$HISTORY_ICON<span>${esc(words.history)}</span></a><a href="#export">$EXPORT_ICON<span>${esc(words.export)}</span></a></nav>
+<nav${if (onFind != null) " class=\"five\"" else ""}><a href="#open">$SEARCH_ICON<span>${esc(words.open)}</span></a>${findLink()}<a href="#bookmarks">$BOOKMARKS_ICON<span>${esc(words.bookmarks)}</span></a><a href="#history">$HISTORY_ICON<span>${esc(words.history)}</span></a><a href="#export">$EXPORT_ICON<span>${esc(words.export)}</span></a></nav>
 <section id="tab-open">
 <form method="post" action="#open" accept-charset="utf-8">
 <div class="search">$SEARCH_ICON<input name="t" type="text" ${if (done == null) "autofocus" else ""} autocomplete="off" autocapitalize="off" placeholder="${esc(words.hint)}"></div>
 <button type="submit">${esc(words.send)}</button>
 </form>
 </section>
+${findSection()}
 <section id="tab-bookmarks">
 ${list(bookmarks, "bookmarks", words.noBookmarks)}
 </section>
@@ -204,9 +218,9 @@ ${list(recent, "history", words.noHistory)}
 </main>
 <script>
 // One tab at a time, the one in the address, so a page picked or a file sent comes back to where it was.
-const tabs = ['open', 'bookmarks', 'history', 'export'];
+const tabs = ['open', ${if (onFind != null) "'find', " else ""}'bookmarks', 'history', 'export'];
 const show = () => {
-  const on = tabs.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'open';
+  const on = tabs.includes(location.hash.slice(1)) ? location.hash.slice(1) : '${if (startOnFind && onFind != null) "find" else "open"}';
   for (const t of tabs) document.getElementById('tab-' + t).hidden = t !== on;
   for (const a of document.querySelectorAll('nav a')) a.classList.toggle('on', a.getAttribute('href') === '#' + on);
 };
@@ -324,6 +338,15 @@ document.getElementById('file').onchange = async (e) => {
 </script></body></html>"""
     }
 
+    /** The Find tab's link in the page's bar, when the page can find. */
+    private fun findLink() = if (onFind == null) "" else "<a href=\"#find\">$FIND_ICON<span>${esc(words.findTab)}</span></a>"
+
+    /** The Find tab: what to look for on the page the TV shows. */
+    private fun findSection() = if (onFind == null) "" else
+        "<section id=\"tab-find\">\n<form method=\"post\" action=\"#find\" accept-charset=\"utf-8\">\n" +
+            "<div class=\"search\">$FIND_ICON<input name=\"f\" type=\"text\" ${if (startOnFind) "autofocus " else ""}autocomplete=\"off\" autocapitalize=\"off\" placeholder=\"${esc(words.findHint)}\"></div>\n" +
+            "<button type=\"submit\">${esc(words.findSend)}</button>\n</form>\n</section>"
+
     /** [s] as a JavaScript string inside the page's script. */
     private fun js(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("<", "\\u003c")
         .replace("\n", "\\n") + "\""
@@ -351,6 +374,8 @@ nav { position: sticky; top: 8px; z-index: 1; display: flex; gap: 4px; padding: 
 nav a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px 6px; border-radius: 18px; color: var(--mid); text-decoration: none; font-size: 13px; }
 nav a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 nav a svg { width: 24px; height: 24px; }
+nav.five { gap: 2px; }
+nav.five a { font-size: 12px; padding-inline: 0; }
 nav a.on { background: var(--focus); color: var(--on-focus); font-weight: 500; }
 .search { position: relative; margin-bottom: 12px; }
 .search svg { position: absolute; inset-inline-start: 18px; top: 50%; width: 24px; height: 24px; margin-top: -12px; color: var(--weak); pointer-events: none; }
@@ -394,6 +419,7 @@ button:active, .button:active { opacity: .8; }
         // The TV's own icons (res/drawable), to sit in the page.
         private const val LOGO = """<svg viewBox="40 40 880 880" aria-hidden="true"><path d="M160,800Q110,800 75,765Q40,730 40,680L40,480Q40,447 63.5,423.5Q87,400 120,400Q153,400 176.5,423.5Q200,447 200,480L200,640L760,640L760,480Q760,447 783.5,423.5Q807,400 840,400Q873,400 896.5,423.5Q920,447 920,480L920,680Q920,730 885,765Q850,800 800,800L160,800ZM280,560L280,480Q280,427 245.5,387Q211,347 160,332L160,280Q160,230 195,195Q230,160 280,160L680,160Q730,160 765,195Q800,230 800,280L800,332Q747,343 713.5,384.5Q680,426 680,480L680,560L280,560Z"/></svg>"""
         private const val SEARCH_ICON = """<svg viewBox="0 0 960 960" aria-hidden="true"><path d="M784,840L532,588Q502,612 463,626Q424,640 380,640Q271,640 195.5,564.5Q120,489 120,380Q120,271 195.5,195.5Q271,120 380,120Q489,120 564.5,195.5Q640,271 640,380Q640,424 626,463Q612,502 588,532L840,784L784,840ZM380,560Q455,560 507.5,507.5Q560,455 560,380Q560,305 507.5,252.5Q455,200 380,200Q305,200 252.5,252.5Q200,305 200,380Q200,455 252.5,507.5Q305,560 380,560Z"/></svg>"""
+        private const val FIND_ICON = """<svg viewBox="0 -960 960 960" aria-hidden="true"><path d="m590-160 80 80H240q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h360l200 240v480q0 20-8.5 36.5T768-96L560-302q-17 11-37 16.5t-43 5.5q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 23-5.5 43T618-360l102 104v-356L562-800H240v640h350ZM480-360q33 0 56.5-23.5T560-440q0-33-23.5-56.5T480-520q-33 0-56.5 23.5T400-440q0 33 23.5 56.5T480-360Zm0-80Zm0 0Z"/></svg>"""
         private const val BOOKMARKS_ICON = """<svg viewBox="0 0 960 960" aria-hidden="true"><path d="M120,920L120,280Q120,247 143.5,223.5Q167,200 200,200L600,200Q633,200 656.5,223.5Q680,247 680,280L680,920L400,800L120,920ZM200,798L400,712L600,798L600,280L200,280L200,798ZM760,800L760,120L240,120L240,40L760,40Q793,40 816.5,63.5Q840,87 840,120L840,800L760,800Z"/></svg>"""
         private const val HISTORY_ICON = """<svg viewBox="0 0 960 960" aria-hidden="true"><path d="M480,840Q342,840 239.5,748.5Q137,657 122,520L204,520Q218,624 296.5,692Q375,760 480,760Q597,760 678.5,678.5Q760,597 760,480Q760,363 678.5,281.5Q597,200 480,200Q411,200 351,232Q291,264 250,320L360,320L360,400L120,400L120,160L200,160L200,254Q251,190 324.5,155Q398,120 480,120Q555,120 620.5,148.5Q686,177 734.5,225.5Q783,274 811.5,339.5Q840,405 840,480Q840,555 811.5,620.5Q783,686 734.5,734.5Q686,783 620.5,811.5Q555,840 480,840ZM592,648L440,496L440,280L520,280L520,464L648,592L592,648Z"/></svg>"""
         private const val DELETE_ICON = """<svg viewBox="0 0 960 960" aria-hidden="true"><path d="M280,840Q247,840 223.5,816.5Q200,793 200,760L200,240L160,240L160,160L360,160L360,120L600,120L600,160L800,160L800,240L760,240L760,760Q760,793 736.5,816.5Q713,840 680,840L280,840ZM680,240L280,240L280,760L680,760L680,240ZM360,680L440,680L440,320L360,320L360,680ZM520,680L600,680L600,320L520,320L520,680Z"/></svg>"""
