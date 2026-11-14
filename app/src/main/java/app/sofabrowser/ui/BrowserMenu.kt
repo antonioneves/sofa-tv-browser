@@ -157,6 +157,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             addView(zoomLabel, LinearLayout.LayoutParams(0, 64.px, 1f))
             addView(zoomButton(Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in), LinearLayout.LayoutParams(0, 64.px, 1f))
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 2.px })
+        list.addView(android.view.View(context).apply { setBackgroundColor(Ui.p.fillFocused) },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2.px).apply { setMargins(8.px, 10.px, 8.px, 8.px) })
         // Kept per site; not in private browsing, which saves none.
         add(Action.AUTO_WATCH, R.drawable.ic_autoplay, R.string.auto_watch)
         add(Action.TRANSLATE, R.drawable.ic_translate, R.string.translate)
