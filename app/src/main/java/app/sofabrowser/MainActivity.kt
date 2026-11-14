@@ -117,6 +117,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     private lateinit var browser: Browser
 
     private lateinit var browserLayer: FrameLayout
+    private lateinit var rootLayer: FrameLayout
     private lateinit var cursor: CursorLayout
     private lateinit var progress: View
     private lateinit var scrollPill: TextView
@@ -201,7 +202,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             }
             root.addView(splash, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         }
+        rootLayer = root
         setContentView(root)
+        applyDock()
 
         if (!restorePage(savedInstanceState) && !handleIntent(intent) && !openStartPage(savedInstanceState)) {
             showHome()
@@ -294,6 +297,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         home.visibility = View.GONE
         applyKeepAwake()
         browserLayer.visibility = View.VISIBLE
+        syncDock()
         cursor.speedLevel = prefs.cursorSpeed
         web?.onResume()
         web?.requestFocus()
@@ -309,6 +313,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         home.visibility = View.VISIBLE
         applyKeepAwake()
         browserLayer.visibility = View.INVISIBLE
+        syncDock()
         if (home.findFocus() == null) home.searchPill.requestFocus()
         Updater.showPending(this)
     }
@@ -332,6 +337,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             // While the bar has focus, the D-pad moves between its buttons instead of the pointer.
             if (findBar.hasFocus()) return super.dispatchKeyEvent(event)
         }
+        // The docked bar with the focus takes the keys; BACK, MENU and RIGHT hand the focus back to the page.
+        menu?.takeIf { !homeShown && it.dockHasFocus }?.let { return it.dockedKey(event) || super.dispatchKeyEvent(event) }
         if (standalone) {
             // Back steps back through the page's own history and then leaves, to the TV home screen.
             when (event.keyCode) {
@@ -496,7 +503,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             if (triggers.axis(side, pull, event.eventTime)) GamePad.action(code, inFullscreen)?.let(::padPress)
         }
         val pointer = when {
-            homeShown || menu?.isShowing == true -> null
+            homeShown || menu?.inUse == true -> null
             inFullscreen -> fullscreen.pointer.takeIf { it.cursorEnabled }
             findBar.hasFocus() -> null
             else -> cursor.takeIf { it.cursorEnabled }
@@ -632,6 +639,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             translateInto = Translator.name(translateCode(), Locale.getDefault()),
             reading = reading,
             pinned = url.isNotEmpty() && db.isPinned(url),
+            docked = prefs.menuDocked,
         )
     }
 
@@ -646,8 +654,30 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     private fun showMenu() {
         cursor.hide()
-        val m = menu ?: BrowserMenu(this, this).also { menu = it }
-        m.show(menuState())
+        menuView().show(menuState())
+    }
+
+    private fun menuView() = menu ?: BrowserMenu(this, this).also { m ->
+        menu = m
+        // A docked bar is left for the page, not closed.
+        m.onLeave = { if (!homeShown) web?.requestFocus() }
+    }
+
+    /** The menu bar docked at the left edge with the page beside it (Prefs.menuDocked), or floating over the page when opened. */
+    private fun applyDock() {
+        if (prefs.menuDocked && !standalone) menuView().dock(rootLayer, 1).also { menu?.update(menuState()) }
+        else menu?.undock()
+        syncDock()
+    }
+
+    /** The docked bar shows only with the page, and the page keeps its room beside it, also while something covers both. */
+    private fun syncDock() {
+        val m = menu ?: return
+        m.setDockVisible(browserLayer.visibility == View.VISIBLE)
+        (browserLayer.layoutParams as? FrameLayout.LayoutParams)?.let {
+            val left = if (m.docked) BrowserMenu.BAR.px else 0
+            if (it.leftMargin != left) { it.leftMargin = left; browserLayer.layoutParams = it }
+        }
     }
 
     override fun onAddress() = startSearch(voice = false, current = web?.url)
@@ -659,6 +689,11 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         when (action) {
             BrowserMenu.Action.ALLOW_ONCE -> { menu?.dismiss(); browser.allowOnce()?.let(::openUrl) }
             BrowserMenu.Action.HOME -> showHome()
+            BrowserMenu.Action.DOCK -> {
+                prefs.menuDocked = !prefs.menuDocked
+                applyDock()
+                menuView().show(menuState())
+            }
             BrowserMenu.Action.BACK -> if (w.canGoBack()) { menu?.dismiss(); browser.goBack() }
             BrowserMenu.Action.FORWARD -> if (w.canGoForward()) { menu?.dismiss(); browser.goForward() }
             BrowserMenu.Action.RELOAD -> { if (loading) w.stopLoading() else browser.reload(); menu?.dismiss() }
@@ -725,7 +760,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             BrowserMenu.Action.SETTINGS -> { menu?.dismiss(); openSettings() }
             BrowserMenu.Action.DOWNLOADS -> { menu?.dismiss(); onDownloads() }
         }
-        menu?.takeIf { it.isShowing }?.update(menuState())
+        menu?.takeIf { it.shown }?.update(menuState())
     }
 
     /**
@@ -747,7 +782,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         if (step > 0) w.zoomBy(1.25.pow(step).toFloat())
         else w.evaluateJavascript("document.documentElement.style.zoom='${1.25.pow(step)}'", null)
         zoomStep = step
-        menu?.takeIf { it.isShowing }?.update(menuState())
+        menu?.takeIf { it.shown }?.update(menuState())
     }
 
     /**
@@ -799,7 +834,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                         pageTranslated = true
                         if (announceTranslation) toast(getString(R.string.translated, translateName()))
                         announceTranslation = false
-                        menu?.takeIf { it.isShowing }?.update(menuState())
+                        menu?.takeIf { it.shown }?.update(menuState())
                     }
                     ++translateTries < TRANSLATE_TRIES -> cursor.postDelayed(this, 1000)
                     announceTranslation -> { announceTranslation = false; translateSite = null; toast(R.string.translate_failed) }
@@ -823,7 +858,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             cursor.cursorEnabled = false
             if (cursor.scrollMode) cursor.setScrollMode(false)
             // The menu stays open over a toggle: its line now offers to leave reader view.
-            menu?.takeIf { it.isShowing }?.update(menuState())
+            menu?.takeIf { it.shown }?.update(menuState())
         }
     }
 
@@ -1064,7 +1099,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         translateUrl = null
         // Translation follows the site's pages, not the user to another site.
         if (translateSite != null && host?.let(Sites::of) != translateSite) { translateSite = null; announceTranslation = false }
-        menu?.takeIf { it.isShowing }?.update(menuState())
+        menu?.takeIf { it.shown }?.update(menuState())
     }
 
     override fun onPageFinished(url: String) {
@@ -1073,7 +1108,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         progress.animate().cancel()
         progress.visibility = View.GONE
         progress.scaleX = 0f
-        menu?.takeIf { it.isShowing }?.update(menuState())
+        menu?.takeIf { it.shown }?.update(menuState())
         if (Browser.isWebUrl(url)) maybeAutoWatch(url)
         if (translateSite != null && translateUrl != url && Browser.hostOf(url)?.let(Sites::of) == translateSite) {
             translate(announce = announceTranslation)
@@ -1097,7 +1132,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     override fun onIcon(url: String, icon: Bitmap) {
         if (!browser.privateMode) Favicons.get(this).save(url, icon)
-        menu?.takeIf { it.isShowing }?.update(menuState())
+        menu?.takeIf { it.shown }?.update(menuState())
     }
 
     override fun onEnterFullscreen(view: View, callback: WebChromeClient.CustomViewCallback) {
@@ -1118,6 +1153,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         fullscreen.bar.pipShown = pipSupported
         fullscreen.attach(view)
         browserLayer.visibility = View.INVISIBLE
+        syncDock()
         fullscreen.postDelayed({ VideoRelay.send(web, "watch") }, 300)
         fullscreen.bar.show()
     }
@@ -1131,6 +1167,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         fullscreen.detach()
         fullscreenCallback = null
         browserLayer.visibility = View.VISIBLE
+        syncDock()
         web?.requestFocus()
     }
 
@@ -1381,7 +1418,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     private fun autoWatchTry() {
-        if (!started || homeShown || inPip || watching || menu?.isShowing == true || fullscreen.visibility == View.VISIBLE) return
+        if (!started || homeShown || inPip || watching || menu?.inUse == true || fullscreen.visibility == View.VISIBLE) return
         if (web?.url != autoWatchUrl) return
         autoWatching = true
         watching = true

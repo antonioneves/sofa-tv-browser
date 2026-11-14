@@ -9,6 +9,7 @@
 - **The page icon names the site**: while the page icon at the foot of the menu bar is focused, its label shows the site's name and, under it, the address; an address too long for the label is cut short. Its focus square has the same corner radius as the site's icon.
 - **More after Home, and no greyed-out buttons**: More sits right under Home in the menu bar, and Back, Forward and the zoom buttons are hidden while they cannot be used, in place of showing dimmed.
 - **Back and Forward take each other's place**: when you click Back and there is nothing further back, the menu's focus moves on to Forward, which is now the one shown.
+- **Dock the sidebar or let it collapse**: a new button right after More in the menu bar chooses how the bar lives. Collapsed (as before) it is hidden until BACK or MENU opens it over the page, and it closes after an action; docked, it stays on screen at the left edge with the page laid out beside it, BACK or MENU move the focus into it, and BACK or RIGHT move it back to the page. The choice is remembered.
 - **A new icon for More**: the More button in the menu bar shows a small set of shapes (three squares and a diamond), in place of the arrow. The balloon it opens and its label are unchanged.
 - **Loading bar at the bottom**: the orange page loading bar runs along the bottom edge of the page instead of the top.
 - **A cross to close the phone card**: the "Type on your phone" card has a close cross in its top right corner, in

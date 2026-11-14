@@ -23,10 +23,14 @@ import app.sofabrowser.Space
  * BACK or More closes the balloon again, and so does LEFT from the balloon's lines (it returns to More). A tap on
  * the page beside the menu closes the whole menu. The focused bar button's name shows in a small label
  * beside it. Like BrowsHere's, the menu remembers the last button used and doesn't hide on its own.
+ *
+ * Its dock button after More chooses how the bar lives: collapsed (the default), the bar is hidden until BACK or MENU
+ * opens it over the page and it closes after an action; docked, it is part of the screen, always shown at the left
+ * edge with the page laid out beside it, and the same keys only move the focus into it, and out again.
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
 
-    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
+    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
     interface Actions {
         fun onAddress()
@@ -65,6 +69,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         val reading: Boolean,
         /** The page is a bookmark in Quick access. */
         val pinned: Boolean,
+        /** The bar is docked: always shown, with the page beside it. */
+        val docked: Boolean = false,
     )
 
     private val buttons = LinkedHashMap<Action, LabeledIconButton>()
@@ -83,8 +89,36 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     private lateinit var balloonList: LinearLayout
     private lateinit var balloonScroll: FocusScrollView
     private lateinit var balloonDrawable: BalloonDrawable
-    private val topRow = setOf(Action.HOME, Action.BACK, Action.FORWARD, Action.RELOAD)
+    private val topRow = setOf(Action.HOME, Action.DOCK, Action.BACK, Action.FORWARD, Action.RELOAD)
     private var lastFocused = Action.HOME
+
+    /** The bar, the balloon and the label, on a frame as big as the screen: in this dialog, or docked in the screen. */
+    private lateinit var content: android.widget.FrameLayout
+    private var created = false
+
+    /** The bar is docked in the screen (see [dock]) and not shown in this dialog. */
+    var docked = false
+        private set
+    private var dockHost: android.widget.FrameLayout? = null
+
+    /** Called when the docked bar is left: the focus goes back to the page. */
+    var onLeave: (() -> Unit)? = null
+
+    /** The bar is on screen: its dialog is showing, or it is docked and not hidden behind another screen. */
+    val shown get() = isShowing || docked && content.visibility == android.view.View.VISIBLE
+
+    /** The bar is being used: its dialog is showing, or the docked bar has the focus. */
+    val inUse get() = isShowing || dockHasFocus
+
+    val dockHasFocus get() = docked && content.findFocus() != null
+
+    private val leavingFocus = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, now ->
+        // Focus went to the page: the balloon and the label are done with.
+        if (now == null || !within(now, content)) {
+            hideTip()
+            setBalloon(false, animate = false)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +130,12 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             setDimAmount(0f)
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         }
+        created = true
+        if (!docked) setContentView(build())
+    }
+
+    private fun build(): android.widget.FrameLayout {
+        if (::content.isInitialized) return content
         val sheetColor = if (Space.active) Ui.p.sheetSpace else Ui.p.sheet
         val bar = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -148,7 +188,9 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
                 setBalloon(true, focusInside = true); true
             } else false
         }
-        place(more, bar, 28)
+        place(more, bar, 16)
+        // How the bar lives: kept on screen with the page beside it, or collapsed until BACK or MENU opens it.
+        add(Action.DOCK, R.drawable.ic_dock_off, R.string.dock_off, bar, 28)
         // Moving about the page.
         add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, bar)
         add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar)
@@ -246,12 +288,67 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             addView(tipUrl, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 4.px })
             visibility = android.view.View.INVISIBLE
         }
-        setContentView(android.widget.FrameLayout(context).apply {
+        content = android.widget.FrameLayout(context).apply {
             addView(bar, android.widget.FrameLayout.LayoutParams(BAR.px, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START))
             addView(balloon, android.widget.FrameLayout.LayoutParams(BALLOON.px, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(tipBox, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeTip() }
-        })
+        }
+        return content
+    }
+
+    /** Docks the bar in [host], at [index] among its views, instead of floating it over the page in a dialog. */
+    fun dock(host: android.widget.FrameLayout, index: Int) {
+        if (docked) return
+        val c = build()
+        if (isShowing) dismiss()
+        (c.parent as? ViewGroup)?.removeView(c)
+        host.addView(c, index, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        dockHost = host
+        docked = true
+        c.viewTreeObserver.addOnGlobalFocusChangeListener(leavingFocus)
+    }
+
+    /** The bar goes back to its dialog, which opens with BACK or MENU. */
+    fun undock() {
+        if (!docked) return
+        docked = false
+        content.viewTreeObserver.removeOnGlobalFocusChangeListener(leavingFocus)
+        dockHost?.removeView(content)
+        dockHost = null
+        content.visibility = android.view.View.VISIBLE
+        if (created) setContentView(content)
+    }
+
+    /** The docked bar is shown, or out of the way of the home screen and the fullscreen video. */
+    fun setDockVisible(visible: Boolean) {
+        if (!docked) return
+        content.visibility = if (visible) android.view.View.VISIBLE else android.view.View.GONE
+    }
+
+    /** A key while the docked bar has the focus: what the bar adds to the usual way the focus moves. */
+    fun dockedKey(event: KeyEvent): Boolean {
+        val focus = content.findFocus() ?: return false
+        if (balloonLeft(event, focus)) return true
+        val down = event.action == KeyEvent.ACTION_DOWN
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_BACK -> {
+                if (down && event.repeatCount == 0) { if (balloonOpen) { setBalloon(false); more.requestFocus() } else dismiss() }
+                return true
+            }
+            KeyEvent.KEYCODE_MENU -> { if (down) dismiss(); return true }
+            // The page is to the right of the bar; More's own RIGHT opens its balloon.
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (focus !== more && !inBalloon(focus)) { if (down) dismiss(); return true }
+        }
+        return false
+    }
+
+    /** Closing a docked bar leaves it where it is, and gives the focus back to the page. */
+    override fun dismiss() {
+        if (!docked) return super.dismiss()
+        if (::balloon.isInitialized) setBalloon(false, animate = false)
+        hideTip()
+        onLeave?.invoke()
     }
 
     /** Shows [button]'s name beside it; the address button's is the page's address. */
@@ -300,7 +397,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     private var balloonOpen = false
 
     fun show(state: State) {
-        if (!isShowing) show()
+        if (!docked && !isShowing) show()
         update(state)
         // The balloon starts closed; a pending "Allow once" is why the menu was opened, most likely, so then it opens
         // with that action focused.
@@ -323,20 +420,23 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
     /** LEFT from a line of the balloon goes back to More, where the balloon came from; zoom in goes on to zoom out. */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && balloonOpen) {
-            val focus = currentFocus
-            if (focus != null && inBalloon(focus) && focus !== buttons[Action.ZOOM_IN]) {
-                if (event.action == KeyEvent.ACTION_DOWN) more.requestFocus()
-                return true
-            }
-        }
+        if (balloonLeft(event, currentFocus)) return true
         return super.dispatchKeyEvent(event)
     }
 
-    private fun inBalloon(view: android.view.View): Boolean {
+    private fun balloonLeft(event: KeyEvent, focus: android.view.View?): Boolean {
+        if (event.keyCode != KeyEvent.KEYCODE_DPAD_LEFT || !balloonOpen || focus == null) return false
+        if (!inBalloon(focus) || focus === buttons[Action.ZOOM_IN]) return false
+        if (event.action == KeyEvent.ACTION_DOWN) more.requestFocus()
+        return true
+    }
+
+    private fun inBalloon(view: android.view.View) = within(view, balloon)
+
+    private fun within(view: android.view.View, ancestor: android.view.View): Boolean {
         var v: android.view.View? = view
         while (v != null) {
-            if (v === balloon) return true
+            if (v === ancestor) return true
             v = v.parent as? android.view.View
         }
         return false
@@ -414,6 +514,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         address.contentDescription = s.address.ifEmpty { context.getString(R.string.search_hint) }
         siteUrl = app.sofabrowser.browser.UrlInput.display(s.url)
         siteName = s.title.ifBlank { app.sofabrowser.browser.Browser.hostOf(s.url)?.removePrefix("www.") ?: s.address }
+        buttons[Action.DOCK]?.set(if (s.docked) R.drawable.ic_dock_on else R.drawable.ic_dock_off,
+            context.getString(if (s.docked) R.string.dock_on else R.string.dock_off))
         buttons[Action.ALLOW_ONCE]?.visibility = if (s.allowPending) android.view.View.VISIBLE else android.view.View.GONE
         // Back and Forward take each other's place: when the one with focus goes away, the other gets the focus.
         val back = buttons[Action.BACK]
@@ -468,7 +570,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         if (focused && !enabled) buttons[other]?.requestFocus()
     }
 
-    private companion object {
+    companion object {
         // Design pixels: the bar's width, the balloon's width, and the room its tail takes at the balloon's left.
         const val BAR = 96
         // The most the label's text can be wide before it is cut short.

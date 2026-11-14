@@ -119,6 +119,8 @@ class Prefs(context: Context) {
     var customUserAgent by string("custom_user_agent", "")
     /** BACK goes to the previous page when there is one, instead of opening the menu (BrowsHere's behaviour). */
     var backGoesBack by boolean("back_goes_back", false)
+    /** The menu bar stays docked at the left edge, with the page beside it, instead of opening over the page. */
+    var menuDocked by boolean("menu_docked", false)
     /** Sofa starts on [startPage] instead of the home screen; off by default. */
     var startPageOn by boolean("start_page_on", false)
     /** An http(s) address, or "" until one is chosen. */
