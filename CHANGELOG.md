@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **A cross to close the phone card**: the "Type on your phone" card has a close cross in its top right corner, in
-  place of the Close button at the bottom.
+  place of the Close button at the bottom. The cross keeps the focus while the card is open: the arrows move nothing.
 - **Find in page from the phone**: the phone page has a Find tab, with the find icon in its bar, when you open it
   from the search screen over a web page. Type what to look for there and the TV closes the search screen and opens
   the page's find bar on it, with the matches highlighted. The find bar has a phone button too: it shows the QR code

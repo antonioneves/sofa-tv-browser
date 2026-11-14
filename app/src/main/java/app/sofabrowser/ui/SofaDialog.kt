@@ -36,6 +36,8 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
     private var neutral: View? = null
     private var negative: View? = null
     private var firstFocus: View? = null
+    /** The close cross, when it is the dialog's only control: it keeps the focus for as long as the dialog is open. */
+    private var cross: View? = null
     private var messageView: TextView? = null
 
     class Builder(internal val context: Context) {
@@ -136,6 +138,8 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
                     setImageResource(R.drawable.ic_close)
                     contentDescription = context.getString(R.string.close)
                     isFocusable = true
+                    // Also after a tap: the cross keeps the focus whether the dialog was touched or driven by the remote.
+                    isFocusableInTouchMode = true
                     isClickable = true
                     setPadding(14.px, 14.px, 14.px, 14.px)
                     background = Ui.fillSelector(Color.TRANSPARENT, p.focus, 32)
@@ -144,6 +148,7 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
                     setOnClickListener { dismiss() }
                 }
                 firstFocus = cross
+                if (b.positiveText == null && b.negativeText == null && b.neutralText == null && b.items == null) this.cross = cross
                 sheet.addView(LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
@@ -201,6 +206,20 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         root.clipChildren = false
         setContentView(root)
         (firstFocus ?: positive ?: negative ?: neutral)?.requestFocus()
+    }
+
+    /** With only the close cross to use, the D-pad can't move the focus off it: any key brings it back, the arrows do nothing. */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val only = cross
+        if (only != null) {
+            if (!only.hasFocus()) only.requestFocus()
+            when (event.keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+                android.view.KeyEvent.KEYCODE_TAB -> return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     private fun gap() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 64.px).apply { marginStart = 12.px }
