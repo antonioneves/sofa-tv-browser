@@ -4,7 +4,6 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Intent
-import android.graphics.PorterDuff
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -101,7 +100,7 @@ class ListActivity : Activity() {
             db.history().forEach { h ->
                 val header = dayLabel(h.visitedAt)
                 if (header != lastHeader) {
-                    list.addView(Ui.text(this, 30, Ui.p.textWeak).apply { text = header; setPadding(0, 36.px, 0, 20.px) })
+                    addHeader(header)
                     lastHeader = header
                 }
                 addRow(h.title, h.url, DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(h.visitedAt))) {
@@ -109,11 +108,29 @@ class ListActivity : Activity() {
                 }
             }
         } else {
-            db.bookmarks().forEach { b -> addRow(b.title, b.url, null, bookmark = true, starred = db.isPinned(b.url)) { db.removeBookmark(b.url) } }
+            // Two sections: the bookmarks in Quick access, in their order, then the rest.
+            val pinned = db.pinned()
+            val pinnedUrls = pinned.map { it.url }.toSet()
+            val rest = db.bookmarks().filter { it.url !in pinnedUrls }
+            if (pinned.isNotEmpty()) addHeader(getString(R.string.quick_access))
+            pinned.forEach { b -> addRow(b.title, b.url, null, bookmark = true) { db.removeBookmark(b.url) } }
+            if (rest.isNotEmpty()) addHeader(getString(R.string.bookmarks))
+            rest.forEach { b -> addRow(b.title, b.url, null, bookmark = true) { db.removeBookmark(b.url) } }
         }
         empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
         list.getChildAt((0 until list.childCount).firstOrNull { list.getChildAt(it) is LinearLayout } ?: 0)
             ?.let { (it as? LinearLayout)?.getChildAt(0)?.requestFocus() }
+    }
+
+    private fun addHeader(text: String) {
+        list.addView(Ui.text(this, 30, Ui.p.textWeak).apply { this.text = text; setPadding(0, 36.px, 0, 20.px) })
+    }
+
+    /** Gives the focus to the row at [index], or the nearest one after it, else before it; headers are skipped. */
+    private fun focusRowNear(index: Int) {
+        val rows = (0 until list.childCount).filter { list.getChildAt(it) is LinearLayout }
+        val at = rows.firstOrNull { it >= index } ?: rows.lastOrNull() ?: return
+        (list.getChildAt(at) as LinearLayout).getChildAt(0)?.requestFocus()
     }
 
     private fun dayLabel(t: Long): String {
@@ -128,7 +145,7 @@ class ListActivity : Activity() {
         }
     }
 
-    private fun addRow(title: String, url: String, meta: String?, bookmark: Boolean = false, starred: Boolean = false, delete: () -> Unit) {
+    private fun addRow(title: String, url: String, meta: String?, bookmark: Boolean = false, delete: () -> Unit) {
         val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; clipChildren = false }
         val open = {
             setResult(RESULT_OK, Intent().putExtra(SearchActivity.EXTRA_URL, url))
@@ -137,17 +154,22 @@ class ListActivity : Activity() {
         val remove = {
             delete()
             val i = list.indexOfChild(line)
-            list.removeView(line)
-            (list.getChildAt(i) as? LinearLayout ?: list.getChildAt(i - 1) as? LinearLayout)?.getChildAt(0)?.requestFocus()
-            empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
+            if (bookmark) {
+                // Rebuilt, so a section that has run out of rows loses its header.
+                load()
+                focusRowNear(i)
+            } else {
+                list.removeView(line)
+                (list.getChildAt(i) as? LinearLayout ?: list.getChildAt(i - 1) as? LinearLayout)?.getChildAt(0)?.requestFocus()
+                empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
+            }
         }
-        // Pinning a bookmark puts it in Quick access on the home screen; the row is rebuilt to show the mark.
+        // Adding a bookmark to Quick access (or removing it) moves it to the other section, so the list is rebuilt.
         val togglePin = {
             val i = list.indexOfChild(line)
             if (db.isPinned(url)) db.unpin(url) else db.pin(title, url)
             load()
-            (list.getChildAt(i) as? LinearLayout)?.getChildAt(0)?.requestFocus()
-            Unit
+            focusRowNear(i)
         }
         val menu = {
             val items = mutableListOf(TileMenu.Item(R.drawable.ic_open_in_new, R.string.open, open))
@@ -188,12 +210,6 @@ class ListActivity : Activity() {
             setPadding(0, 10.px, 0, 0)
         })
         body.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        // A star marks the bookmarks that are in Quick access.
-        if (starred) body.addView(ImageView(this).apply {
-            setImageResource(R.drawable.ic_star_filled)
-            setColorFilter(Ui.BRAND, PorterDuff.Mode.SRC_IN)
-            contentDescription = getString(R.string.quick_access)
-        }, LinearLayout.LayoutParams(48.px, 48.px).apply { marginStart = 24.px })
         line.addView(body, LinearLayout.LayoutParams(0, 136.px, 1f))
         list.addView(line, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = 16.px

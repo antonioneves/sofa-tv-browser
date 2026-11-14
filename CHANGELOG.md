@@ -5,7 +5,7 @@
 - **Icons stay with bookmarks**: a bookmarked site keeps its icon, when it has one, even after you clear browsing
   data. Sites without an icon show a letter tile.
 - **Quick access is your pinned bookmarks**: "Add to Quick access" in a bookmark's menu, in the bookmarks list or on
-  the home screen, puts it there; "Remove from Quick access" takes it off and keeps the bookmark. The bookmarks list marks them with a star.
+  the home screen, puts it there; "Remove from Quick access" takes it off and keeps the bookmark. The bookmarks list has two sections: Quick access at the top, then the other bookmarks.
   Pinned bookmarks no longer repeat in the Bookmarks row. Quick access you already had is kept: those tiles are now
   pinned bookmarks, in the same order. Add site, Edit and Move work as before.
 - **Bookmarks on the home screen**: the Bookmarks button leaves the top bar; the Bookmarks row on the home screen is
