@@ -6,7 +6,9 @@
   The icon fills almost all of its focus square, and the bar's top and bottom margins are a little smaller.
   The bar itself is narrower too, 96 instead of 108, and the selection square on its buttons is smaller (68 instead of 80), so it keeps a comfortable margin to the bar's edges even when it grows on focus.
 - **No more endless reloading of a crashing page**: when a page's renderer dies, Sofa still loads the page again once, but if it dies again within two minutes Sofa stops, says that the page keeps crashing and goes back to the home screen.
+- **The page icon names the site**: while the page icon at the foot of the menu bar is focused, its label shows the site's name and, under it, the address; an address too long for the label is cut short. Its focus square has the same corner radius as the site's icon.
 - **More after Home, and no greyed-out buttons**: More sits right under Home in the menu bar, and Back, Forward and the zoom buttons are hidden while they cannot be used, in place of showing dimmed.
+- **Back and Forward take each other's place**: when you click Back and there is nothing further back, the menu's focus moves on to Forward, which is now the one shown.
 - **A new icon for More**: the More button in the menu bar shows a small set of shapes (three squares and a diamond), in place of the arrow. The balloon it opens and its label are unchanged.
 - **Loading bar at the bottom**: the orange page loading bar runs along the bottom edge of the page instead of the top.
 - **A cross to close the phone card**: the "Type on your phone" card has a close cross in its top right corner, in

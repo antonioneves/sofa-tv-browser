@@ -62,7 +62,7 @@ class Favicons private constructor(private val context: Context) {
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tileColor(url) }
-        c.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), size * 0.22f, size * 0.22f, bg)
+        c.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), size * CORNER, size * CORNER, bg)
         val fg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = size * 0.56f
@@ -78,6 +78,9 @@ class Favicons private constructor(private val context: Context) {
         key(pageUrl)?.let { File(dir, "$it.png") }?.takeIf { it.exists() }?.let { runCatching { it.readBytes() }.getOrNull() }
 
     companion object {
+        /** A letter tile's corner radius, as a fraction of its size. */
+        const val CORNER = 0.22f
+
         /** The site an icon is kept for: [url]'s host without "www.", in letters, digits, dots and dashes only. */
         fun key(url: String): String? =
             runCatching { Uri.parse(url).host }.getOrNull()?.lowercase()?.removePrefix("www.")

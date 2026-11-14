@@ -64,7 +64,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
             }
         } else {
             // A rounded square, not a circle, like Sofa's other focused buttons.
-            circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, 24)
+            circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, FOCUS_RADIUS)
             circle.isDuplicateParentStateEnabled = true
             circle.addView(image, LayoutParams(48.px, 48.px, Gravity.CENTER))
             addView(circle, LayoutParams(square.px, square.px, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
@@ -83,6 +83,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
 
     fun set(icon: Int, label: String) {
         if (plain && !row) image.layoutParams = LayoutParams(48.px, 48.px, Gravity.CENTER)
+        if (plain && !row) circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, FOCUS_RADIUS)
         plain = false
         image.setImageResource(icon)
         text.text = label
@@ -97,6 +98,8 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         if (!row) image.layoutParams = LayoutParams((square - 8).px, (square - 8).px, Gravity.CENTER)
         image.setImageDrawable(picture)
         image.clearColorFilter()
+        // The focus square takes the corner radius of the site's icon (Favicons.CORNER of its size), not the usual one.
+        if (!row) circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, Math.round((square - 8) * app.sofabrowser.data.Favicons.CORNER))
     }
 
     /** A button that cannot be used is not shown: gone, or invisible where its neighbours must stay in place. */
@@ -122,5 +125,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
     companion object {
         const val WIDTH = 104
         const val LABEL_WIDTH = 320
+        /** The corner radius of the focus square, and so of a site icon inside it. */
+        const val FOCUS_RADIUS = 24
     }
 }

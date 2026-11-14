@@ -71,7 +71,12 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     private lateinit var address: LabeledIconButton
     /** The name of the focused button, floating beside it. */
     private lateinit var tip: TextView
+    /** The label's box: the name, and under it, for the page's icon, the address. */
+    private lateinit var tipBox: LinearLayout
+    private lateinit var tipUrl: TextView
     private var tipFor: android.view.View? = null
+    private var siteName = ""
+    private var siteUrl = ""
     private lateinit var zoomLabel: TextView
     private lateinit var more: LabeledIconButton
     private lateinit var balloon: LinearLayout
@@ -222,16 +227,29 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
         tip = Ui.text(context, 26, Ui.p.text).apply {
             maxLines = 1
-            ellipsize = TextUtils.TruncateAt.MIDDLE
-            maxWidth = 900.px
+            ellipsize = TextUtils.TruncateAt.END
+            maxWidth = TIP_TEXT.px
+        }
+        // An address too long for the label is cut short with an ellipsis.
+        tipUrl = Ui.text(context, 22, Ui.p.textWeak).apply {
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            maxWidth = TIP_TEXT.px
+            visibility = android.view.View.GONE
+        }
+        tipBox = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
             background = Ui.rounded(sheetColor, 12)
             setPadding(24.px, 14.px, 24.px, 14.px)
+            // Wrapping its text, not the default of matching the box, which would size the box by the address alone.
+            addView(tip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(tipUrl, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 4.px })
             visibility = android.view.View.INVISIBLE
         }
         setContentView(android.widget.FrameLayout(context).apply {
             addView(bar, android.widget.FrameLayout.LayoutParams(BAR.px, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START))
             addView(balloon, android.widget.FrameLayout.LayoutParams(BALLOON.px, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(tip, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(tipBox, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeTip() }
         })
     }
@@ -241,28 +259,42 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // With the balloon open its lines are where the label would go.
         if (balloonOpen) return hideTip()
         tipFor = button
-        tip.text = button.contentDescription
-        tip.visibility = android.view.View.VISIBLE
+        fillTip(button)
+        tipBox.visibility = android.view.View.VISIBLE
         // Placed once the button is where a scroll or a layout leaves it.
-        tip.post { placeTip() }
+        tipBox.post { placeTip() }
     }
 
     private fun hideTip() {
         tipFor = null
-        tip.visibility = android.view.View.INVISIBLE
+        tipBox.visibility = android.view.View.INVISIBLE
     }
 
     private fun placeTip() {
         val button = tipFor ?: return
-        val frame = tip.parent as? android.view.View ?: return
+        val frame = tipBox.parent as? android.view.View ?: return
         if (!button.isAttachedToWindow || frame.height == 0) return
-        tip.text = button.contentDescription
-        tip.measure(android.view.View.MeasureSpec.makeMeasureSpec(900.px, android.view.View.MeasureSpec.AT_MOST),
+        fillTip(button)
+        tipBox.measure(android.view.View.MeasureSpec.makeMeasureSpec(900.px, android.view.View.MeasureSpec.AT_MOST),
             android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED))
+        // Laid out at the size just measured, so its text is not cut to a width from an earlier, shorter text.
+        tipBox.layout(0, 0, tipBox.measuredWidth, tipBox.measuredHeight)
         val at = IntArray(2).also { button.getLocationInWindow(it) }
         val origin = IntArray(2).also { frame.getLocationInWindow(it) }
-        tip.x = (at[0] - origin[0] + button.width + 20.px).toFloat()
-        tip.y = (at[1] - origin[1] + (button.height - tip.measuredHeight) / 2).coerceIn(8.px, maxOf(8.px, frame.height - tip.measuredHeight - 8.px)).toFloat()
+        tipBox.x = (at[0] - origin[0] + button.width + 20.px).toFloat()
+        tipBox.y = (at[1] - origin[1] + (button.height - tipBox.measuredHeight) / 2).coerceIn(8.px, maxOf(8.px, frame.height - tipBox.measuredHeight - 8.px)).toFloat()
+    }
+
+    /** The page's icon names the site and gives its address; any other button just its name. */
+    private fun fillTip(button: android.view.View) {
+        val name: CharSequence
+        val url: String
+        if (button === address && siteUrl.isNotEmpty()) { name = siteName; url = siteUrl }
+        else { name = button.contentDescription ?: ""; url = "" }
+        // Only when they changed: this runs on every layout pass, and setting the same text asks for another layout.
+        if (tip.text.toString() != name.toString()) tip.text = name
+        if (tipUrl.text.toString() != url) tipUrl.text = url
+        tipUrl.visibility = if (url.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
     }
 
     private var balloonOpen = false
@@ -279,8 +311,14 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         }
         setBalloon(false, animate = false)
         // An action last used from the balloon is one press away, on More.
-        val last = buttons[lastFocused]?.takeIf { lastFocused in topRow && it.isEnabled && it.visibility == android.view.View.VISIBLE }
-        (last ?: if (lastFocused in topRow) buttons[Action.HOME] else more)?.requestFocus()
+        // Back just used and gone, because it was the first page: Forward is where it was, and the one to focus.
+        val wanted = when {
+            lastFocused == Action.BACK && buttons[Action.BACK]?.isEnabled == false -> Action.FORWARD
+            lastFocused == Action.FORWARD && buttons[Action.FORWARD]?.isEnabled == false -> Action.BACK
+            else -> lastFocused
+        }
+        val last = buttons[wanted]?.takeIf { wanted in topRow && it.isEnabled && it.visibility == android.view.View.VISIBLE }
+        (last ?: if (wanted in topRow) buttons[Action.HOME] else more)?.requestFocus()
     }
 
     /** LEFT from a line of the balloon goes back to More, where the balloon came from; zoom in goes on to zoom out. */
@@ -374,9 +412,18 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         if (!::address.isInitialized) return
         address.setPicture(app.sofabrowser.data.Favicons.get(context).drawable(s.url, s.title.ifBlank { s.address }, 96))
         address.contentDescription = s.address.ifEmpty { context.getString(R.string.search_hint) }
+        siteUrl = app.sofabrowser.browser.UrlInput.display(s.url)
+        siteName = s.title.ifBlank { app.sofabrowser.browser.Browser.hostOf(s.url)?.removePrefix("www.") ?: s.address }
         buttons[Action.ALLOW_ONCE]?.visibility = if (s.allowPending) android.view.View.VISIBLE else android.view.View.GONE
-        buttons[Action.BACK]?.setEnabledLook(s.canGoBack)
-        buttons[Action.FORWARD]?.setEnabledLook(s.canGoForward)
+        // Back and Forward take each other's place: when the one with focus goes away, the other gets the focus.
+        val back = buttons[Action.BACK]
+        val forward = buttons[Action.FORWARD]
+        val backHadFocus = back?.hasFocus() == true
+        val forwardHadFocus = forward?.hasFocus() == true
+        back?.setEnabledLook(s.canGoBack)
+        forward?.setEnabledLook(s.canGoForward)
+        if (backHadFocus && !s.canGoBack && s.canGoForward) forward?.requestFocus()
+        if (forwardHadFocus && !s.canGoForward && s.canGoBack) back?.requestFocus()
         buttons[Action.RELOAD]?.set(if (s.loading) R.drawable.ic_close else R.drawable.ic_refresh,
             context.getString(if (s.loading) R.string.stop else R.string.reload))
         buttons[Action.BOOKMARK]?.set(if (s.bookmarked) R.drawable.ic_star_filled else R.drawable.ic_star,
@@ -424,6 +471,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     private companion object {
         // Design pixels: the bar's width, the balloon's width, and the room its tail takes at the balloon's left.
         const val BAR = 96
+        // The most the label's text can be wide before it is cut short.
+        const val TIP_TEXT = 640
 
         /** The focus square of the bar's buttons; it grows by a tenth when focused, and still leaves room to the bar's edges. */
         const val BAR_SQUARE = 68
