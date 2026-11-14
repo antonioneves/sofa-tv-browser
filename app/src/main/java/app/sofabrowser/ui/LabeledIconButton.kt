@@ -99,10 +99,11 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         image.clearColorFilter()
     }
 
-    fun setEnabledLook(enabled: Boolean) {
+    /** A button that cannot be used is not shown: gone, or invisible where its neighbours must stay in place. */
+    fun setEnabledLook(enabled: Boolean, gone: Boolean = true) {
         isEnabled = enabled
         isFocusable = enabled
-        alpha = if (enabled) 1f else 0.35f
+        visibility = if (enabled) VISIBLE else if (gone) GONE else INVISIBLE
     }
 
     private fun focused(has: Boolean) {

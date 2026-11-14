@@ -133,10 +133,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         address = LabeledIconButton(context, R.drawable.ic_search, context.getString(R.string.search_hint), labelled = false, square = BAR_SQUARE) {
             dismiss(); actions.onAddress()
         }
-        // Moving about the page.
-        add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, bar)
-        add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar)
-        add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, bar, 28)
+        // More comes right after Home; the balloon opens beside it.
         more = LabeledIconButton(context, R.drawable.ic_more_widgets, context.getString(R.string.more_actions), labelled = false, square = BAR_SQUARE) {
             setBalloon(!balloonOpen, focusInside = true)
         }
@@ -146,7 +143,11 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
                 setBalloon(true, focusInside = true); true
             } else false
         }
-        place(more, bar, 0)
+        place(more, bar, 28)
+        // Moving about the page.
+        add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, bar)
+        add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar)
+        add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, bar, 28)
         // The page's icon at the foot of the bar, the way to the address and the search: the bar is too slim to spell
         // the address out, so it shows in the label while this button is focused.
         bar.addView(android.view.View(context), LinearLayout.LayoutParams(1, 0, 1f))
@@ -416,7 +417,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     private fun zoomLimit(action: Action, enabled: Boolean, other: Action) {
         val b = buttons[action] ?: return
         val focused = b.hasFocus()
-        b.setEnabledLook(enabled)
+        b.setEnabledLook(enabled, gone = false)
         if (focused && !enabled) buttons[other]?.requestFocus()
     }
 
