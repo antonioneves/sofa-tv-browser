@@ -9,7 +9,7 @@
   Pinned bookmarks no longer repeat in the Bookmarks row. Quick access you already had is kept: those tiles are now
   pinned bookmarks, in the same order. Add site, Edit and Move work as before.
 - **Bookmarks on the home screen**: the Bookmarks button leaves the top bar; the Bookmarks row on the home screen is
-  always there, shows all your bookmarks from the most visited to the least, and ends with an "All bookmarks" card that opens the list to manage them.
+  always there, shows all your bookmarks from the most visited to the least, and has an "All bookmarks" button in its header that opens the list to manage them.
 - **Type on your phone from the home screen**: a phone button next to the microphone opens the search screen with
   the QR code ready.
 - **Search opens in place**: the search screen keeps the sofa in its corner and the field where the home screen's

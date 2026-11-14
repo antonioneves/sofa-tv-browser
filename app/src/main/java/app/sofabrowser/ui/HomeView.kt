@@ -178,13 +178,16 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 }
             }
         }
-        // Bookmarks live on the home screen: all of them in a row, the most visited first, ending in a card for the list that manages them.
-        bookmarksRow = addRow(R.string.bookmarks, db.bookmarksByVisits().take(50)) { card ->
+        // Bookmarks live on the home screen: the ones not in Quick access, the most visited first, with a button in the
+        // header for the list that manages them all.
+        val allBookmarks = context.getString(R.string.all_bookmarks) to { listener.onBookmarks() }
+        val rest = db.bookmarksByVisits().take(50)
+        bookmarksRow = if (rest.isEmpty()) {
+            addHeader(R.string.bookmarks, allBookmarks)
+            null
+        } else addRow(R.string.bookmarks, rest, allBookmarks) { card ->
             card.setOnLongClickListener { card.site?.let(listener::onBookmarkMenu); true }
-        }.also { it.addView(
-            SiteCard(context, null, context.getDrawable(R.drawable.ic_bookmarks), context.getString(R.string.all_bookmarks)).apply {
-                setOnClickListener { listener.onBookmarks() }
-            }) }
+        }
 
         // A tile that was removed hands the focus to the one that took its place in the row.
         val restore = focusedUrl?.let { url -> findCard { it.site?.url == url } }
@@ -192,11 +195,26 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         (restore ?: if (focused != null || findFocus() == null) tilesRow?.getChildAt(0) else null)?.requestFocus()
     }
 
-    private fun addRow(title: Int, sites: List<Site>, extra: ((SiteCard) -> Unit)? = null): LinearLayout {
-        rows.addView(Ui.text(context, 28, Ui.p.textMid).apply {
-            text = context.getString(title)
-            setPadding(0, 32.px, 0, 18.px)
+    /** A row's title, with an optional button after it. */
+    private fun addHeader(title: Int, action: Pair<String, () -> Unit>? = null) {
+        val label = Ui.text(context, 28, Ui.p.textMid).apply { text = context.getString(title) }
+        if (action == null) {
+            rows.addView(label.apply { setPadding(0, 32.px, 0, 18.px) })
+            return
+        }
+        rows.addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 20.px, 0, 6.px)
+            addView(label)
+            addView(Ui.button(context, action.first, 24, action.second).apply {
+                setPadding(24.px, 8.px, 24.px, 8.px)
+            }, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = 24.px })
         })
+    }
+
+    private fun addRow(title: Int, sites: List<Site>, headerAction: Pair<String, () -> Unit>? = null, extra: ((SiteCard) -> Unit)? = null): LinearLayout {
+        addHeader(title, headerAction)
         val line = LinearLayout(context).apply {
             tag = title
             orientation = LinearLayout.HORIZONTAL
