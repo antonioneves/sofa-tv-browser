@@ -935,7 +935,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { openUrl(site.url) },
             TileMenu.Item(R.drawable.ic_swap_vert, R.string.move) { home.startMoving(site) },
             TileMenu.Item(R.drawable.ic_edit, R.string.edit) { editTile(site) },
-            TileMenu.Item(R.drawable.ic_star_filled, R.string.unpin) {
+            TileMenu.Item(R.drawable.ic_star_filled, R.string.remove_from_quick_access) {
                 db.unpin(site.url)
                 home.refresh(prefs.privateMode, prefs.adBlock)
             },
@@ -945,7 +945,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onBookmarkMenu(site: Site) {
         TileMenu(this, site, listOf(
             TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { openUrl(site.url) },
-            TileMenu.Item(R.drawable.ic_star, R.string.pin_to_quick_access) {
+            TileMenu.Item(R.drawable.ic_star, R.string.add_to_quick_access) {
                 db.pin(site.title, site.url)
                 home.refresh(prefs.privateMode, prefs.adBlock)
             },

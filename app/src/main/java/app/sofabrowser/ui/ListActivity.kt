@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Intent
+import android.graphics.PorterDuff
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -108,7 +109,7 @@ class ListActivity : Activity() {
                 }
             }
         } else {
-            db.bookmarks().forEach { b -> addRow(b.title, b.url, if (db.isPinned(b.url)) getString(R.string.quick_access) else null, bookmark = true) { db.removeBookmark(b.url) } }
+            db.bookmarks().forEach { b -> addRow(b.title, b.url, null, bookmark = true, starred = db.isPinned(b.url)) { db.removeBookmark(b.url) } }
         }
         empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
         list.getChildAt((0 until list.childCount).firstOrNull { list.getChildAt(it) is LinearLayout } ?: 0)
@@ -127,7 +128,7 @@ class ListActivity : Activity() {
         }
     }
 
-    private fun addRow(title: String, url: String, meta: String?, bookmark: Boolean = false, delete: () -> Unit) {
+    private fun addRow(title: String, url: String, meta: String?, bookmark: Boolean = false, starred: Boolean = false, delete: () -> Unit) {
         val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; clipChildren = false }
         val open = {
             setResult(RESULT_OK, Intent().putExtra(SearchActivity.EXTRA_URL, url))
@@ -153,7 +154,7 @@ class ListActivity : Activity() {
             if (bookmark) {
                 val pinned = db.isPinned(url)
                 items.add(TileMenu.Item(if (pinned) R.drawable.ic_star_filled else R.drawable.ic_star,
-                    if (pinned) R.string.unpin else R.string.pin_to_quick_access, togglePin))
+                    if (pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access, togglePin))
             }
             items.add(TileMenu.Item(R.drawable.ic_delete, R.string.delete, remove))
             TileMenu(this, Site(0, title.ifBlank { url }, url), items).show()
@@ -187,6 +188,12 @@ class ListActivity : Activity() {
             setPadding(0, 10.px, 0, 0)
         })
         body.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        // A star marks the bookmarks that are in Quick access.
+        if (starred) body.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_star_filled)
+            setColorFilter(Ui.BRAND, PorterDuff.Mode.SRC_IN)
+            contentDescription = getString(R.string.quick_access)
+        }, LinearLayout.LayoutParams(48.px, 48.px).apply { marginStart = 24.px })
         line.addView(body, LinearLayout.LayoutParams(0, 136.px, 1f))
         list.addView(line, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = 16.px

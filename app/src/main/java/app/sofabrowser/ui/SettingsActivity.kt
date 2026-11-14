@@ -627,7 +627,7 @@ class SettingsActivity : Activity() {
             .setPositiveButton(R.string.clear) { _, _ ->
                 WebViews.clearBrowsingData(this, null)
                 Db.get(this).clearHistory()
-                Favicons.get(this).clear()
+                Favicons.get(this).clear(keep = Db.get(this).bookmarks().mapNotNull { Favicons.key(it.url) }.toSet())
                 prefs.clearDrmAnswers()
                 app.sofabrowser.resumeStore(this).clear()
                 forgetSiteChoices(this)

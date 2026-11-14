@@ -176,8 +176,7 @@
     <string name="phone_type">Type on your phone</string>
     <string name="phone_search">Phone</string>
     <string name="all_bookmarks">All bookmarks</string>
-    <string name="pin_to_quick_access">Pin to Quick access</string>
-    <string name="unpin">Unpin</string>
+    <string name="remove_from_quick_access">Remove from Quick access</string>
     <string name="phone_step_scan">Point your phone\'s camera at the code</string>
     <string name="phone_step_type">Type a search, or pick a bookmark or a recent page</string>
     <string name="phone_step_open">It opens here on the TV</string>
