@@ -45,15 +45,15 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         text.text = label
         if (row) {
             background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, 20)
-            minimumHeight = 72.px
-            setPadding(0, 10.px, 0, 10.px)
-            addView(image, LayoutParams(40.px, 40.px, Gravity.CENTER_VERTICAL or Gravity.START).apply { marginStart = 24.px })
-            text.setTextSize(TypedValue.COMPLEX_UNIT_PX, 26.px.toFloat())
+            minimumHeight = 64.px
+            setPadding(0, 8.px, 0, 8.px)
+            addView(image, LayoutParams(36.px, 36.px, Gravity.CENTER_VERTICAL or Gravity.START).apply { marginStart = 18.px })
+            text.setTextSize(TypedValue.COMPLEX_UNIT_PX, 24.px.toFloat())
             text.maxLines = 2
             text.ellipsize = TextUtils.TruncateAt.END
             addView(text, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL).apply {
-                marginStart = 88.px
-                marginEnd = 20.px
+                marginStart = 70.px
+                marginEnd = 14.px
             })
         } else {
             // A rounded square, not a circle, like Sofa's other focused buttons.

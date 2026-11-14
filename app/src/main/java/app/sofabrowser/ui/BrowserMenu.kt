@@ -102,7 +102,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         val list = balloonList
         fun place(b: LabeledIconButton, into: LinearLayout, gap: Int) {
             if (into === list) {
-                into.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 4.px })
+                into.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 2.px })
                 return
             }
             // In the bar the name shows beside the focused button; a balloon that is open makes way for another button.
@@ -184,11 +184,11 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             clipChildren = false
             addView(balloonList)
         }
-        balloonDrawable = BalloonDrawable(sheetColor, Ui.p.fillFocused, 28.px.toFloat(), TAIL.px.toFloat(), 22.px.toFloat(), 2.px.toFloat())
+        balloonDrawable = BalloonDrawable(sheetColor, Ui.p.fillFocused, 24.px.toFloat(), TAIL.px.toFloat(), 18.px.toFloat(), 2.px.toFloat())
         balloon = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = balloonDrawable
-            setPadding(TAIL.px + 16.px, 20.px, 16.px, 20.px)
+            setPadding(TAIL.px + 12.px, 16.px, 12.px, 16.px)
             visibility = android.view.View.GONE
             addView(balloonScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
@@ -232,7 +232,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED))
         val at = IntArray(2).also { button.getLocationInWindow(it) }
         val origin = IntArray(2).also { frame.getLocationInWindow(it) }
-        tip.x = (at[0] - origin[0] + button.width + 28.px).toFloat()
+        tip.x = (at[0] - origin[0] + button.width + 20.px).toFloat()
         tip.y = (at[1] - origin[1] + (button.height - tip.measuredHeight) / 2).coerceIn(8.px, maxOf(8.px, frame.height - tip.measuredHeight - 8.px)).toFloat()
     }
 
@@ -360,8 +360,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
     private companion object {
         // Design pixels: the bar's width, the balloon's width, and the room its tail takes at the balloon's left.
-        const val BAR = 136
-        const val BALLOON = 600
-        const val TAIL = 26
+        const val BAR = 120
+        const val BALLOON = 470
+        const val TAIL = 22
     }
 }
