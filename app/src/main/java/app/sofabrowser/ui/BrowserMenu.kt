@@ -113,7 +113,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             }
             // In the bar the name shows beside the focused button; a balloon that is open makes way for another button.
             b.onFocused = b.onFocused.let { was -> { was?.invoke(); if (b !== more && balloonOpen) setBalloon(false); showTip(b) } }
-            into.addView(b, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            into.addView(b, LinearLayout.LayoutParams((BAR - 4).px, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = gap.px
             })
         }
@@ -421,7 +421,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
     private companion object {
         // Design pixels: the bar's width, the balloon's width, and the room its tail takes at the balloon's left.
-        const val BAR = 108
+        const val BAR = 96
         const val BALLOON = 470
         const val TAIL = 22
     }
