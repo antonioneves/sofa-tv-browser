@@ -68,7 +68,6 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     private lateinit var address: LabeledIconButton
     /** The name of the focused button, floating beside it. */
     private lateinit var tip: TextView
-    private lateinit var tipDrawable: BalloonDrawable
     private var tipFor: android.view.View? = null
     private lateinit var zoomLabel: TextView
     private lateinit var more: LabeledIconButton
@@ -218,10 +217,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.MIDDLE
             maxWidth = 900.px
-            // The same speech balloon as the More menu, small, its tail pointing back at the button.
-            tipDrawable = BalloonDrawable(sheetColor, Ui.p.fillFocused, 18.px.toFloat(), TIP_TAIL.px.toFloat(), 10.px.toFloat(), 2.px.toFloat())
-            background = tipDrawable
-            setPadding(TIP_TAIL.px + 20.px, 12.px, 22.px, 12.px)
+            background = Ui.rounded(sheetColor, 12)
+            setPadding(24.px, 14.px, 24.px, 14.px)
             visibility = android.view.View.INVISIBLE
         }
         setContentView(android.widget.FrameLayout(context).apply {
@@ -257,8 +254,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED))
         val at = IntArray(2).also { button.getLocationInWindow(it) }
         val origin = IntArray(2).also { frame.getLocationInWindow(it) }
-        tip.x = (at[0] - origin[0] + button.width + 6.px).toFloat()
-        tipDrawable.tailY = tip.measuredHeight / 2f
+        tip.x = (at[0] - origin[0] + button.width + 20.px).toFloat()
         tip.y = (at[1] - origin[1] + (button.height - tip.measuredHeight) / 2).coerceIn(8.px, maxOf(8.px, frame.height - tip.measuredHeight - 8.px)).toFloat()
     }
 
@@ -422,6 +418,5 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         const val BAR = 108
         const val BALLOON = 470
         const val TAIL = 22
-        const val TIP_TAIL = 14
     }
 }
