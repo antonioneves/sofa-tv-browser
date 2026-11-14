@@ -97,7 +97,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             gravity = Gravity.CENTER_HORIZONTAL
             // Square corners: the bar runs from the top of the screen to its foot.
             setBackgroundColor(sheetColor)
-            setPadding(0, 48.px, 0, 48.px)
+            setPadding(0, 28.px, 0, 28.px)
             // The focused button's scaled square may reach into the padding.
             clipChildren = false
             clipToPadding = false

@@ -82,6 +82,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
     }
 
     fun set(icon: Int, label: String) {
+        if (plain && !row) image.layoutParams = LayoutParams(48.px, 48.px, Gravity.CENTER)
         plain = false
         image.setImageResource(icon)
         text.text = label
@@ -92,6 +93,8 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
     /** A picture as it is, a site's icon, in place of a tinted icon. */
     fun setPicture(picture: android.graphics.drawable.Drawable) {
         plain = true
+        // Fills nearly all of the focus square, where a drawn icon keeps room around it.
+        if (!row) image.layoutParams = LayoutParams(68.px, 68.px, Gravity.CENTER)
         image.setImageDrawable(picture)
         image.clearColorFilter()
     }

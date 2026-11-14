@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **The page's icon in the menu bar**: the magnifier at the top of the browse menu's slim bar is gone. The page's icon (or its coloured letter tile, like a bookmark's) sits at the bottom of the bar instead, and opens the search screen, with the page's address, when pressed.
+  The icon fills almost all of its focus square, and the bar's top and bottom margins are a little smaller.
 - **Loading bar at the bottom**: the orange page loading bar runs along the bottom edge of the page instead of the top.
 - **A cross to close the phone card**: the "Type on your phone" card has a close cross in its top right corner, in
   place of the Close button at the bottom. The cross keeps the focus while the card is open: the arrows move nothing.
