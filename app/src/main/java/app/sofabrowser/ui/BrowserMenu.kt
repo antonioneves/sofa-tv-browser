@@ -4,7 +4,6 @@ import android.app.Dialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.Gravity
@@ -88,11 +87,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         val bar = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            background = GradientDrawable().apply {
-                setColor(sheetColor)
-                // Rounded where it faces the page: the top right and bottom right corners.
-                cornerRadii = FloatArray(8) { if (it in 2..5) 16.px.toFloat() else 0f }
-            }
+            // Square corners: the bar runs from the top of the screen to its foot.
+            setBackgroundColor(sheetColor)
             setPadding(0, 48.px, 0, 48.px)
             // The focused button's scaled square may reach into the padding.
             clipChildren = false
@@ -360,7 +356,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
     private companion object {
         // Design pixels: the bar's width, the balloon's width, and the room its tail takes at the balloon's left.
-        const val BAR = 120
+        const val BAR = 108
         const val BALLOON = 470
         const val TAIL = 22
     }
