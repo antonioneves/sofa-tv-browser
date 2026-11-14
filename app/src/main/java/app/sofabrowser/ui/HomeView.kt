@@ -176,8 +176,8 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 }
             }
         }
-        // Bookmarks live on the home screen: all of them in a row, ending in a card for the list that manages them.
-        addRow(R.string.bookmarks, db.bookmarks().take(50)).addView(
+        // Bookmarks live on the home screen: all of them in a row, the most visited first, ending in a card for the list that manages them.
+        addRow(R.string.bookmarks, db.bookmarksByVisits().take(50)).addView(
             SiteCard(context, null, context.getDrawable(R.drawable.ic_bookmarks), context.getString(R.string.all_bookmarks)).apply {
                 setOnClickListener { listener.onBookmarks() }
             })

@@ -100,6 +100,13 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         Site(it.getLong(0), it.getString(1), it.getString(2))
     }
 
+    /** Bookmarks from the most visited to the least, by how often the page is in the history; ties newest first. */
+    fun bookmarksByVisits(): List<Site> = query(
+        "SELECT b.id, b.title, b.url FROM bookmarks b LEFT JOIN history h ON h.url = b.url " +
+            "GROUP BY b.id ORDER BY COUNT(h.id) DESC, b.created DESC") {
+        Site(it.getLong(0), it.getString(1), it.getString(2))
+    }
+
     fun isBookmarked(url: String): Boolean =
         readableDatabase.rawQuery("SELECT 1 FROM bookmarks WHERE url = ?", arrayOf(url)).use { it.moveToFirst() }
 
