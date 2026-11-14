@@ -37,6 +37,9 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
     data class State(
         val address: String,
+        /** The page's address and title: its icon, at the foot of the bar. */
+        val url: String,
+        val title: String,
         val canGoBack: Boolean,
         val canGoForward: Boolean,
         val loading: Boolean,
@@ -126,11 +129,9 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // The sofa is Sofa's home: orange at rest, like on the start screen.
         add(Action.HOME, R.drawable.ic_sofa, R.string.home, bar, 28)
         buttons[Action.HOME]?.accent = Ui.BRAND
-        // The address: the bar is too slim to spell it out, so it shows in the label while this button is focused.
         address = LabeledIconButton(context, R.drawable.ic_search, context.getString(R.string.search_hint), labelled = false) {
             dismiss(); actions.onAddress()
         }
-        place(address, bar, 28)
         // Moving about the page.
         add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, bar)
         add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar)
@@ -145,6 +146,10 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             } else false
         }
         place(more, bar, 0)
+        // The page's icon at the foot of the bar, the way to the address and the search: the bar is too slim to spell
+        // the address out, so it shows in the label while this button is focused.
+        bar.addView(android.view.View(context), LinearLayout.LayoutParams(1, 0, 1f))
+        place(address, bar, 0)
 
         // Two groups. First the toggles: they change how the page or the site is shown, the balloon stays open and
         // the line shows the new state. Then the actions: each does one thing and closes the menu.
@@ -365,7 +370,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
     fun update(s: State) {
         if (!::address.isInitialized) return
-        address.set(R.drawable.ic_search, s.address.ifEmpty { context.getString(R.string.search_hint) })
+        address.setPicture(app.sofabrowser.data.Favicons.get(context).drawable(s.url, s.title.ifBlank { s.address }, 96))
+        address.contentDescription = s.address.ifEmpty { context.getString(R.string.search_hint) }
         buttons[Action.ALLOW_ONCE]?.visibility = if (s.allowPending) android.view.View.VISIBLE else android.view.View.GONE
         buttons[Action.BACK]?.setEnabledLook(s.canGoBack)
         buttons[Action.FORWARD]?.setEnabledLook(s.canGoForward)

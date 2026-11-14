@@ -611,6 +611,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         val host = Browser.hostOf(url)
         return BrowserMenu.State(
             address = addressText(url),
+            url = url,
+            title = web?.title.orEmpty(),
             canGoBack = web?.canGoBack() == true,
             canGoForward = web?.canGoForward() == true,
             loading = loading,
@@ -1094,6 +1096,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     override fun onIcon(url: String, icon: Bitmap) {
         if (!browser.privateMode) Favicons.get(this).save(url, icon)
+        menu?.takeIf { it.isShowing }?.update(menuState())
     }
 
     override fun onEnterFullscreen(view: View, callback: WebChromeClient.CustomViewCallback) {

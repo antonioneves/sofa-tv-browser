@@ -31,6 +31,8 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
     var accent: Int? = null
         set(value) { field = value; tint(hasFocus()) }
 
+    private var plain = false
+
     /** Called when the button gains focus. */
     var onFocused: (() -> Unit)? = null
 
@@ -80,10 +82,18 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
     }
 
     fun set(icon: Int, label: String) {
+        plain = false
         image.setImageResource(icon)
         text.text = label
         contentDescription = label
         tint(hasFocus())
+    }
+
+    /** A picture as it is, a site's icon, in place of a tinted icon. */
+    fun setPicture(picture: android.graphics.drawable.Drawable) {
+        plain = true
+        image.setImageDrawable(picture)
+        image.clearColorFilter()
     }
 
     fun setEnabledLook(enabled: Boolean) {
@@ -103,7 +113,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         Ui.animateScale(circle, if (has) 1.12f else 1f, has)
     }
 
-    private fun tint(focused: Boolean) = image.setColorFilter(if (focused) Ui.p.onFocus else accent ?: Ui.p.text)
+    private fun tint(focused: Boolean) { if (!plain) image.setColorFilter(if (focused) Ui.p.onFocus else accent ?: Ui.p.text) }
 
     companion object {
         const val WIDTH = 104
