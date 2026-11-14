@@ -114,13 +114,14 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             // In the bar the name shows beside the focused button; a balloon that is open makes way for another button.
             b.onFocused = b.onFocused.let { was -> { was?.invoke(); if (b !== more && balloonOpen) setBalloon(false); showTip(b) } }
             into.addView(b, LinearLayout.LayoutParams((BAR - 4).px, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = gap.px
+                // The squares are smaller than they were, the spacing from one to the next is not.
+                bottomMargin = gap.px + (80 - BAR_SQUARE).px
             })
         }
         fun add(action: Action, icon: Int, label: Int, into: LinearLayout = list, gap: Int = 16) {
             // In the bar the icons speak for themselves; in the balloon each action is a line with its name.
             val inList = into === list
-            val b = LabeledIconButton(context, icon, context.getString(label), labelled = false, row = inList) { actions.onAction(action) }
+            val b = LabeledIconButton(context, icon, context.getString(label), labelled = false, row = inList, square = BAR_SQUARE) { actions.onAction(action) }
             b.onFocused = { lastFocused = action; if (inList) hideTip() }
             buttons[action] = b
             place(b, into, gap)
@@ -129,14 +130,14 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // The sofa is Sofa's home: orange at rest, like on the start screen.
         add(Action.HOME, R.drawable.ic_sofa, R.string.home, bar, 28)
         buttons[Action.HOME]?.accent = Ui.BRAND
-        address = LabeledIconButton(context, R.drawable.ic_search, context.getString(R.string.search_hint), labelled = false) {
+        address = LabeledIconButton(context, R.drawable.ic_search, context.getString(R.string.search_hint), labelled = false, square = BAR_SQUARE) {
             dismiss(); actions.onAddress()
         }
         // Moving about the page.
         add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, bar)
         add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar)
         add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, bar, 28)
-        more = LabeledIconButton(context, R.drawable.ic_chevron_right, context.getString(R.string.more_actions), labelled = false) {
+        more = LabeledIconButton(context, R.drawable.ic_chevron_right, context.getString(R.string.more_actions), labelled = false, square = BAR_SQUARE) {
             setBalloon(!balloonOpen, focusInside = true)
         }
         // Right on More opens the balloon, or goes into it when it is open, as it sits in that direction.
@@ -422,6 +423,9 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     private companion object {
         // Design pixels: the bar's width, the balloon's width, and the room its tail takes at the balloon's left.
         const val BAR = 96
+
+        /** The focus square of the bar's buttons; it grows by a tenth when focused, and still leaves room to the bar's edges. */
+        const val BAR_SQUARE = 68
         const val BALLOON = 470
         const val TAIL = 22
     }

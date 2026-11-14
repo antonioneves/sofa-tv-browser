@@ -22,7 +22,7 @@ import android.widget.TextView
  */
 @SuppressLint("ViewConstructor")
 class LabeledIconButton(context: Context, icon: Int, label: String, private val labelled: Boolean = true,
-    private val row: Boolean = false, iconOnly: Boolean = false, onClick: () -> Unit) : FrameLayout(context) {
+    private val row: Boolean = false, iconOnly: Boolean = false, private val square: Int = 80, onClick: () -> Unit) : FrameLayout(context) {
     private val circle = FrameLayout(context)
     private val image = ImageView(context)
     private val text: TextView = Ui.text(context, 24, Ui.p.text)
@@ -67,7 +67,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
             circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, 24)
             circle.isDuplicateParentStateEnabled = true
             circle.addView(image, LayoutParams(48.px, 48.px, Gravity.CENTER))
-            addView(circle, LayoutParams(80.px, 80.px, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+            addView(circle, LayoutParams(square.px, square.px, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
 
             text.gravity = Gravity.CENTER_HORIZONTAL
             text.maxLines = 1
@@ -75,7 +75,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
             addView(text, LayoutParams(LABEL_WIDTH.px, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
                 topMargin = 92.px
             })
-            layoutParams = LayoutParams(WIDTH.px, if (labelled) 128.px else 80.px)
+            layoutParams = LayoutParams(WIDTH.px, if (labelled) 128.px else square.px)
         }
         tint(false)
         setOnFocusChangeListener { _, has -> focused(has) }
@@ -90,11 +90,11 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         tint(hasFocus())
     }
 
-    /** A picture as it is, a site's icon, in place of a tinted icon. */
+    /** A picture as it is, a site's icon, in place of a tinted icon. It fills the focus square but for a thin edge. */
     fun setPicture(picture: android.graphics.drawable.Drawable) {
         plain = true
         // Fills nearly all of the focus square, where a drawn icon keeps room around it.
-        if (!row) image.layoutParams = LayoutParams(68.px, 68.px, Gravity.CENTER)
+        if (!row) image.layoutParams = LayoutParams((square - 8).px, (square - 8).px, Gravity.CENTER)
         image.setImageDrawable(picture)
         image.clearColorFilter()
     }
