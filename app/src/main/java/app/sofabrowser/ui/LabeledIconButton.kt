@@ -35,7 +35,8 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         contentDescription = label
         setOnClickListener { if (isEnabled) onClick() }
 
-        circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, 40)
+        // A rounded square, not a circle, like Sofa's other focused buttons.
+        circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, 24)
         circle.isDuplicateParentStateEnabled = true
         image.setImageResource(icon)
         circle.addView(image, LayoutParams(48.px, 48.px, Gravity.CENTER))
