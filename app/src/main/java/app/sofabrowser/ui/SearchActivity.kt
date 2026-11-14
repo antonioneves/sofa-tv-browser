@@ -366,7 +366,7 @@ class SearchActivity : Activity() {
             @Suppress("DEPRECATION")
             startActivityForResult(i, REQ_VOICE)
         } catch (e: Exception) {
-            Toast.makeText(this, R.string.voice_unavailable, Toast.LENGTH_LONG).show()
+            SofaToast.makeText(this, R.string.voice_unavailable, Toast.LENGTH_LONG).show()
             showKeyboard()
         }
     }
@@ -411,8 +411,8 @@ class SearchActivity : Activity() {
         val link = PhoneLink(this, onText = { text ->
             dialog?.dismiss()
             submit(text)
-        }, onImported = { _, message -> Toast.makeText(this, message, Toast.LENGTH_LONG).show() })
-        val address = link.start(this) ?: return Toast.makeText(this, R.string.phone_no_network, Toast.LENGTH_LONG).show()
+        }, onImported = { _, message -> SofaToast.makeText(this, message, Toast.LENGTH_LONG).show() })
+        val address = link.start(this) ?: return SofaToast.makeText(this, R.string.phone_no_network, Toast.LENGTH_LONG).show()
         phoneLink?.stop()
         phoneLink = link
         dialog = Ui.dialog(this)

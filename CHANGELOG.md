@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **The orange sofa in messages**: the small messages Sofa shows at the bottom of the screen carry the orange sofa
+  in front of the text, instead of the app icon Android draws on them.
 - **Bookmark and Quick access in the menu**: on a page that is in Quick access the Bookmark line reads "Bookmarked ·
   in Quick access", and turning it off says "Removed from bookmarks and Quick access", as a pinned page is a bookmark.
 - **The menu is a bar on the left**: the menu on the Back key is now a slim vertical bar at the left edge of the

@@ -72,10 +72,10 @@ class BookmarkTransfer(private val activity: Activity, private val onUrl: (Strin
             val url = UrlInput.resolve(text, Prefs(activity).searchEngine, searchShortcuts(activity))
             if (url.isNotEmpty()) onUrl(url)
         }, onImported = { added, message ->
-            Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
+            SofaToast.makeText(activity, message, Toast.LENGTH_LONG).show()
             if (added > 0) onChanged()
         }, onChanged = { onChanged() })
-        val address = link.start(activity) ?: return Toast.makeText(activity, R.string.phone_no_network, Toast.LENGTH_LONG).show()
+        val address = link.start(activity) ?: return SofaToast.makeText(activity, R.string.phone_no_network, Toast.LENGTH_LONG).show()
         phoneLink?.stop()
         phoneLink = link
         Ui.dialog(activity)
@@ -116,7 +116,7 @@ class BookmarkTransfer(private val activity: Activity, private val onUrl: (Strin
             }
             main.post {
                 if (activity.isDestroyed) return@post
-                Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
+                SofaToast.makeText(activity, message, Toast.LENGTH_LONG).show()
                 if (added > 0) onChanged()
             }
         }

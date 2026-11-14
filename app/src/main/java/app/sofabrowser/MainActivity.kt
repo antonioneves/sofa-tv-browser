@@ -93,6 +93,7 @@ import app.sofabrowser.ui.ListActivity
 import app.sofabrowser.ui.Palette
 import app.sofabrowser.ui.SearchActivity
 import app.sofabrowser.ui.SettingsActivity
+import app.sofabrowser.ui.SofaToast
 import app.sofabrowser.shortcut.TvShortcut
 import app.sofabrowser.ui.TileMenu
 import app.sofabrowser.ui.SetupActivity
@@ -519,7 +520,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         if (web?.url != null) { showBrowser(); return }
         val now = SystemClock.uptimeMillis()
         if (now - lastBackOnHome < 2500) finish()
-        else Toast.makeText(this, R.string.back_again_to_exit, Toast.LENGTH_SHORT).show()
+        else SofaToast.makeText(this, R.string.back_again_to_exit, Toast.LENGTH_SHORT).show()
         lastBackOnHome = now
     }
 
@@ -2254,9 +2255,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         addView(v, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
-    private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()
+    private fun toast(res: Int) = SofaToast.makeText(this, res, Toast.LENGTH_SHORT).show()
 
-    private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+    private fun toast(text: String) = SofaToast.makeText(this, text, Toast.LENGTH_SHORT).show()
 
     companion object {
         /** Set by a TV home screen tile (the :shortcut template) when it opens its page in Sofa. */

@@ -128,7 +128,7 @@ class PinActivity : Activity() {
                 if (pin != chosen) { step = Step.CHOOSE; show(getString(R.string.pin_mismatch)) }
                 else work({ SpacePin.set(this, pin); true }) {
                     if (mode == MODE_CHANGE) {
-                        android.widget.Toast.makeText(this, R.string.pin_changed, android.widget.Toast.LENGTH_SHORT).show()
+                        SofaToast.makeText(this, R.string.pin_changed, android.widget.Toast.LENGTH_SHORT).show()
                     }
                     done()
                 }

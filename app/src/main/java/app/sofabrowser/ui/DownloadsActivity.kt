@@ -107,7 +107,7 @@ class DownloadsActivity : Activity() {
         }
     }
 
-    private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()
+    private fun toast(res: Int) = SofaToast.makeText(this, res, Toast.LENGTH_SHORT).show()
 
     private inner class Row(initial: Download) : LinearLayout(this@DownloadsActivity) {
         val body = LinearLayout(context)
