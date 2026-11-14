@@ -122,7 +122,6 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         adBlockButton = button(R.drawable.ic_shield, R.string.ad_blocker) { listener.onToggleAdBlock() }
         downloadsButton = button(R.drawable.ic_download, R.string.downloads) { listener.onDownloads() }
         listOf(
-            button(R.drawable.ic_bookmarks, R.string.bookmarks) { listener.onBookmarks() },
             button(R.drawable.ic_history, R.string.history) { listener.onHistory() },
             downloadsButton,
             privateButton,
@@ -149,10 +148,6 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         background = Ui.background(privateMode)
         micButton.visibility = if (prefs.voiceSearch) VISIBLE else GONE
         spaceButton.visibility = if (app.sofabrowser.Space.offered(context)) VISIBLE else GONE
-        // With the Private Space button there is one more icon, so the search pill gives up some width to keep them all on screen.
-        searchPill.layoutParams = (searchPill.layoutParams as LinearLayout.LayoutParams).apply {
-            width = (if (spaceButton.visibility == VISIBLE) 640 else 760).px
-        }
         privateButton.set(if (privateMode) R.drawable.ic_private_filled else R.drawable.ic_private,
             context.getString(if (privateMode) R.string.private_mode_on else R.string.private_mode_off))
         adBlockButton.set(if (adBlock) R.drawable.ic_shield_filled else R.drawable.ic_shield,
@@ -181,7 +176,11 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 }
             }
         }
-        db.bookmarks().take(12).takeIf { it.isNotEmpty() }?.let { addRow(R.string.bookmarks, it) }
+        // Bookmarks live on the home screen: all of them in a row, ending in a card for the list that manages them.
+        addRow(R.string.bookmarks, db.bookmarks().take(50)).addView(
+            SiteCard(context, null, context.getDrawable(R.drawable.ic_bookmarks), context.getString(R.string.all_bookmarks)).apply {
+                setOnClickListener { listener.onBookmarks() }
+            })
 
         // A tile that was removed hands the focus to the one that took its place in the row.
         val restore = focusedUrl?.let { url -> findCard { it.site?.url == url } }

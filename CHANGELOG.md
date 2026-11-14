@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Bookmarks on the home screen**: the Bookmarks button leaves the top bar; the Bookmarks row on the home screen is
+  always there, shows all your bookmarks, and ends with an "All bookmarks" card that opens the list to manage them.
 - **Type on your phone from the home screen**: a phone button next to the microphone opens the search screen with
   the QR code ready.
 - **Search opens in place**: the search screen keeps the sofa in its corner and the field where the home screen's
