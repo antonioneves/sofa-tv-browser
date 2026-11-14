@@ -248,6 +248,7 @@
     <string name="zoom_out">Zoom out</string>
     <string name="percent">%d%%</string>
     <string name="link_blocked">Sofa doesn\'t open other apps from web pages</string>
+    <string name="page_keeps_crashing">This page keeps crashing, so Sofa stopped loading it again</string>
     <string name="popup_blocked">Pop-up blocked</string>
     <string name="popup_blocked_allow">Blocked a pop-up. To open it, use Allow once in the menu.</string>
     <string name="redirect_blocked_allow">Blocked a redirect. To follow it, use Allow once in the menu.</string>

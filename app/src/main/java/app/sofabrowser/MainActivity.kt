@@ -41,6 +41,7 @@ import android.widget.Toast
 import androidx.webkit.WebViewFeature
 import app.sofabrowser.adblock.Sites
 import app.sofabrowser.browser.Browser
+import app.sofabrowser.browser.CrashLoop
 import app.sofabrowser.browser.Reader
 import app.sofabrowser.browser.SignInRejected
 import app.sofabrowser.browser.Translator
@@ -2127,11 +2128,21 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     override fun onRedirectBlocked() = toast(R.string.redirect_blocked_allow)
 
+    private val crashLoop = CrashLoop()
+
     override fun onRendererGone() {
         val url = web?.url
         browser.destroy()
         cursor.removeAllViews()
-        if (url != null) openUrl(url) else showHome()
+        when {
+            url == null -> showHome()
+            crashLoop.reload() -> openUrl(url)
+            // The page killed its renderer again right after being loaded again: once more would only repeat it.
+            else -> {
+                SofaToast.makeText(this, R.string.page_keeps_crashing, Toast.LENGTH_LONG).show()
+                if (standalone) finish() else showHome()
+            }
+        }
     }
 
     // Lifecycle
