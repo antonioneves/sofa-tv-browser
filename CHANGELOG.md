@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Bookmark and Quick access in the menu**: on a page that is in Quick access the Bookmark line reads "Bookmarked ·
+  in Quick access", and turning it off says "Removed from bookmarks and Quick access", as a pinned page is a bookmark.
 - **The menu is a bar on the left**: the menu on the Back key is now a slim vertical bar at the left edge of the
   screen, with Home, the address, back, forward, reload and More one under the other. More opens a speech
   balloon beside it with all the other actions, each with its name, and at the top a full-width line with the zoom buttons; the toggles (zoom, Watch by itself, Translate, Reader view, Bookmark, Quick access, Ad block, Pointer) come first and keep the menu open, a line separates them from the single actions, which close it. Left from the balloon goes back to More; the Back key or More closes the balloon. The menu's back and forward buttons close the menu, and so does a tap outside it. The name of the button you are on shows in a small label next to it; on the

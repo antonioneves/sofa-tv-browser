@@ -107,8 +107,10 @@
     <string name="stop">Stop</string>
     <string name="bookmark">Bookmark</string>
     <string name="bookmarked">Bookmarked</string>
+    <string name="bookmarked_pinned">Bookmarked · in Quick access</string>
     <string name="bookmark_added">Bookmark added</string>
     <string name="bookmark_removed">Bookmark removed</string>
+    <string name="bookmark_removed_pinned">Removed from bookmarks and Quick access</string>
     <string name="private_space">Private space</string>
     <string name="private_space_sub">Shows a button for a second Sofa behind a PIN, with its own bookmarks, history, settings, logins and downloads. Turning this off hides the button and keeps what\'s inside.</string>
     <string name="private_space_leave">Leave private space</string>

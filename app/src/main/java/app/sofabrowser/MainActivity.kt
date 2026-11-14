@@ -677,8 +677,14 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 else toast(if (browser.startPicking()) R.string.hide_parts_toast else R.string.hide_parts_unsupported)
             }
             BrowserMenu.Action.BOOKMARK -> if (Browser.isWebUrl(url)) {
+                // A pinned page is a bookmark: taking the bookmark away takes it out of Quick access too, and says so.
+                val wasPinned = db.isPinned(url)
                 if (db.isBookmarked(url)) db.removeBookmark(url) else db.addBookmark(w.title.orEmpty(), url)
-                toast(if (db.isBookmarked(url)) R.string.bookmark_added else R.string.bookmark_removed)
+                toast(when {
+                    db.isBookmarked(url) -> R.string.bookmark_added
+                    wasPinned -> R.string.bookmark_removed_pinned
+                    else -> R.string.bookmark_removed
+                })
             }
             // A toggle: the page is in Quick access, or it is not. The menu stays open and the line shows which.
             BrowserMenu.Action.PIN -> if (Browser.isWebUrl(url)) {

@@ -372,7 +372,11 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         buttons[Action.RELOAD]?.set(if (s.loading) R.drawable.ic_close else R.drawable.ic_refresh,
             context.getString(if (s.loading) R.string.stop else R.string.reload))
         buttons[Action.BOOKMARK]?.set(if (s.bookmarked) R.drawable.ic_star_filled else R.drawable.ic_star,
-            context.getString(if (s.bookmarked) R.string.bookmarked else R.string.bookmark))
+            context.getString(when {
+                s.bookmarked && s.pinned -> R.string.bookmarked_pinned
+                s.bookmarked -> R.string.bookmarked
+                else -> R.string.bookmark
+            }))
         buttons[Action.PIN]?.set(if (s.pinned) R.drawable.ic_close else R.drawable.ic_add,
             context.getString(if (s.pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access))
         buttons[Action.ADBLOCK]?.set(if (s.adBlockOn) R.drawable.ic_shield_filled else R.drawable.ic_shield,
