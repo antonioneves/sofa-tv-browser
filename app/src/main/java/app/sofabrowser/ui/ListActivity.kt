@@ -1,8 +1,10 @@
 package app.sofabrowser.ui
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.graphics.PorterDuff
 import android.os.Bundle
 import android.text.TextUtils
 import android.text.format.DateUtils
@@ -12,6 +14,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
 import app.sofabrowser.R
 import app.sofabrowser.browser.UrlInput
 import app.sofabrowser.data.Db
@@ -29,6 +32,16 @@ class ListActivity : Activity() {
     private lateinit var list: LinearLayout
     private lateinit var empty: View
 
+    // Selecting bookmarks to delete several at once: OK ticks a row instead of opening it.
+    private var selecting = false
+    private val selected = LinkedHashSet<String>()
+    private val checks = HashMap<String, ImageView>()
+    private lateinit var selectButton: TextView
+    private lateinit var selectAllButton: TextView
+    private lateinit var deleteSelectedButton: TextView
+    private lateinit var cancelButton: TextView
+    private lateinit var deleteAllButton: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Ui.init(this)
@@ -42,7 +55,18 @@ class ListActivity : Activity() {
         header.addView(Ui.text(this, 56, Ui.p.text, bold = true).apply {
             text = getString(if (history) R.string.history else R.string.bookmarks)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(headerButton(R.string.delete_all) { confirmDeleteAll() })
+        if (!history) {
+            selectButton = headerButton(R.string.select) { setSelecting(true) }
+            selectAllButton = headerButton(R.string.select_all) { selectAll() }
+            deleteSelectedButton = headerButton(R.string.delete_selected) { confirmDeleteSelected() }
+            cancelButton = headerButton(android.R.string.cancel) { setSelecting(false) }
+            listOf(selectButton, selectAllButton, deleteSelectedButton, cancelButton).forEach {
+                header.addView(it, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    .apply { marginEnd = 16.px })
+            }
+        }
+        deleteAllButton = headerButton(R.string.delete_all) { confirmDeleteAll() }
+        header.addView(deleteAllButton)
         root.addView(header)
 
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24.px, 24.px, 24.px, 72.px); clipChildren = false; clipToPadding = false }
@@ -80,6 +104,7 @@ class ListActivity : Activity() {
 
     private fun load() {
         list.removeAllViews()
+        checks.clear()
         if (history) {
             var lastHeader: String? = null
             db.history().forEach { h ->
@@ -103,6 +128,8 @@ class ListActivity : Activity() {
             rest.forEach { b -> addRow(b.title, b.url, null, bookmark = true) { db.removeBookmark(b.url) } }
         }
         empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
+        selected.retainAll(checks.keys)
+        updateHeader()
         list.getChildAt((0 until list.childCount).firstOrNull { list.getChildAt(it) is LinearLayout } ?: 0)
             ?.let { (it as? LinearLayout)?.getChildAt(0)?.requestFocus() }
     }
@@ -174,7 +201,7 @@ class ListActivity : Activity() {
             background = Ui.fillSelector(Ui.p.fill, Ui.p.fillFocused, 16)
             foreground = Ui.focusBorder(16)
             setPadding(40.px, 0, 40.px, 0)
-            setOnClickListener { open() }
+            setOnClickListener { if (bookmark && selecting) toggle(url) else open() }
             // Holding OK, or Menu, opens the card's options.
             setOnLongClickListener { menu(); true }
             setOnKeyListener { _, keyCode, event ->
@@ -183,6 +210,12 @@ class ListActivity : Activity() {
                 true
             }
             setOnFocusChangeListener { v, has -> Ui.animateScale(v, if (has) 1.02f else 1f, has) }
+        }
+        if (bookmark) {
+            val box = ImageView(this).apply { visibility = View.GONE }
+            checks[url] = box
+            body.addView(box, LinearLayout.LayoutParams(48.px, 48.px).apply { marginEnd = 32.px })
+            updateCheck(url)
         }
         body.addView(ImageView(this).apply { setImageDrawable(Favicons.get(this@ListActivity).drawable(url, title, 128)) },
             LinearLayout.LayoutParams(64.px, 64.px).apply { marginEnd = 32.px })
@@ -199,6 +232,72 @@ class ListActivity : Activity() {
         list.addView(line, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = 16.px
         })
+    }
+
+    private fun setSelecting(on: Boolean) {
+        selecting = on
+        if (!on) selected.clear()
+        checks.keys.forEach(::updateCheck)
+        updateHeader()
+        if (on) focusRowNear(0) else selectButton.requestFocus()
+    }
+
+    private fun toggle(url: String) {
+        if (!selected.add(url)) selected.remove(url)
+        updateCheck(url)
+        updateHeader()
+    }
+
+    private fun selectAll() {
+        selected.addAll(checks.keys)
+        checks.keys.forEach(::updateCheck)
+        updateHeader()
+    }
+
+    private fun updateCheck(url: String) {
+        val box = checks[url] ?: return
+        val on = url in selected
+        box.visibility = if (selecting) View.VISIBLE else View.GONE
+        box.setImageResource(if (on) R.drawable.ic_check_box else R.drawable.ic_check_box_outline_blank)
+        box.setColorFilter(if (on) Ui.BRAND else Ui.p.textMid, PorterDuff.Mode.SRC_IN)
+    }
+
+    /** The buttons of the bookmarks screen: Select and Delete all, or while selecting Select all, Delete selected and Cancel. */
+    private fun updateHeader() {
+        if (history) return
+        fun show(v: View, on: Boolean) { v.visibility = if (on) View.VISIBLE else View.GONE }
+        show(selectButton, !selecting && list.childCount > 0)
+        show(deleteAllButton, !selecting)
+        show(selectAllButton, selecting)
+        show(deleteSelectedButton, selecting)
+        show(cancelButton, selecting)
+        deleteSelectedButton.text = getString(R.string.delete_selected, selected.size)
+        deleteSelectedButton.alpha = if (selected.isEmpty()) 0.5f else 1f
+    }
+
+    private fun confirmDeleteSelected() {
+        val n = selected.size
+        if (n == 0) return
+        Ui.dialog(this)
+            .setMessage(resources.getQuantityString(R.plurals.confirm_delete_bookmarks, n, n))
+            .setPositiveButton(R.string.delete) { _, _ ->
+                selected.forEach { db.removeBookmark(it) }
+                selected.clear()
+                selecting = false
+                load()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    // BACK while selecting only stops selecting (TV remotes send BACK as a key; see the manifest).
+    @SuppressLint("GestureBackNavigation")
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK && selecting) {
+            setSelecting(false)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     private fun confirmDeleteAll() {

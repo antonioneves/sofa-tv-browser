@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Select bookmarks to delete**: "Select" in the bookmarks list lets you tick bookmarks with OK, "Select all", and
+  "Delete selected" removes them after you confirm. Back or Cancel leaves selecting.
 - **Bookmarks in the settings**: under Browsing, "Bookmarks" opens the list to manage them, and "Import or export
   bookmarks" is there too. The Import or export button leaves the bookmarks list, which keeps Delete all.
 - **Icons stay with bookmarks**: a bookmarked site keeps its icon, when it has one, even after you clear browsing

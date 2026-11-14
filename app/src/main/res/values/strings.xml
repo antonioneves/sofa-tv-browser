@@ -52,6 +52,13 @@
     <!-- Lists -->
     <string name="delete">Delete</string>
     <string name="delete_all">Delete all</string>
+    <string name="select">Select</string>
+    <string name="select_all">Select all</string>
+    <string name="delete_selected">Delete selected (%d)</string>
+    <plurals name="confirm_delete_bookmarks">
+        <item quantity="one">Delete this bookmark?</item>
+        <item quantity="other">Delete %d bookmarks?</item>
+    </plurals>
     <string name="today">Today</string>
     <string name="yesterday">Yesterday</string>
     <string name="history_empty">No history yet</string>
