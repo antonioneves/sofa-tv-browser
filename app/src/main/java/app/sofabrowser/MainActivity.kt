@@ -683,7 +683,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 toast(if (db.isBookmarked(url)) R.string.bookmark_added else R.string.bookmark_removed)
             }
             BrowserMenu.Action.PIN -> if (Browser.isWebUrl(url)) {
-                db.addTile(w.title?.ifBlank { null } ?: UrlInput.display(url), url)
+                db.pin(w.title?.ifBlank { null } ?: UrlInput.display(url), url)
                 toast(R.string.pinned)
             }
             BrowserMenu.Action.TV_SHORTCUT -> if (Browser.isWebUrl(url)) {
@@ -935,8 +935,22 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { openUrl(site.url) },
             TileMenu.Item(R.drawable.ic_swap_vert, R.string.move) { home.startMoving(site) },
             TileMenu.Item(R.drawable.ic_edit, R.string.edit) { editTile(site) },
-            TileMenu.Item(R.drawable.ic_delete, R.string.remove) {
-                db.removeTile(site.id)
+            TileMenu.Item(R.drawable.ic_star_filled, R.string.unpin) {
+                db.unpin(site.url)
+                home.refresh(prefs.privateMode, prefs.adBlock)
+            },
+        )).show()
+    }
+
+    override fun onBookmarkMenu(site: Site) {
+        TileMenu(this, site, listOf(
+            TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { openUrl(site.url) },
+            TileMenu.Item(R.drawable.ic_star, R.string.pin_to_quick_access) {
+                db.pin(site.title, site.url)
+                home.refresh(prefs.privateMode, prefs.adBlock)
+            },
+            TileMenu.Item(R.drawable.ic_delete, R.string.delete) {
+                db.removeBookmark(site.url)
                 home.refresh(prefs.privateMode, prefs.adBlock)
             },
         )).show()
@@ -946,7 +960,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         TileMenu(this, site, listOf(
             TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { openUrl(site.url) },
             TileMenu.Item(R.drawable.ic_add, R.string.add_to_quick_access) {
-                db.addTile(site.title, site.url)
+                db.pin(site.title, site.url)
                 home.refresh(prefs.privateMode, prefs.adBlock)
             },
             TileMenu.Item(R.drawable.ic_delete, R.string.remove) {
@@ -972,7 +986,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 val url = UrlInput.resolve(address.text.toString(), prefs.searchEngine, searchShortcuts(this))
                 if (!Browser.isWebUrl(url)) return@setPositiveButton
                 val name = title.text.toString().trim().ifEmpty { Db.prettyHost(Browser.hostOf(url).orEmpty()) }
-                if (site == null) db.addTile(name, url) else db.updateTile(site.id, name, url)
+                if (site == null) db.pin(name, url) else db.updateBookmark(site.id, name, url)
                 home.refresh(prefs.privateMode, prefs.adBlock)
             }.setNegativeButton(android.R.string.cancel, null).show()
     }

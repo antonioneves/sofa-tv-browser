@@ -108,7 +108,7 @@ class ListActivity : Activity() {
                 }
             }
         } else {
-            db.bookmarks().forEach { b -> addRow(b.title, b.url, null) { db.removeBookmark(b.url) } }
+            db.bookmarks().forEach { b -> addRow(b.title, b.url, if (db.isPinned(b.url)) getString(R.string.quick_access) else null, bookmark = true) { db.removeBookmark(b.url) } }
         }
         empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
         list.getChildAt((0 until list.childCount).firstOrNull { list.getChildAt(it) is LinearLayout } ?: 0)
@@ -127,7 +127,7 @@ class ListActivity : Activity() {
         }
     }
 
-    private fun addRow(title: String, url: String, meta: String?, delete: () -> Unit) {
+    private fun addRow(title: String, url: String, meta: String?, bookmark: Boolean = false, delete: () -> Unit) {
         val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; clipChildren = false }
         val open = {
             setResult(RESULT_OK, Intent().putExtra(SearchActivity.EXTRA_URL, url))
@@ -140,11 +140,23 @@ class ListActivity : Activity() {
             (list.getChildAt(i) as? LinearLayout ?: list.getChildAt(i - 1) as? LinearLayout)?.getChildAt(0)?.requestFocus()
             empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
         }
+        // Pinning a bookmark puts it in Quick access on the home screen; the row is rebuilt to show the mark.
+        val togglePin = {
+            val i = list.indexOfChild(line)
+            if (db.isPinned(url)) db.unpin(url) else db.pin(title, url)
+            load()
+            (list.getChildAt(i) as? LinearLayout)?.getChildAt(0)?.requestFocus()
+            Unit
+        }
         val menu = {
-            TileMenu(this, Site(0, title.ifBlank { url }, url), listOf(
-                TileMenu.Item(R.drawable.ic_open_in_new, R.string.open, open),
-                TileMenu.Item(R.drawable.ic_delete, R.string.delete, remove),
-            )).show()
+            val items = mutableListOf(TileMenu.Item(R.drawable.ic_open_in_new, R.string.open, open))
+            if (bookmark) {
+                val pinned = db.isPinned(url)
+                items.add(TileMenu.Item(if (pinned) R.drawable.ic_star_filled else R.drawable.ic_star,
+                    if (pinned) R.string.unpin else R.string.pin_to_quick_access, togglePin))
+            }
+            items.add(TileMenu.Item(R.drawable.ic_delete, R.string.delete, remove))
+            TileMenu(this, Site(0, title.ifBlank { url }, url), items).show()
         }
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

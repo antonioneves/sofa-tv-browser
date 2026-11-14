@@ -19,7 +19,7 @@ import app.sofabrowser.data.Site
 
 /**
  * The start screen: a fixed top bar (logo, search pill, mic, labelled icon buttons) above rows of site cards:
- * Quick access (user-editable), Most visited and Bookmarks. All of it is local data.
+ * Quick access (the pinned bookmarks), Most visited and the other Bookmarks. All of it is local data.
  */
 @SuppressLint("ViewConstructor")
 class HomeView(context: Context, private val listener: Listener) : FrameLayout(context) {
@@ -37,6 +37,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         fun onSpace()
         fun onTileMenu(site: Site)
         fun onMostVisitedMenu(site: Site)
+        fun onBookmarkMenu(site: Site)
         fun onAddTile()
         fun onDownloads()
     }
@@ -63,6 +64,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
     private val phoneButton: LabeledIconButton
     private var tilesRow: LinearLayout? = null
     private var mostVisitedRow: LinearLayout? = null
+    private var bookmarksRow: LinearLayout? = null
 
     /** When non-null, the tile being moved with Left/Right; OK or Back drops it. */
     private var moving: SiteCard? = null
@@ -160,7 +162,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         rows.removeAllViews()
         rows.setPadding(96.px, 24.px, 0, 64.px)
 
-        val tiles = db.tiles()
+        val tiles = db.pinned()
         tilesRow = addRow(R.string.quick_access, tiles) { card ->
             card.setOnLongClickListener { card.site?.let(listener::onTileMenu); true }
         }.also { row ->
@@ -177,10 +179,12 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
             }
         }
         // Bookmarks live on the home screen: all of them in a row, the most visited first, ending in a card for the list that manages them.
-        addRow(R.string.bookmarks, db.bookmarksByVisits().take(50)).addView(
+        bookmarksRow = addRow(R.string.bookmarks, db.bookmarksByVisits().take(50)) { card ->
+            card.setOnLongClickListener { card.site?.let(listener::onBookmarkMenu); true }
+        }.also { it.addView(
             SiteCard(context, null, context.getDrawable(R.drawable.ic_bookmarks), context.getString(R.string.all_bookmarks)).apply {
                 setOnClickListener { listener.onBookmarks() }
-            })
+            }) }
 
         // A tile that was removed hands the focus to the one that took its place in the row.
         val restore = focusedUrl?.let { url -> findCard { it.site?.url == url } }
@@ -237,7 +241,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // Menu on a Quick access or Most visited tile opens its options, like a long press of OK.
+        // Menu on a Quick access, Most visited or Bookmarks tile opens its options, like a long press of OK.
         if (moving == null && event.keyCode == KeyEvent.KEYCODE_MENU) {
             val focused = findFocus() as? SiteCard
             val site = focused?.site
@@ -245,6 +249,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 site == null -> null
                 focused.parent === tilesRow -> listener::onTileMenu
                 focused.parent === mostVisitedRow -> listener::onMostVisitedMenu
+                focused.parent === bookmarksRow -> listener::onBookmarkMenu
                 else -> null
             }
             if (open != null && site != null) {
@@ -270,7 +275,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 moving = null
                 card.alpha = 1f
                 Ui.animateScale(card, 1.04f, false)
-                db.reorderTiles((0 until row.childCount).mapNotNull { (row.getChildAt(it) as SiteCard).site?.id })
+                db.reorderPinned((0 until row.childCount).mapNotNull { (row.getChildAt(it) as SiteCard).site?.id })
             }
         }
         return true

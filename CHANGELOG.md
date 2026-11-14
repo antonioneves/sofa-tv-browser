@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Quick access is your pinned bookmarks**: pin a bookmark from its menu, in the bookmarks list or on the home
+  screen, and it joins Quick access; Unpin takes it off and keeps the bookmark. The list marks the pinned ones.
+  Pinned bookmarks no longer repeat in the Bookmarks row. Quick access you already had is kept: those tiles are now
+  pinned bookmarks, in the same order. Add site, Edit and Move work as before.
 - **Bookmarks on the home screen**: the Bookmarks button leaves the top bar; the Bookmarks row on the home screen is
   always there, shows all your bookmarks from the most visited to the least, and ends with an "All bookmarks" card that opens the list to manage them.
 - **Type on your phone from the home screen**: a phone button next to the microphone opens the search screen with
