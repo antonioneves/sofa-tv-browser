@@ -64,7 +64,7 @@ class TileMenu(context: Context, private val site: Site, private val items: List
             })
         }
 
-        val root = ShadowFrame(context, 28)
+        val root = FrameLayout(context)
         root.addView(sheet, FrameLayout.LayoutParams(560.px, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         setContentView(root)
         rows.first().requestFocus()

@@ -163,11 +163,11 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
             })
         }
 
-        // The root draws the dialog's shadow.
-        val root = ShadowFrame(context, 44)
+        val root = FrameLayout(context)
         root.addView(sheet, FrameLayout.LayoutParams(900.px, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         // Keep the sheet within the screen: long text and long lists scroll inside it.
         root.setPadding(0, 48.px, 0, 48.px)
+        root.clipChildren = false
         setContentView(root)
         (firstFocus ?: positive ?: negative ?: neutral)?.requestFocus()
     }
