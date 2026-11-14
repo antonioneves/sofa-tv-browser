@@ -178,15 +178,12 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 }
             }
         }
-        // Bookmarks live on the home screen: the ones not in Quick access, the most visited first, ending in a card for
-        // the list that manages them all. With so many that the card starts off screen, the header carries a button too.
-        val rest = db.bookmarksByVisits().take(50)
-        val allBookmarks = context.getString(R.string.all_bookmarks)
-        val cardFits = CARDS_LEFT + rest.size * CARD_STEP + CARD_WIDTH <= SCREEN_WIDTH
-        bookmarksRow = addRow(R.string.bookmarks, rest, if (cardFits) null else allBookmarks to { listener.onBookmarks() }) { card ->
+        // Bookmarks live on the home screen: the 20 newest that are not in Quick access, ending in a card for the list
+        // that manages them all.
+        bookmarksRow = addRow(R.string.bookmarks, db.recentBookmarks(20)) { card ->
             card.setOnLongClickListener { card.site?.let(listener::onBookmarkMenu); true }
         }.also {
-            it.addView(SiteCard(context, null, context.getDrawable(R.drawable.ic_bookmarks), allBookmarks).apply {
+            it.addView(SiteCard(context, null, context.getDrawable(R.drawable.ic_bookmarks), context.getString(R.string.all_bookmarks)).apply {
                 setOnClickListener { listener.onBookmarks() }
             })
         }
@@ -197,27 +194,11 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         (restore ?: if (focused != null || findFocus() == null) tilesRow?.getChildAt(0) else null)?.requestFocus()
     }
 
-    /** A row's title, with an optional button at the right. */
-    private fun addHeader(title: Int, action: Pair<String, () -> Unit>? = null) {
-        val label = Ui.text(context, 28, Ui.p.textMid).apply { text = context.getString(title) }
-        if (action == null) {
-            rows.addView(label.apply { setPadding(0, 32.px, 0, 18.px) })
-            return
-        }
-        rows.addView(LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            // The button sits at the right, in line with the top bar's last icon.
-            setPadding(0, 20.px, 64.px, 6.px)
-            addView(label, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-            addView(Ui.button(context, action.first, 24, action.second).apply {
-                setPadding(24.px, 8.px, 24.px, 8.px)
-            })
+    private fun addRow(title: Int, sites: List<Site>, extra: ((SiteCard) -> Unit)? = null): LinearLayout {
+        rows.addView(Ui.text(context, 28, Ui.p.textMid).apply {
+            text = context.getString(title)
+            setPadding(0, 32.px, 0, 18.px)
         })
-    }
-
-    private fun addRow(title: Int, sites: List<Site>, headerAction: Pair<String, () -> Unit>? = null, extra: ((SiteCard) -> Unit)? = null): LinearLayout {
-        addHeader(title, headerAction)
         val line = LinearLayout(context).apply {
             tag = title
             orientation = LinearLayout.HORIZONTAL
@@ -302,11 +283,4 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         return true
     }
 
-    private companion object {
-        // Design pixels: where a row's first card starts, the width of a card, the step to the next, and the screen.
-        const val CARDS_LEFT = 104
-        const val CARD_WIDTH = 510
-        const val CARD_STEP = 550
-        const val SCREEN_WIDTH = 1920
-    }
 }

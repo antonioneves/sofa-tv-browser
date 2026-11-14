@@ -125,10 +125,9 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         Site(it.getLong(0), it.getString(1), it.getString(2))
     }
 
-    /** The bookmarks that are not pinned, from the most visited to the least, by how often the page is in the history; ties newest first. */
-    fun bookmarksByVisits(): List<Site> = query(
-        "SELECT b.id, b.title, b.url FROM bookmarks b LEFT JOIN history h ON h.url = b.url " +
-            "WHERE b.pinned IS NULL GROUP BY b.id ORDER BY COUNT(h.id) DESC, b.created DESC") {
+    /** The newest [limit] bookmarks that are not pinned to Quick access, the most recently added first. */
+    fun recentBookmarks(limit: Int): List<Site> = query(
+        "SELECT id, title, url FROM bookmarks WHERE pinned IS NULL ORDER BY created DESC LIMIT $limit") {
         Site(it.getLong(0), it.getString(1), it.getString(2))
     }
 
