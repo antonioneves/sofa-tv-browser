@@ -952,7 +952,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             TileMenu.Item(R.drawable.ic_delete, R.string.delete) {
                 db.removeBookmark(site.url)
                 home.refresh(prefs.privateMode, prefs.adBlock)
-            },
+            }.danger(),
         )).show()
     }
 

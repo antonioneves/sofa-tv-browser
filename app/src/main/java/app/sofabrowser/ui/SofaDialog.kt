@@ -52,6 +52,7 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         internal var negativeClick: DialogInterface.OnClickListener? = null
         internal var onDismiss: DialogInterface.OnDismissListener? = null
         internal var onCancel: DialogInterface.OnCancelListener? = null
+        internal var destructive = false
 
         fun setTitle(t: CharSequence?) = apply { title = t }
         fun setTitle(res: Int) = apply { title = context.getString(res) }
@@ -78,6 +79,9 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         fun setNegativeButton(res: Int, l: DialogInterface.OnClickListener?) = setNegativeButton(context.getString(res), l)
         fun setOnDismissListener(l: DialogInterface.OnDismissListener) = apply { onDismiss = l }
         fun setOnCancelListener(l: DialogInterface.OnCancelListener) = apply { onCancel = l }
+
+        /** Makes the positive button the red-orange one of a delete, so it can't be mistaken for a plain choice. */
+        fun setDestructive() = apply { destructive = true }
 
         fun create() = SofaDialog(context, this)
         fun show() = create().also { it.show() }
@@ -159,11 +163,11 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
             })
         }
 
-        val root = FrameLayout(context)
+        // The root draws the dialog's shadow.
+        val root = ShadowFrame(context, 44)
         root.addView(sheet, FrameLayout.LayoutParams(900.px, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         // Keep the sheet within the screen: long text and long lists scroll inside it.
         root.setPadding(0, 48.px, 0, 48.px)
-        root.clipChildren = false
         setContentView(root)
         (firstFocus ?: positive ?: negative ?: neutral)?.requestFocus()
     }
@@ -172,8 +176,11 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
 
     private fun pill(label: CharSequence, which: Int, primary: Boolean, click: () -> DialogInterface.OnClickListener?): TextView {
         val p = Ui.p
-        val idle = if (primary) Ui.SWITCH_ON else p.fillFocused
+        val danger = primary && b.destructive
+        val idle = if (danger) Ui.DANGER_IDLE else if (primary) Ui.SWITCH_ON else p.fillFocused
         val idleText = if (primary) Color.WHITE else p.text
+        val focusFill = if (danger) Ui.DANGER else p.focus
+        val focusText = if (danger) Color.WHITE else p.onFocus
         return Ui.text(context, 28, idleText, bold = true).apply {
             text = label
             gravity = Gravity.CENTER
@@ -182,8 +189,8 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
             maxLines = 1
             setPadding(36.px, 0, 36.px, 0)
             minWidth = 140.px
-            background = Ui.fillSelector(idle, p.focus, 32)
-            Ui.focusScale(this, 1.06f) { has -> setTextColor(if (has) p.onFocus else idleText) }
+            background = Ui.fillSelector(idle, focusFill, 32)
+            Ui.focusScale(this, 1.06f) { has -> setTextColor(if (has) focusText else idleText) }
             setOnClickListener {
                 click()?.onClick(this@SofaDialog, which)
                 dismiss()

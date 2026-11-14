@@ -218,6 +218,7 @@ class DownloadsActivity : Activity() {
         private fun confirmDelete() {
             val d = current() ?: return
             Ui.dialog(context).setMessage(getString(R.string.delete_file_confirm, d.name))
+                .setDestructive()
                 .setPositiveButton(R.string.delete) { _, _ -> DownloadEngine.delete(id) }
                 .setNegativeButton(android.R.string.cancel, null).show()
         }

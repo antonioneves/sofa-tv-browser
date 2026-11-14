@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PorterDuff
 import android.os.Bundle
 import android.text.TextUtils
@@ -58,14 +59,14 @@ class ListActivity : Activity() {
         if (!history) {
             selectButton = headerButton(R.string.select) { setSelecting(true) }
             selectAllButton = headerButton(R.string.select_all) { selectAll() }
-            deleteSelectedButton = headerButton(R.string.delete_selected) { confirmDeleteSelected() }
+            deleteSelectedButton = headerButton(R.string.delete_selected, danger = true) { confirmDeleteSelected() }
             cancelButton = headerButton(android.R.string.cancel) { setSelecting(false) }
             listOf(selectButton, selectAllButton, deleteSelectedButton, cancelButton).forEach {
                 header.addView(it, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
                     .apply { marginEnd = 16.px })
             }
         }
-        deleteAllButton = headerButton(R.string.delete_all) { confirmDeleteAll() }
+        deleteAllButton = headerButton(R.string.delete_all, danger = true) { confirmDeleteAll() }
         header.addView(deleteAllButton)
         root.addView(header)
 
@@ -91,14 +92,15 @@ class ListActivity : Activity() {
         load()
     }
 
-    private fun headerButton(label: Int, click: () -> Unit) = Ui.text(this, 28, Ui.p.textMid).apply {
+    private fun headerButton(label: Int, danger: Boolean = false, click: () -> Unit) = Ui.text(this, 28, if (danger) Color.WHITE else Ui.p.textMid).apply {
         text = getString(label)
         isFocusable = true
         isClickable = true
         gravity = Gravity.CENTER
-        background = Ui.fillSelector(Ui.p.fillFocused, Ui.p.focus, 12)
+        // A delete stays red-orange, brighter when focused; the other buttons are tonal, inverted when focused.
+        background = if (danger) Ui.fillSelector(Ui.DANGER_IDLE, Ui.DANGER, 12) else Ui.fillSelector(Ui.p.fillFocused, Ui.p.focus, 12)
         setPadding(32.px, 14.px, 32.px, 14.px)
-        setOnFocusChangeListener { v, has -> (v as android.widget.TextView).setTextColor(if (has) Ui.p.onFocus else Ui.p.textMid) }
+        if (!danger) setOnFocusChangeListener { v, has -> (v as android.widget.TextView).setTextColor(if (has) Ui.p.onFocus else Ui.p.textMid) }
         setOnClickListener { click() }
     }
 
@@ -190,7 +192,7 @@ class ListActivity : Activity() {
                 items.add(TileMenu.Item(if (pinned) R.drawable.ic_star_filled else R.drawable.ic_star,
                     if (pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access, togglePin))
             }
-            items.add(TileMenu.Item(R.drawable.ic_delete, R.string.delete, remove))
+            items.add(TileMenu.Item(R.drawable.ic_delete, R.string.delete, remove).danger())
             TileMenu(this, Site(0, title.ifBlank { url }, url), items).show()
         }
         val body = LinearLayout(this).apply {
@@ -281,6 +283,7 @@ class ListActivity : Activity() {
         if (n == 0) return
         Ui.dialog(this)
             .setMessage(resources.getQuantityString(R.plurals.confirm_delete_bookmarks, n, n))
+            .setDestructive()
             .setPositiveButton(R.string.delete) { _, _ ->
                 selected.forEach { db.removeBookmark(it) }
                 selected.clear()
@@ -304,6 +307,7 @@ class ListActivity : Activity() {
     private fun confirmDeleteAll() {
         Ui.dialog(this)
             .setMessage(if (history) R.string.confirm_clear_history else R.string.confirm_clear_bookmarks)
+            .setDestructive()
             .setPositiveButton(R.string.delete_all) { _, _ ->
                 if (history) db.clearHistory() else db.bookmarks().forEach { db.removeBookmark(it.url) }
                 load()
