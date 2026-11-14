@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Bookmarks in the settings**: under Browsing, "Bookmarks" opens the list to manage them, and "Import or export
+  bookmarks" is there too. The Import or export button leaves the bookmarks list, which keeps Delete all.
 - **Icons stay with bookmarks**: a bookmarked site keeps its icon, when it has one, even after you clear browsing
   data. Sites without an icon show a letter tile.
 - **Quick access is your pinned bookmarks**: "Add to Quick access" in a bookmark's menu, in the bookmarks list or on

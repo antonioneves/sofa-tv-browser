@@ -712,7 +712,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             }
             BrowserMenu.Action.ZOOM_IN -> if (zoomStep < MAX_ZOOM_STEP) { zoomTo(w, zoomStep + 1); browser.setSiteZoom(url, zoomStep) }
             BrowserMenu.Action.ZOOM_OUT -> if (zoomStep > MIN_ZOOM_STEP) { zoomTo(w, zoomStep - 1); browser.setSiteZoom(url, zoomStep) }
-            BrowserMenu.Action.SETTINGS -> { menu?.dismiss(); startActivity(Intent(this, SettingsActivity::class.java)) }
+            BrowserMenu.Action.SETTINGS -> { menu?.dismiss(); openSettings() }
             BrowserMenu.Action.DOWNLOADS -> { menu?.dismiss(); onDownloads() }
         }
         menu?.takeIf { it.isShowing }?.update(menuState())
@@ -746,7 +746,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
      */
     private fun pickUserAgent() {
         val url = web?.url
-        if (!Browser.isWebUrl(url)) { startActivity(Intent(this, SettingsActivity::class.java)); menu?.dismiss(); return }
+        if (!Browser.isWebUrl(url)) { openSettings(); menu?.dismiss(); return }
         val labels = resources.getStringArray(R.array.user_agents)
         val default = labels[Prefs.UA_MODES.indexOf(prefs.userAgent).coerceAtLeast(0)]
         val site = browser.siteUserAgent(url)
@@ -898,7 +898,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onPhoneSearch() = startSearch(voice = false, current = null, phone = true)
     override fun onBookmarks() = openList(ListActivity.MODE_BOOKMARKS)
     override fun onHistory() = openList(ListActivity.MODE_HISTORY)
-    override fun onSettings() = startActivity(Intent(this, SettingsActivity::class.java))
+    override fun onSettings() = openSettings()
     override fun onDownloads() = startActivity(Intent(this, DownloadsActivity::class.java))
     override fun onSpace() = if (Space.active) Space.leave(this) else startActivity(Intent(this, PinActivity::class.java))
 
@@ -1004,6 +1004,12 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         // Cross-fade: the search screen keeps the sofa and the field where the home screen has them.
         @Suppress("DEPRECATION")
         overridePendingTransition(R.anim.screen_fade_in, R.anim.screen_fade_out)
+    }
+
+    /** For a result: a bookmark opened from the settings' bookmarks list comes back as an address to open. */
+    private fun openSettings() {
+        @Suppress("DEPRECATION")
+        startActivityForResult(Intent(this, SettingsActivity::class.java), REQ_URL)
     }
 
     private fun openList(mode: String) {

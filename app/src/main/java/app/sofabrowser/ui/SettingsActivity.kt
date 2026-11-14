@@ -63,6 +63,31 @@ class SettingsActivity : Activity() {
     /** The Filter lists row on the main page, whose rule count is refreshed on return. */
     private var listsRow: View? = null
 
+    /** Importing and exporting bookmarks, from the Bookmarks entries below. */
+    private val transfer by lazy {
+        BookmarkTransfer(this, onUrl = ::openInBrowser, onChanged = { if (!isFinishing) build() })
+    }
+
+    /** Hands an address to the browser screen that opened the settings, and leaves the settings. */
+    private fun openInBrowser(url: String) {
+        setResult(RESULT_OK, Intent().putExtra(SearchActivity.EXTRA_URL, url))
+        finish()
+    }
+
+    @Deprecated("Framework activity result API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        if (transfer.onActivityResult(requestCode, resultCode, data)) return
+        // A bookmark opened from the list is handed on to the browser.
+        if (requestCode == REQ_BOOKMARKS && resultCode == RESULT_OK) data?.getStringExtra(SearchActivity.EXTRA_URL)?.let(::openInBrowser)
+    }
+
+    override fun onDestroy() {
+        transfer.stop()
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Ui.init(this)
@@ -161,6 +186,11 @@ class SettingsActivity : Activity() {
         // Only on TVs that offer another refresh rate at their resolution; many offer just one.
         if (RefreshRateMatch(this).available()) switch(R.string.match_frame_rate, R.string.match_frame_rate_sub, prefs::matchFrameRate)
         nav(R.string.downloads, null) { startActivity(android.content.Intent(this, DownloadsActivity::class.java)) }
+        nav(R.string.bookmarks, null) {
+            @Suppress("DEPRECATION")
+            startActivityForResult(Intent(this, ListActivity::class.java).putExtra(ListActivity.EXTRA_MODE, ListActivity.MODE_BOOKMARKS), REQ_BOOKMARKS)
+        }
+        nav(R.string.bookmarks_transfer_title, null) { transfer.start() }
 
         section(R.string.section_privacy)
         switch(R.string.adblock_setting, R.string.adblock_setting_sub, prefs::adBlock)
@@ -776,6 +806,7 @@ class SettingsActivity : Activity() {
         private val THEMES = listOf("dark", "light", "system")
         private val DRM_MODES = listOf(ProtectedMedia.ASK, ProtectedMedia.ALLOW, ProtectedMedia.BLOCK)
         private const val PAGE = "page"
+        private const val REQ_BOOKMARKS = 7001
         private const val PAGE_LISTS = "lists"
         private const val PAGE_SITES = "sites"
     }
