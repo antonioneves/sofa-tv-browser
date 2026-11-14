@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Loading bar at the bottom**: the orange page loading bar runs along the bottom edge of the page instead of the top.
 - **A cross to close the phone card**: the "Type on your phone" card has a close cross in its top right corner, in
   place of the Close button at the bottom. The cross keeps the focus while the card is open: the arrows move nothing.
 - **Find in page from the phone**: the phone page has a Find tab, with the find icon in its bar, when you open it

@@ -171,7 +171,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         cursor = CursorLayout(this).apply { listener = this@MainActivity }
         browserLayer.addView(cursor, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         progress = View(this).apply { setBackgroundColor(Ui.BRAND); pivotX = 0f; scaleX = 0f }
-        browserLayer.addView(progress, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 6.px, Gravity.TOP))
+        browserLayer.addView(progress, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 6.px, Gravity.BOTTOM))
         scrollPill = Ui.text(this, 26, Ui.DARK.text).apply {
             text = getString(R.string.scroll_mode_hint)
             background = Ui.rounded(0xB3000000.toInt(), 48)
