@@ -17,11 +17,12 @@ import android.widget.TextView
  * [labelled], the button is just its circle, and the label is only read out by TalkBack.
  *
  * As a [row] (the actions in the menu's balloon) it is a full-width line instead: the icon, then the label beside it,
- * always shown, with the focus fill behind the whole line.
+ * always shown, with the focus fill behind the whole line. With [iconOnly] the icon sits in the middle of the line
+ * and there is no label.
  */
 @SuppressLint("ViewConstructor")
 class LabeledIconButton(context: Context, icon: Int, label: String, private val labelled: Boolean = true,
-    private val row: Boolean = false, onClick: () -> Unit) : FrameLayout(context) {
+    private val row: Boolean = false, iconOnly: Boolean = false, onClick: () -> Unit) : FrameLayout(context) {
     private val circle = FrameLayout(context)
     private val image = ImageView(context)
     private val text: TextView = Ui.text(context, 24, Ui.p.text)
@@ -47,14 +48,18 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
             background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, 20)
             minimumHeight = 64.px
             setPadding(0, 8.px, 0, 8.px)
-            addView(image, LayoutParams(36.px, 36.px, Gravity.CENTER_VERTICAL or Gravity.START).apply { marginStart = 18.px })
-            text.setTextSize(TypedValue.COMPLEX_UNIT_PX, 24.px.toFloat())
-            text.maxLines = 2
-            text.ellipsize = TextUtils.TruncateAt.END
-            addView(text, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL).apply {
-                marginStart = 70.px
-                marginEnd = 14.px
-            })
+            if (iconOnly) {
+                addView(image, LayoutParams(36.px, 36.px, Gravity.CENTER))
+            } else {
+                addView(image, LayoutParams(36.px, 36.px, Gravity.CENTER_VERTICAL or Gravity.START).apply { marginStart = 18.px })
+                text.setTextSize(TypedValue.COMPLEX_UNIT_PX, 24.px.toFloat())
+                text.maxLines = 2
+                text.ellipsize = TextUtils.TruncateAt.END
+                addView(text, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL).apply {
+                    marginStart = 70.px
+                    marginEnd = 14.px
+                })
+            }
         } else {
             // A rounded square, not a circle, like Sofa's other focused buttons.
             circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, 24)

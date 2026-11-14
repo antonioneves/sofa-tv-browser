@@ -140,6 +140,21 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         place(more, bar, 0)
 
         // Grouped by what they act on.
+        // Zoom first: out, the level, in, as wide as the balloon and as tall as the lines below, a third each.
+        fun zoomButton(action: Action, icon: Int, label: Int) =
+            LabeledIconButton(context, icon, context.getString(label), labelled = false, row = true, iconOnly = true) { actions.onAction(action) }.also {
+                it.onFocused = { lastFocused = action; hideTip() }
+                buttons[action] = it
+            }
+        zoomLabel = Ui.text(context, 24, Ui.p.textMid).apply { gravity = Gravity.CENTER; text = context.getString(R.string.percent, 100) }
+        list.addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            clipChildren = false
+            addView(zoomButton(Action.ZOOM_OUT, R.drawable.ic_zoom_out, R.string.zoom_out), LinearLayout.LayoutParams(0, 64.px, 1f))
+            addView(zoomLabel, LinearLayout.LayoutParams(0, 64.px, 1f))
+            addView(zoomButton(Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in), LinearLayout.LayoutParams(0, 64.px, 1f))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 2.px })
         // Watching, the action a TV is most often used for, first.
         add(Action.WATCH, R.drawable.ic_play_circle, R.string.watch)
         // Kept per site; not in private browsing, which saves none.
@@ -159,21 +174,6 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.BOOKMARKS, R.drawable.ic_bookmarks, R.string.bookmarks)
         add(Action.HISTORY, R.drawable.ic_history, R.string.history)
         add(Action.DOWNLOADS, R.drawable.ic_download, R.string.downloads)
-        // Zoom: out, the level, in, side by side on one line.
-        fun zoomButton(action: Action, icon: Int, label: Int) =
-            LabeledIconButton(context, icon, context.getString(label), labelled = false) { actions.onAction(action) }.also {
-                it.onFocused = { lastFocused = action; hideTip() }
-                buttons[action] = it
-            }
-        zoomLabel = Ui.text(context, 24, Ui.p.textMid).apply { gravity = Gravity.CENTER; text = context.getString(R.string.percent, 100) }
-        list.addView(LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            clipChildren = false
-            addView(zoomButton(Action.ZOOM_OUT, R.drawable.ic_zoom_out, R.string.zoom_out), LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT))
-            addView(zoomLabel, LinearLayout.LayoutParams(110.px, 80.px))
-            addView(zoomButton(Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in), LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT))
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 2.px })
         // How this site is shown.
         add(Action.ADBLOCK, R.drawable.ic_shield, R.string.adblock_site)
         // Shown only after a block, next to the shield it belongs with; the menu then opens with it focused.
