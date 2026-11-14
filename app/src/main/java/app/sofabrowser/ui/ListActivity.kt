@@ -211,12 +211,6 @@ class ListActivity : Activity() {
             }
             setOnFocusChangeListener { v, has -> Ui.animateScale(v, if (has) 1.02f else 1f, has) }
         }
-        if (bookmark) {
-            val box = ImageView(this).apply { visibility = View.GONE }
-            checks[url] = box
-            body.addView(box, LinearLayout.LayoutParams(48.px, 48.px).apply { marginEnd = 32.px })
-            updateCheck(url)
-        }
         body.addView(ImageView(this).apply { setImageDrawable(Favicons.get(this@ListActivity).drawable(url, title, 128)) },
             LinearLayout.LayoutParams(64.px, 64.px).apply { marginEnd = 32.px })
         val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -228,6 +222,13 @@ class ListActivity : Activity() {
             setPadding(0, 10.px, 0, 0)
         })
         body.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        // While selecting, a checkbox at the end of the card shows whether the bookmark is ticked.
+        if (bookmark) {
+            val box = ImageView(this).apply { visibility = View.GONE }
+            checks[url] = box
+            body.addView(box, LinearLayout.LayoutParams(48.px, 48.px).apply { marginStart = 32.px })
+            updateCheck(url)
+        }
         line.addView(body, LinearLayout.LayoutParams(0, 136.px, 1f))
         list.addView(line, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = 16.px
