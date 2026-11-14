@@ -137,7 +137,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, bar)
         add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar)
         add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, bar, 28)
-        more = LabeledIconButton(context, R.drawable.ic_more_horiz, context.getString(R.string.more_actions), labelled = false, square = BAR_SQUARE) {
+        more = LabeledIconButton(context, R.drawable.ic_more_widgets, context.getString(R.string.more_actions), labelled = false, square = BAR_SQUARE) {
             setBalloon(!balloonOpen, focusInside = true)
         }
         // Right on More opens the balloon, or goes into it when it is open, as it sits in that direction.
@@ -327,7 +327,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         val changed = open != balloonOpen
         balloonOpen = open
         // One chevron, pointing at where the balloon is or goes back to.
-        more.set(R.drawable.ic_more_horiz, context.getString(if (open) R.string.fewer_actions else R.string.more_actions))
+        more.set(R.drawable.ic_more_widgets, context.getString(if (open) R.string.fewer_actions else R.string.more_actions))
         more.scaleX = if (open) -1f else 1f
         if (!open) {
             if (balloon.hasFocus()) more.requestFocus()
