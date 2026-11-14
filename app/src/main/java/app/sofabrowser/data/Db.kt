@@ -12,26 +12,27 @@ data class Site(val id: Long, val title: String, val url: String)
 data class HistoryEntry(val id: Long, val title: String, val url: String, val visitedAt: Long)
 
 /**
- * All persistent user data: quick-access tiles, bookmarks and history. Everything stays on the device;
+ * All persistent user data: bookmarks (the pinned ones are Quick access) and history. Everything stays on the device;
  * there is no sync and no upload.
  */
-class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space.name("sofa.db"), null, 3) {
+class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space.name("sofa.db"), null, 4) {
 
     private val writer = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
         Thread(r, "history-db").apply { priority = Thread.MIN_PRIORITY }
     }
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE tiles (id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, position INTEGER NOT NULL)")
-        db.execSQL("CREATE TABLE bookmarks (id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL UNIQUE, created INTEGER NOT NULL)")
+        // pinned: null for a plain bookmark, else its place among the Quick access ones.
+        db.execSQL("CREATE TABLE bookmarks (id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL UNIQUE, created INTEGER NOT NULL, pinned INTEGER)")
         db.execSQL("CREATE TABLE history (id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, visited INTEGER NOT NULL)")
         db.execSQL("CREATE INDEX history_visited ON history (visited)")
         db.execSQL("CREATE INDEX history_url ON history (url)")
         createDownloads(db)
         createMostVisitedRemoved(db)
+        val now = System.currentTimeMillis()
         DEFAULT_TILES.forEachIndexed { i, (title, url) ->
-            db.insert("tiles", null, ContentValues().apply {
-                put("title", title); put("url", url); put("position", i)
+            db.insert("bookmarks", null, ContentValues().apply {
+                put("title", title); put("url", url); put("created", now - i); put("pinned", i)
             })
         }
     }
@@ -39,6 +40,24 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createDownloads(db)
         if (oldVersion < 3) createMostVisitedRemoved(db)
+        if (oldVersion < 4) pinTiles(db)
+    }
+
+    /** Quick access used to be its own list of tiles; now they are bookmarks that are pinned, in the same order. */
+    private fun pinTiles(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE bookmarks ADD COLUMN pinned INTEGER")
+        val now = System.currentTimeMillis()
+        val tiles = ArrayList<Pair<String, String>>()
+        db.rawQuery("SELECT title, url FROM tiles ORDER BY position", null).use { c ->
+            while (c.moveToNext()) tiles.add(c.getString(0) to c.getString(1))
+        }
+        tiles.forEachIndexed { i, (title, url) ->
+            val changed = db.update("bookmarks", ContentValues().apply { put("pinned", i) }, "url = ?", arrayOf(url))
+            if (changed == 0) db.insert("bookmarks", null, ContentValues().apply {
+                put("title", title); put("url", url); put("created", now - i); put("pinned", i)
+            })
+        }
+        db.execSQL("DROP TABLE tiles")
     }
 
     /** Sites taken off Most visited, and when: only visits after that count for them again. */
@@ -57,36 +76,42 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
             )""".trimIndent())
     }
 
-    // Tiles
+    // Quick access: the pinned bookmarks
 
-    fun tiles(): List<Site> = query("SELECT id, title, url FROM tiles ORDER BY position") {
+    fun pinned(): List<Site> = query("SELECT id, title, url FROM bookmarks WHERE pinned IS NOT NULL ORDER BY pinned") {
         Site(it.getLong(0), it.getString(1), it.getString(2))
     }
 
-    fun addTile(title: String, url: String) {
+    fun isPinned(url: String): Boolean =
+        readableDatabase.rawQuery("SELECT 1 FROM bookmarks WHERE url = ? AND pinned IS NOT NULL", arrayOf(url)).use { it.moveToFirst() }
+
+    /** Pins the bookmark for [url] to the end of Quick access, bookmarking the page first if it is not yet. */
+    fun pin(title: String, url: String) {
         val db = writableDatabase
-        val next = db.compileStatement("SELECT COALESCE(MAX(position) + 1, 0) FROM tiles").simpleQueryForLong()
-        db.insert("tiles", null, ContentValues().apply {
-            put("title", title); put("url", url); put("position", next)
+        val next = db.compileStatement("SELECT COALESCE(MAX(pinned) + 1, 0) FROM bookmarks").simpleQueryForLong()
+        val changed = db.update("bookmarks", ContentValues().apply { put("pinned", next) }, "url = ? AND pinned IS NULL", arrayOf(url))
+        if (changed == 0 && !isBookmarked(url)) db.insert("bookmarks", null, ContentValues().apply {
+            put("title", title.ifBlank { url }); put("url", url); put("created", System.currentTimeMillis()); put("pinned", next)
         })
     }
 
-    fun updateTile(id: Long, title: String, url: String) {
-        writableDatabase.update("tiles", ContentValues().apply { put("title", title); put("url", url) },
-            "id = ?", arrayOf(id.toString()))
+    /** Takes the bookmark off Quick access; it stays a bookmark. */
+    fun unpin(url: String) {
+        writableDatabase.update("bookmarks", ContentValues().apply { putNull("pinned") }, "url = ?", arrayOf(url))
     }
 
-    fun removeTile(id: Long) {
-        writableDatabase.delete("tiles", "id = ?", arrayOf(id.toString()))
+    fun updateBookmark(id: Long, title: String, url: String) {
+        writableDatabase.updateWithOnConflict("bookmarks", ContentValues().apply { put("title", title); put("url", url) },
+            "id = ?", arrayOf(id.toString()), SQLiteDatabase.CONFLICT_IGNORE)
     }
 
-    /** Persists [ids] as the new tile order. */
-    fun reorderTiles(ids: List<Long>) {
+    /** Persists [ids] (bookmark ids) as the new Quick access order. */
+    fun reorderPinned(ids: List<Long>) {
         val db = writableDatabase
         db.beginTransaction()
         try {
             ids.forEachIndexed { i, id ->
-                db.update("tiles", ContentValues().apply { put("position", i) }, "id = ?", arrayOf(id.toString()))
+                db.update("bookmarks", ContentValues().apply { put("pinned", i) }, "id = ?", arrayOf(id.toString()))
             }
             db.setTransactionSuccessful()
         } finally {
@@ -100,13 +125,21 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         Site(it.getLong(0), it.getString(1), it.getString(2))
     }
 
+    /** The newest [limit] bookmarks that are not pinned to Quick access, the most recently added first. */
+    fun recentBookmarks(limit: Int): List<Site> = query(
+        "SELECT id, title, url FROM bookmarks WHERE pinned IS NULL ORDER BY created DESC LIMIT $limit") {
+        Site(it.getLong(0), it.getString(1), it.getString(2))
+    }
+
     fun isBookmarked(url: String): Boolean =
         readableDatabase.rawQuery("SELECT 1 FROM bookmarks WHERE url = ?", arrayOf(url)).use { it.moveToFirst() }
 
     fun addBookmark(title: String, url: String) {
-        writableDatabase.insertWithOnConflict("bookmarks", null, ContentValues().apply {
+        // Not a REPLACE: that would drop the pin of a bookmark that is added again.
+        val values = ContentValues().apply {
             put("title", title.ifBlank { url }); put("url", url); put("created", System.currentTimeMillis())
-        }, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+        if (writableDatabase.update("bookmarks", values, "url = ?", arrayOf(url)) == 0) writableDatabase.insert("bookmarks", null, values)
     }
 
     fun removeBookmark(url: String) {
@@ -143,10 +176,9 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         return added
     }
 
-    /** Adds the quick-access [pages] (title, address) not among the tiles yet. */
+    /** Pins the quick-access [pages] (title, address) that are not pinned yet, bookmarking them first if need be. */
     fun importTiles(pages: List<Pair<String, String>>) {
-        val have = tiles().map { it.url }.toHashSet()
-        pages.filter { have.add(it.second) }.forEach { (title, url) -> addTile(title.ifBlank { url }, url) }
+        pages.filter { !isPinned(it.second) }.forEach { (title, url) -> pin(title.ifBlank { url }, url) }
     }
 
     /** Adds the visits not in the history yet (same address, same moment) and returns how many. */
@@ -241,7 +273,7 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
      */
     fun mostVisited(limit: Int, minVisits: Int = 3): List<Site> {
         val since = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
-        val pinned = tiles().mapNotNull { hostOf(it.url) }.toSet()
+        val pinned = pinned().mapNotNull { hostOf(it.url) }.toSet()
         val removed = HashMap<String, Long>()
         readableDatabase.rawQuery("SELECT host, removed FROM most_visited_removed", null).use { c ->
             while (c.moveToNext()) removed[c.getString(0)] = c.getLong(1)

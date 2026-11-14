@@ -17,7 +17,7 @@ object BackupFile {
 
     private val KEYS: Map<String, T> = mapOf(
         "setup_done" to T.BOOL, "theme" to T.TEXT, "search_engine" to T.TEXT, "custom_search" to T.TEXT,
-        "search_suggestions" to T.BOOL, "voice_search" to T.BOOL, "menu_expanded" to T.BOOL,
+        "search_suggestions" to T.BOOL, "voice_search" to T.BOOL,
         "translate_language" to T.TEXT, "adblock" to T.BOOL, "auto_update_lists" to T.BOOL,
         "cookies" to T.BOOL, "block_3p_cookies" to T.BOOL, "reject_cookie_banners" to T.BOOL, "send_gpc" to T.BOOL,
         "user_agent" to T.TEXT, "custom_user_agent" to T.TEXT, "back_goes_back" to T.BOOL,

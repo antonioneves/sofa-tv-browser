@@ -55,6 +55,7 @@ import app.sofabrowser.browser.FullscreenLayer
 import app.sofabrowser.browser.GamePad
 import app.sofabrowser.browser.LinkMenu
 import app.sofabrowser.browser.PageDownloads
+import app.sofabrowser.browser.PhoneLink
 import app.sofabrowser.browser.PlayerRequest
 import app.sofabrowser.browser.Playlist
 import app.sofabrowser.browser.ProtectedMedia
@@ -93,6 +94,9 @@ import app.sofabrowser.ui.ListActivity
 import app.sofabrowser.ui.Palette
 import app.sofabrowser.ui.SearchActivity
 import app.sofabrowser.ui.SettingsActivity
+import app.sofabrowser.ui.PhoneCard
+import app.sofabrowser.ui.SofaDialog
+import app.sofabrowser.ui.SofaToast
 import app.sofabrowser.shortcut.TvShortcut
 import app.sofabrowser.ui.TileMenu
 import app.sofabrowser.ui.SetupActivity
@@ -167,7 +171,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         cursor = CursorLayout(this).apply { listener = this@MainActivity }
         browserLayer.addView(cursor, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         progress = View(this).apply { setBackgroundColor(Ui.BRAND); pivotX = 0f; scaleX = 0f }
-        browserLayer.addView(progress, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 6.px, Gravity.TOP))
+        browserLayer.addView(progress, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 6.px, Gravity.BOTTOM))
         scrollPill = Ui.text(this, 26, Ui.DARK.text).apply {
             text = getString(R.string.scroll_mode_hint)
             background = Ui.rounded(0xB3000000.toInt(), 48)
@@ -519,7 +523,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         if (web?.url != null) { showBrowser(); return }
         val now = SystemClock.uptimeMillis()
         if (now - lastBackOnHome < 2500) finish()
-        else Toast.makeText(this, R.string.back_again_to_exit, Toast.LENGTH_SHORT).show()
+        else SofaToast.makeText(this, R.string.back_again_to_exit, Toast.LENGTH_SHORT).show()
         lastBackOnHome = now
     }
 
@@ -624,6 +628,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             translated = translateSite != null && host?.let(Sites::of) == translateSite,
             translateInto = Translator.name(translateCode(), Locale.getDefault()),
             reading = reading,
+            pinned = url.isNotEmpty() && db.isPinned(url),
         )
     }
 
@@ -651,8 +656,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         when (action) {
             BrowserMenu.Action.ALLOW_ONCE -> { menu?.dismiss(); browser.allowOnce()?.let(::openUrl) }
             BrowserMenu.Action.HOME -> showHome()
-            BrowserMenu.Action.BACK -> if (w.canGoBack()) browser.goBack()
-            BrowserMenu.Action.FORWARD -> if (w.canGoForward()) browser.goForward()
+            BrowserMenu.Action.BACK -> if (w.canGoBack()) { menu?.dismiss(); browser.goBack() }
+            BrowserMenu.Action.FORWARD -> if (w.canGoForward()) { menu?.dismiss(); browser.goForward() }
             BrowserMenu.Action.RELOAD -> { if (loading) w.stopLoading() else browser.reload(); menu?.dismiss() }
             BrowserMenu.Action.WATCH -> watch()
             BrowserMenu.Action.AUTO_WATCH -> if (host != null && !browser.privateMode) {
@@ -662,15 +667,12 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 prefs.setAutoWatchSite(host, on)
                 if (on) prefs.autoWatch = WatchTarget.Auto.SITES
                 toast(if (on) R.string.auto_watch_site_added else R.string.auto_watch_site_removed)
-                menu?.dismiss()
             }
             BrowserMenu.Action.FIND -> { menu?.dismiss(); findBar.open(voice = prefs.voiceSearch && voiceInput.available) }
             BrowserMenu.Action.TRANSLATE -> if (host != null && Browser.isWebUrl(url)) {
-                menu?.dismiss()
                 if (Sites.of(host) == translateSite) showOriginal() else { translateSite = Sites.of(host); translate(announce = true) }
             }
             BrowserMenu.Action.READER -> if (Browser.isWebUrl(url)) {
-                menu?.dismiss()
                 if (reading) leaveReader() else read()
             }
             BrowserMenu.Action.HIDE_PARTS -> if (Browser.isWebUrl(url)) {
@@ -679,12 +681,19 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 else toast(if (browser.startPicking()) R.string.hide_parts_toast else R.string.hide_parts_unsupported)
             }
             BrowserMenu.Action.BOOKMARK -> if (Browser.isWebUrl(url)) {
+                // A pinned page is a bookmark: taking the bookmark away takes it out of Quick access too, and says so.
+                val wasPinned = db.isPinned(url)
                 if (db.isBookmarked(url)) db.removeBookmark(url) else db.addBookmark(w.title.orEmpty(), url)
-                toast(if (db.isBookmarked(url)) R.string.bookmark_added else R.string.bookmark_removed)
+                toast(when {
+                    db.isBookmarked(url) -> R.string.bookmark_added
+                    wasPinned -> R.string.bookmark_removed_pinned
+                    else -> R.string.bookmark_removed
+                })
             }
+            // A toggle: the page is in Quick access, or it is not. The menu stays open and the line shows which.
             BrowserMenu.Action.PIN -> if (Browser.isWebUrl(url)) {
-                db.addTile(w.title?.ifBlank { null } ?: UrlInput.display(url), url)
-                toast(R.string.pinned)
+                if (db.isPinned(url)) { db.unpin(url); toast(R.string.pin_removed) }
+                else { db.pin(w.title?.ifBlank { null } ?: UrlInput.display(url), url); toast(R.string.pinned) }
             }
             BrowserMenu.Action.TV_SHORTCUT -> if (Browser.isWebUrl(url)) {
                 menu?.dismiss()
@@ -698,7 +707,6 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 val allowed = !browser.adBlockOff(host)
                 browser.setAdBlockOff(host, allowed)
                 toast(if (allowed) R.string.adblock_site_disabled else R.string.adblock_site_enabled)
-                menu?.dismiss()
                 browser.reload()
             }
             BrowserMenu.Action.USER_AGENT -> pickUserAgent()
@@ -708,11 +716,10 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 browser.setKeysToPage(host, keys)
                 cursor.cursorEnabled = !keys
                 toast(if (keys) R.string.pointer_off_toast else R.string.pointer_on_toast)
-                menu?.dismiss()
             }
             BrowserMenu.Action.ZOOM_IN -> if (zoomStep < MAX_ZOOM_STEP) { zoomTo(w, zoomStep + 1); browser.setSiteZoom(url, zoomStep) }
             BrowserMenu.Action.ZOOM_OUT -> if (zoomStep > MIN_ZOOM_STEP) { zoomTo(w, zoomStep - 1); browser.setSiteZoom(url, zoomStep) }
-            BrowserMenu.Action.SETTINGS -> { menu?.dismiss(); startActivity(Intent(this, SettingsActivity::class.java)) }
+            BrowserMenu.Action.SETTINGS -> { menu?.dismiss(); openSettings() }
             BrowserMenu.Action.DOWNLOADS -> { menu?.dismiss(); onDownloads() }
         }
         menu?.takeIf { it.isShowing }?.update(menuState())
@@ -746,7 +753,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
      */
     private fun pickUserAgent() {
         val url = web?.url
-        if (!Browser.isWebUrl(url)) { startActivity(Intent(this, SettingsActivity::class.java)); menu?.dismiss(); return }
+        if (!Browser.isWebUrl(url)) { openSettings(); menu?.dismiss(); return }
         val labels = resources.getStringArray(R.array.user_agents)
         val default = labels[Prefs.UA_MODES.indexOf(prefs.userAgent).coerceAtLeast(0)]
         val site = browser.siteUserAgent(url)
@@ -812,6 +819,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             // The pointer has nothing to do on the article: the D-pad pages through it instead.
             cursor.cursorEnabled = false
             if (cursor.scrollMode) cursor.setScrollMode(false)
+            // The menu stays open over a toggle: its line now offers to leave reader view.
+            menu?.takeIf { it.isShowing }?.update(menuState())
         }
     }
 
@@ -895,9 +904,10 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onOpen(url: String) = openUrl(url)
     override fun onSearch() = startSearch(voice = false, current = null)
     override fun onVoiceSearch() = startSearch(voice = true, current = null)
+    override fun onPhoneSearch() = startSearch(voice = false, current = null, phone = true)
     override fun onBookmarks() = openList(ListActivity.MODE_BOOKMARKS)
     override fun onHistory() = openList(ListActivity.MODE_HISTORY)
-    override fun onSettings() = startActivity(Intent(this, SettingsActivity::class.java))
+    override fun onSettings() = openSettings()
     override fun onDownloads() = startActivity(Intent(this, DownloadsActivity::class.java))
     override fun onSpace() = if (Space.active) Space.leave(this) else startActivity(Intent(this, PinActivity::class.java))
 
@@ -934,10 +944,24 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { openUrl(site.url) },
             TileMenu.Item(R.drawable.ic_swap_vert, R.string.move) { home.startMoving(site) },
             TileMenu.Item(R.drawable.ic_edit, R.string.edit) { editTile(site) },
-            TileMenu.Item(R.drawable.ic_delete, R.string.remove) {
-                db.removeTile(site.id)
+            TileMenu.Item(R.drawable.ic_star_filled, R.string.remove_from_quick_access) {
+                db.unpin(site.url)
                 home.refresh(prefs.privateMode, prefs.adBlock)
             },
+        )).show()
+    }
+
+    override fun onBookmarkMenu(site: Site) {
+        TileMenu(this, site, listOf(
+            TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { openUrl(site.url) },
+            TileMenu.Item(R.drawable.ic_star, R.string.add_to_quick_access) {
+                db.pin(site.title, site.url)
+                home.refresh(prefs.privateMode, prefs.adBlock)
+            },
+            TileMenu.Item(R.drawable.ic_delete, R.string.delete) {
+                db.removeBookmark(site.url)
+                home.refresh(prefs.privateMode, prefs.adBlock)
+            }.danger(),
         )).show()
     }
 
@@ -945,7 +969,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         TileMenu(this, site, listOf(
             TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { openUrl(site.url) },
             TileMenu.Item(R.drawable.ic_add, R.string.add_to_quick_access) {
-                db.addTile(site.title, site.url)
+                db.pin(site.title, site.url)
                 home.refresh(prefs.privateMode, prefs.adBlock)
             },
             TileMenu.Item(R.drawable.ic_delete, R.string.remove) {
@@ -971,20 +995,30 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 val url = UrlInput.resolve(address.text.toString(), prefs.searchEngine, searchShortcuts(this))
                 if (!Browser.isWebUrl(url)) return@setPositiveButton
                 val name = title.text.toString().trim().ifEmpty { Db.prettyHost(Browser.hostOf(url).orEmpty()) }
-                if (site == null) db.addTile(name, url) else db.updateTile(site.id, name, url)
+                if (site == null) db.pin(name, url) else db.updateBookmark(site.id, name, url)
                 home.refresh(prefs.privateMode, prefs.adBlock)
             }.setNegativeButton(android.R.string.cancel, null).show()
     }
 
     // Other screens
 
-    private fun startSearch(voice: Boolean, current: String?) {
+    private fun startSearch(voice: Boolean, current: String?, phone: Boolean = false) {
         menu?.dismiss()
         @Suppress("DEPRECATION")
         startActivityForResult(Intent(this, SearchActivity::class.java)
             .putExtra(SearchActivity.EXTRA_VOICE, voice)
+            .putExtra(SearchActivity.EXTRA_PHONE, phone)
             .putExtra(SearchActivity.EXTRA_PRIVATE, prefs.privateMode)
             .putExtra(SearchActivity.EXTRA_CURRENT_URL, current), REQ_URL)
+        // Cross-fade: the search screen keeps the sofa and the field where the home screen has them.
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.screen_fade_in, R.anim.screen_fade_out)
+    }
+
+    /** For a result: a bookmark opened from the settings' bookmarks list comes back as an address to open. */
+    private fun openSettings() {
+        @Suppress("DEPRECATION")
+        startActivityForResult(Intent(this, SettingsActivity::class.java), REQ_URL)
     }
 
     private fun openList(mode: String) {
@@ -998,6 +1032,10 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQ_URL && resultCode == RESULT_OK) data?.getStringExtra(SearchActivity.EXTRA_URL)?.let(::openUrl)
+        // What the phone typed to find on the page: the find bar opens on it, once the page is showing again.
+        if (requestCode == REQ_URL && resultCode == RESULT_OK) data?.getStringExtra(SearchActivity.EXTRA_FIND)?.let { query ->
+            findBar.post { if (web != null) findBar.openWith(query, voice = prefs.voiceSearch && voiceInput.available) }
+        }
         if (requestCode == REQ_PIN) {
             val then = afterPin
             afterPin = null
@@ -2158,6 +2196,29 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         else -> voiceInput.start()
     }
 
+    private var phoneLink: PhoneLink? = null
+
+    /** The phone's page on its Find tab: what is typed there is looked for on this page, with the find bar staying open. */
+    override fun findByPhone() {
+        var card: SofaDialog? = null
+        val link = PhoneLink(this,
+            onText = { text -> card?.dismiss(); openUrl(UrlInput.resolve(text, prefs.searchEngine, searchShortcuts(this))) },
+            onImported = { _, message -> toast(message) },
+            onFind = { text -> card?.dismiss(); findBar.setQuery(text) },
+            startOnFind = true)
+        val address = link.start(this) ?: return toast(R.string.phone_no_network)
+        phoneLink?.stop()
+        phoneLink = link
+        card = dialog()
+            .setTitle(R.string.phone_type)
+            .setView(PhoneCard.view(this, address,
+                listOf(R.string.phone_step_scan, R.string.phone_step_find, R.string.phone_step_found).map(::getString),
+                getString(R.string.phone_or_open)))
+            .setCloseIcon()
+            .setOnDismissListener { link.stop(); if (phoneLink === link) phoneLink = null }
+            .show()
+    }
+
     override fun closeFind() {
         voiceInput.cancel()
         findBar.close()
@@ -2179,6 +2240,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     override fun onDestroy() {
+        phoneLink?.stop()
         cursor.removeCallbacks(sleepNow)
         cursor.removeCallbacks(sleepWarning)
         voiceInput.destroy()
@@ -2224,9 +2286,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         addView(v, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
-    private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()
+    private fun toast(res: Int) = SofaToast.makeText(this, res, Toast.LENGTH_SHORT).show()
 
-    private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+    private fun toast(text: String) = SofaToast.makeText(this, text, Toast.LENGTH_SHORT).show()
 
     companion object {
         /** Set by a TV home screen tile (the :shortcut template) when it opens its page in Sofa. */

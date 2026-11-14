@@ -53,6 +53,10 @@ object Ui {
         private set
 
     const val BRAND = 0xFFFF8A3D.toInt()
+    // Delete buttons: red-orange, with white text; DANGER when focused, DANGER_IDLE at rest, DANGER_TEXT for a label on a dark sheet.
+    const val DANGER = 0xFFFF5A36.toInt()
+    const val DANGER_IDLE = 0xFFC8442A.toInt()
+    const val DANGER_TEXT = 0xFFFF7A59.toInt()
     const val SWITCH_ON = 0xFF4560E6.toInt()
     /** Marks the private space's button while inside it. */
     const val SPACE = 0xFF3DD6B5.toInt()

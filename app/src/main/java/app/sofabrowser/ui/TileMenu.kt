@@ -21,7 +21,12 @@ import app.sofabrowser.data.Site
 class TileMenu(context: Context, private val site: Site, private val items: List<Item>) :
     Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
 
-    class Item(val icon: Int, val label: Int, val action: () -> Unit)
+    class Item(val icon: Int, val label: Int, val action: () -> Unit) {
+        /** A delete: drawn in red-orange. */
+        var danger = false
+            private set
+        fun danger() = apply { danger = true }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,7 +57,7 @@ class TileMenu(context: Context, private val site: Site, private val items: List
             setMargins(16.px, 6.px, 16.px, 20.px)
         })
 
-        val rows = items.map { row(it.icon, it.label, it.action) }
+        val rows = items.map { row(it.icon, it.label, it.danger, it.action) }
         rows.forEachIndexed { i, row ->
             sheet.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 72.px).apply {
                 if (i > 0) topMargin = 6.px
@@ -65,20 +70,22 @@ class TileMenu(context: Context, private val site: Site, private val items: List
         rows.first().requestFocus()
     }
 
-    private fun row(icon: Int, label: Int, onClick: () -> Unit): LinearLayout {
-        val image = ImageView(context).apply { setImageResource(icon); setColorFilter(Ui.p.text) }
-        val text = Ui.text(context, 28, Ui.p.text).apply { setText(label); maxLines = 1 }
+    private fun row(icon: Int, label: Int, danger: Boolean, onClick: () -> Unit): LinearLayout {
+        val idleTone = if (!danger) Ui.p.text else if (Ui.p.dark) Ui.DANGER_TEXT else Ui.DANGER_IDLE
+        val focusTone = if (danger) Color.WHITE else Ui.p.onFocus
+        val image = ImageView(context).apply { setImageResource(icon); setColorFilter(idleTone) }
+        val text = Ui.text(context, 28, idleTone).apply { setText(label); maxLines = 1 }
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             isFocusable = true
             isClickable = true
             setPadding(20.px, 0, 20.px, 0)
-            background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, 16)
+            background = Ui.fillSelector(Color.TRANSPARENT, if (danger) Ui.DANGER else Ui.p.focus, 16)
             addView(image, LinearLayout.LayoutParams(36.px, 36.px))
             addView(text, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 20.px })
             setOnFocusChangeListener { _, has ->
-                val color = if (has) Ui.p.onFocus else Ui.p.text
+                val color = if (has) focusTone else idleTone
                 image.setColorFilter(color)
                 text.setTextColor(color)
             }

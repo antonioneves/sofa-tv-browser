@@ -32,6 +32,7 @@ import android.widget.Toast
 import app.sofabrowser.Prefs
 import app.sofabrowser.R
 import app.sofabrowser.searchShortcuts
+import app.sofabrowser.browser.Browser
 import app.sofabrowser.browser.PhoneLink
 import app.sofabrowser.browser.SearchShortcuts
 import app.sofabrowser.browser.UrlInput
@@ -71,13 +72,17 @@ class SearchActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = Ui.background(privateMode)
-            setPadding(88.px, 80.px, 88.px, 0)
+            // The bar sits where the home screen's top bar does: the sofa stays put in its corner and the field
+            // takes over from the search pill while the two screens cross-fade.
+            setPadding(64.px, 32.px, 64.px, 0)
             // The mic halo may grow beyond the button row and into the padding.
             clipToPadding = false
             clipChildren = false
         }
 
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        bar.addView(ImageView(this).apply { setImageResource(R.drawable.ic_sofa) },
+            LinearLayout.LayoutParams(64.px, 64.px).apply { marginEnd = 32.px })
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -92,7 +97,6 @@ class SearchActivity : Activity() {
             setOnClickListener { pickEngine() }
             setOnFocusChangeListener { v, has -> (v as TextView).setTextColor(if (has) Ui.p.onFocus else Ui.p.textMid) }
         }
-        box.addView(engineLabel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 96.px))
         field = EditText(this).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_PX, 32.px.toFloat())
             setTextColor(Ui.p.text)
@@ -110,10 +114,15 @@ class SearchActivity : Activity() {
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                override fun afterTextChanged(s: Editable?) = suggest(s.toString())
+                override fun afterTextChanged(s: Editable?) {
+                    updateEngineVisibility(s.toString())
+                    suggest(s.toString())
+                }
             })
         }
         box.addView(field, LinearLayout.LayoutParams(0, 96.px, 1f))
+        // The engine sits at the end of the field, and only while what is typed is a search, not a link.
+        box.addView(engineLabel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 96.px))
         bar.addView(box, LinearLayout.LayoutParams(0, 96.px, 1f))
         bar.addView(squareButton(R.drawable.ic_search, R.string.search) { submit(field.text.toString()) })
         // The mic sits on a halo that grows with the voice level. The holder and the bar let the halo draw
@@ -142,6 +151,8 @@ class SearchActivity : Activity() {
         field.setText(prefill(intent.getStringExtra(EXTRA_CURRENT_URL)))
         field.setSelection(field.text.length)
         if (intent.getBooleanExtra(EXTRA_VOICE, false) && prefs.voiceSearch) voice() else showKeyboard()
+        // From the home screen's phone button: go straight to the QR code.
+        if (intent.getBooleanExtra(EXTRA_PHONE, false)) field.post { typeOnPhone() }
     }
 
     private fun squareButton(icon: Int, label: Int, onClick: () -> Unit) = FrameLayout(this).apply {
@@ -180,6 +191,12 @@ class SearchActivity : Activity() {
         engineLabel.compoundDrawablePadding = 16.px
     }
 
+    private fun updateEngineVisibility(text: String) {
+        val t = text.trim()
+        val isLink = t.isNotEmpty() && UrlInput.resolve(t, prefs.searchEngine, searchShortcuts(this)) != prefs.searchEngine.searchUrl(t)
+        engineLabel.visibility = if (isLink) View.GONE else View.VISIBLE
+    }
+
     private fun pickEngine() {
         val engines = Prefs.ENGINES
         val current = engines.indexOfFirst { it.id == prefs.searchEngineId }
@@ -188,6 +205,7 @@ class SearchActivity : Activity() {
             .setSingleChoiceItems(engines.map { it.name }.toTypedArray(), current) { d, which ->
                 prefs.searchEngineId = engines[which].id
                 updateEngineLabel()
+                updateEngineVisibility(field.text.toString())
                 d.dismiss()
                 field.requestFocus()
             }.show()
@@ -349,7 +367,7 @@ class SearchActivity : Activity() {
             @Suppress("DEPRECATION")
             startActivityForResult(i, REQ_VOICE)
         } catch (e: Exception) {
-            Toast.makeText(this, R.string.voice_unavailable, Toast.LENGTH_LONG).show()
+            SofaToast.makeText(this, R.string.voice_unavailable, Toast.LENGTH_LONG).show()
             showKeyboard()
         }
     }
@@ -365,6 +383,13 @@ class SearchActivity : Activity() {
         if (requestCode != REQ_VOICE) return
         val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
         if (resultCode == RESULT_OK && !spoken.isNullOrBlank()) submit(spoken) else showKeyboard()
+    }
+
+    /** Leaves with the same cross-fade it arrived with. */
+    override fun finish() {
+        super.finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.screen_fade_in, R.anim.screen_fade_out)
     }
 
     override fun onStop() {
@@ -384,11 +409,20 @@ class SearchActivity : Activity() {
 
     private fun typeOnPhone() {
         var dialog: SofaDialog? = null
+        // Over a web page the phone can also type what to find on it: the page's own bar then opens on that text.
+        val page = intent.getStringExtra(EXTRA_CURRENT_URL)?.takeIf(Browser::isWebUrl)
+        val onFind: ((String) -> Unit)? = page?.let {
+            { text: String ->
+                dialog?.dismiss()
+                setResult(RESULT_OK, Intent().putExtra(EXTRA_FIND, text))
+                finish()
+            }
+        }
         val link = PhoneLink(this, onText = { text ->
             dialog?.dismiss()
             submit(text)
-        }, onImported = { _, message -> Toast.makeText(this, message, Toast.LENGTH_LONG).show() })
-        val address = link.start(this) ?: return Toast.makeText(this, R.string.phone_no_network, Toast.LENGTH_LONG).show()
+        }, onImported = { _, message -> SofaToast.makeText(this, message, Toast.LENGTH_LONG).show() }, onFind = onFind)
+        val address = link.start(this) ?: return SofaToast.makeText(this, R.string.phone_no_network, Toast.LENGTH_LONG).show()
         phoneLink?.stop()
         phoneLink = link
         dialog = Ui.dialog(this)
@@ -396,7 +430,7 @@ class SearchActivity : Activity() {
             .setView(PhoneCard.view(this, address,
                 listOf(R.string.phone_step_scan, R.string.phone_step_type, R.string.phone_step_open).map(::getString),
                 getString(R.string.phone_or_open)))
-            .setNegativeButton(R.string.close, null)
+            .setCloseIcon()
             .setOnDismissListener { link.stop(); if (phoneLink === link) phoneLink = null }
             .show()
     }
@@ -419,7 +453,10 @@ class SearchActivity : Activity() {
     companion object {
         const val EXTRA_URL = "url"
         const val EXTRA_CURRENT_URL = "current"
+        /** Returned instead of an address when the phone typed what to find on the page. */
+        const val EXTRA_FIND = "find"
         const val EXTRA_VOICE = "voice"
+        const val EXTRA_PHONE = "phone"
         const val EXTRA_PRIVATE = "private"
         private const val REQ_VOICE = 1
         private const val REQ_MIC = 2

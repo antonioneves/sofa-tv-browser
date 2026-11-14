@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- **Loading bar at the bottom**: the orange page loading bar runs along the bottom edge of the page instead of the top.
+- **A cross to close the phone card**: the "Type on your phone" card has a close cross in its top right corner, in
+  place of the Close button at the bottom. The cross keeps the focus while the card is open: the arrows move nothing.
+- **Find in page from the phone**: the phone page has a Find tab, with the find icon in its bar, when you open it
+  from the search screen over a web page. Type what to look for there and the TV closes the search screen and opens
+  the page's find bar on it, with the matches highlighted. The find bar has a phone button too: it shows the QR code
+  for the phone page on its Find tab, and what you type there is looked for on the page with the find bar still open.
+- **The orange sofa in messages**: the small messages Sofa shows at the bottom of the screen carry the orange sofa
+  in front of the text, instead of the app icon Android draws on them.
+- **Bookmark and Quick access in the menu**: on a page that is in Quick access the Bookmark line reads "Bookmarked ·
+  in Quick access", and turning it off says "Removed from bookmarks and Quick access", as a pinned page is a bookmark.
+- **The menu is a bar on the left**: the menu on the Back key is now a slim vertical bar at the left edge of the
+  screen, with Home, the address, back, forward, reload and More one under the other. More opens a speech
+  balloon beside it with all the other actions, each with its name, and at the top a full-width line with the zoom buttons; the toggles (zoom, Watch by itself, Translate, Reader view, Bookmark, Quick access, Ad block, Pointer) come first and keep the menu open, a line separates them from the single actions, which close it. Left from the balloon goes back to More; the Back key or More closes the balloon. The menu's back and forward buttons close the menu, and so does a tap outside it. The name of the button you are on shows in a small label next to it; on the
+  address button that label is the page's address.
+- **Select bookmarks to delete**: "Select" in the bookmarks list lets you tick bookmarks with OK, "Select all", and
+  "Delete selected" removes them after you confirm. Back or Cancel leaves selecting.
+- **Bookmarks in the settings**: under Browsing, "Bookmarks" opens the list to manage them, and "Import or export
+  bookmarks" is there too. The Import or export button leaves the bookmarks list, which keeps Delete all.
+- **Icons stay with bookmarks**: a bookmarked site keeps its icon, when it has one, even after you clear browsing
+  data. Sites without an icon show a letter tile.
+- **Quick access is your pinned bookmarks**: "Add to Quick access" in a bookmark's menu, in the bookmarks list or on
+  the home screen, puts it there; "Remove from Quick access" takes it off and keeps the bookmark. The bookmarks list has two sections: Quick access at the top, then the other bookmarks.
+  Pinned bookmarks no longer repeat in the Bookmarks row. Quick access you already had is kept: those tiles are now
+  pinned bookmarks, in the same order. Add site, Edit and Move work as before.
+- **Bookmarks on the home screen**: the Bookmarks button leaves the top bar; the Bookmarks row on the home screen is
+  always there, shows your 20 newest bookmarks, the latest first, and ends with an "All bookmarks" card that opens the list to manage them.
+- **Type on your phone from the home screen**: a phone button next to the microphone opens the search screen with
+  the QR code ready.
+- **Search opens in place**: the search screen keeps the sofa in its corner and the field where the home screen's
+  search pill is, and the two screens fade into each other instead of jumping. The search engine's name now sits at
+  the end of the field, and goes away while you type a link.
 - **The phone page in tabs**: the page a phone opens to send things to the TV is split into Open, Bookmarks,
   History and Export, instead of one long page. Picking a page or sending a file comes back to the same tab.
   It now looks like Sofa on the TV: its colours and theme, light or dark, the sofa logo, and each site with its

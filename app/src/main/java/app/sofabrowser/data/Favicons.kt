@@ -18,7 +18,8 @@ import kotlin.concurrent.thread
 
 /**
  * Site icons, captured from pages the WebView loads anyway. Nothing is ever fetched just to show an icon;
- * sites without a cached icon get a letter tile.
+ * sites without a cached icon get a letter tile. The icon of a bookmarked site is kept when icons are cleared,
+ * so it stays the bookmark's icon.
  */
 class Favicons private constructor(private val context: Context) {
     private val dir = File(Space.files(context), "favicons").apply { mkdirs() }
@@ -49,9 +50,10 @@ class Favicons private constructor(private val context: Context) {
         return BitmapDrawable(context.resources, letterTile(pageUrl, title, sizePx))
     }
 
-    fun clear() {
+    /** Forgets the icons, except those of the sites in [keep] (see [key]): a bookmark keeps its icon. */
+    fun clear(keep: Set<String> = emptySet()) {
         memory.evictAll()
-        dir.listFiles()?.forEach { it.delete() }
+        dir.listFiles()?.filter { it.name.removeSuffix(".png") !in keep }?.forEach { it.delete() }
     }
 
     private fun letterTile(url: String, title: String, size: Int): Bitmap {

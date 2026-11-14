@@ -19,7 +19,7 @@ import app.sofabrowser.data.Site
 
 /**
  * The start screen: a fixed top bar (logo, search pill, mic, labelled icon buttons) above rows of site cards:
- * Quick access (user-editable), Most visited and Bookmarks. All of it is local data.
+ * Quick access (the pinned bookmarks), Most visited and the other Bookmarks. All of it is local data.
  */
 @SuppressLint("ViewConstructor")
 class HomeView(context: Context, private val listener: Listener) : FrameLayout(context) {
@@ -28,6 +28,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         fun onOpen(url: String)
         fun onSearch()
         fun onVoiceSearch()
+        fun onPhoneSearch()
         fun onBookmarks()
         fun onHistory()
         fun onTogglePrivate()
@@ -36,6 +37,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         fun onSpace()
         fun onTileMenu(site: Site)
         fun onMostVisitedMenu(site: Site)
+        fun onBookmarkMenu(site: Site)
         fun onAddTile()
         fun onDownloads()
     }
@@ -59,8 +61,10 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
     private val adBlockButton: LabeledIconButton
     private val downloadsButton: LabeledIconButton
     private val micButton: LabeledIconButton
+    private val phoneButton: LabeledIconButton
     private var tilesRow: LinearLayout? = null
     private var mostVisitedRow: LinearLayout? = null
+    private var bookmarksRow: LinearLayout? = null
 
     /** When non-null, the tile being moved with Left/Right; OK or Back drops it. */
     private var moving: SiteCard? = null
@@ -73,7 +77,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         val top = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.TOP
-            setPadding(64.px, 36.px, 64.px, 0)
+            setPadding(64.px, 36.px, 32.px, 0)
             clipChildren = false
             clipToPadding = false
         }
@@ -108,6 +112,8 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         }
         micButton = button(R.drawable.ic_mic, R.string.voice_search) { listener.onVoiceSearch() }
         top.addView(micButton, params(8))
+        phoneButton = button(R.drawable.ic_smartphone, R.string.phone_search) { listener.onPhoneSearch() }
+        top.addView(phoneButton, params(12))
         top.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
         privateButton = button(R.drawable.ic_private, R.string.private_mode) { listener.onTogglePrivate() }
         spaceButton = if (app.sofabrowser.Space.active) {
@@ -118,7 +124,6 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         adBlockButton = button(R.drawable.ic_shield, R.string.ad_blocker) { listener.onToggleAdBlock() }
         downloadsButton = button(R.drawable.ic_download, R.string.downloads) { listener.onDownloads() }
         listOf(
-            button(R.drawable.ic_bookmarks, R.string.bookmarks) { listener.onBookmarks() },
             button(R.drawable.ic_history, R.string.history) { listener.onHistory() },
             downloadsButton,
             privateButton,
@@ -157,7 +162,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         rows.removeAllViews()
         rows.setPadding(96.px, 24.px, 0, 64.px)
 
-        val tiles = db.tiles()
+        val tiles = db.pinned()
         tilesRow = addRow(R.string.quick_access, tiles) { card ->
             card.setOnLongClickListener { card.site?.let(listener::onTileMenu); true }
         }.also { row ->
@@ -173,7 +178,15 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 }
             }
         }
-        db.bookmarks().take(12).takeIf { it.isNotEmpty() }?.let { addRow(R.string.bookmarks, it) }
+        // Bookmarks live on the home screen: the 20 newest that are not in Quick access, ending in a card for the list
+        // that manages them all.
+        bookmarksRow = addRow(R.string.bookmarks, db.recentBookmarks(20)) { card ->
+            card.setOnLongClickListener { card.site?.let(listener::onBookmarkMenu); true }
+        }.also {
+            it.addView(SiteCard(context, null, context.getDrawable(R.drawable.ic_bookmarks), context.getString(R.string.all_bookmarks)).apply {
+                setOnClickListener { listener.onBookmarks() }
+            })
+        }
 
         // A tile that was removed hands the focus to the one that took its place in the row.
         val restore = focusedUrl?.let { url -> findCard { it.site?.url == url } }
@@ -230,7 +243,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // Menu on a Quick access or Most visited tile opens its options, like a long press of OK.
+        // Menu on a Quick access, Most visited or Bookmarks tile opens its options, like a long press of OK.
         if (moving == null && event.keyCode == KeyEvent.KEYCODE_MENU) {
             val focused = findFocus() as? SiteCard
             val site = focused?.site
@@ -238,6 +251,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 site == null -> null
                 focused.parent === tilesRow -> listener::onTileMenu
                 focused.parent === mostVisitedRow -> listener::onMostVisitedMenu
+                focused.parent === bookmarksRow -> listener::onBookmarkMenu
                 else -> null
             }
             if (open != null && site != null) {
@@ -263,9 +277,10 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 moving = null
                 card.alpha = 1f
                 Ui.animateScale(card, 1.04f, false)
-                db.reorderTiles((0 until row.childCount).mapNotNull { (row.getChildAt(it) as SiteCard).site?.id })
+                db.reorderPinned((0 until row.childCount).mapNotNull { (row.getChildAt(it) as SiteCard).site?.id })
             }
         }
         return true
     }
+
 }

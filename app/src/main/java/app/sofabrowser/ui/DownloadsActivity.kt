@@ -107,7 +107,7 @@ class DownloadsActivity : Activity() {
         }
     }
 
-    private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()
+    private fun toast(res: Int) = SofaToast.makeText(this, res, Toast.LENGTH_SHORT).show()
 
     private inner class Row(initial: Download) : LinearLayout(this@DownloadsActivity) {
         val body = LinearLayout(context)
@@ -218,6 +218,7 @@ class DownloadsActivity : Activity() {
         private fun confirmDelete() {
             val d = current() ?: return
             Ui.dialog(context).setMessage(getString(R.string.delete_file_confirm, d.name))
+                .setDestructive()
                 .setPositiveButton(R.string.delete) { _, _ -> DownloadEngine.delete(id) }
                 .setNegativeButton(android.R.string.cancel, null).show()
         }

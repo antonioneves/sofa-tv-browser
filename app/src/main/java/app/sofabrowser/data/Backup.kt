@@ -32,7 +32,7 @@ object Backup {
         return JSONObject()
             .put("sofa_backup", BackupFile.VERSION)
             .put("settings", settings)
-            .put("tiles", pages(db.tiles().map { it.title to it.url }))
+            .put("tiles", pages(db.pinned().map { it.title to it.url }))
             .put("bookmarks", JSONArray(db.bookmarkEntries().map {
                 JSONObject().put("title", it.title).put("url", it.url).put("created", it.created)
             }))

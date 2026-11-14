@@ -17,8 +17,10 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import app.sofabrowser.R
 
 /**
  * Sofa's dialog, in the style of Material 3 Expressive: a large rounded tonal container with a headline, supporting
@@ -34,6 +36,8 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
     private var neutral: View? = null
     private var negative: View? = null
     private var firstFocus: View? = null
+    /** The close cross, when it is the dialog's only control: it keeps the focus for as long as the dialog is open. */
+    private var cross: View? = null
     private var messageView: TextView? = null
 
     class Builder(internal val context: Context) {
@@ -52,6 +56,8 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         internal var negativeClick: DialogInterface.OnClickListener? = null
         internal var onDismiss: DialogInterface.OnDismissListener? = null
         internal var onCancel: DialogInterface.OnCancelListener? = null
+        internal var destructive = false
+        internal var closeIcon = false
 
         fun setTitle(t: CharSequence?) = apply { title = t }
         fun setTitle(res: Int) = apply { title = context.getString(res) }
@@ -78,6 +84,12 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         fun setNegativeButton(res: Int, l: DialogInterface.OnClickListener?) = setNegativeButton(context.getString(res), l)
         fun setOnDismissListener(l: DialogInterface.OnDismissListener) = apply { onDismiss = l }
         fun setOnCancelListener(l: DialogInterface.OnCancelListener) = apply { onCancel = l }
+
+        /** A cross in the top right corner closes the dialog, in place of a Close button at the bottom. */
+        fun setCloseIcon() = apply { closeIcon = true }
+
+        /** Makes the positive button the red-orange one of a delete, so it can't be mistaken for a plain choice. */
+        fun setDestructive() = apply { destructive = true }
 
         fun create() = SofaDialog(context, this)
         fun show() = create().also { it.show() }
@@ -117,7 +129,35 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         val wide = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
         b.title?.let {
-            sheet.addView(Ui.text(context, 40, p.text, bold = true).apply { text = it }, wide)
+            val title = Ui.text(context, 40, p.text, bold = true).apply { text = it }
+            if (!b.closeIcon) {
+                sheet.addView(title, wide)
+            } else {
+                // The title with the close cross at the end of its line: the dialog's top right corner.
+                val cross = ImageView(context).apply {
+                    setImageResource(R.drawable.ic_close)
+                    contentDescription = context.getString(R.string.close)
+                    isFocusable = true
+                    // Also after a tap: the cross keeps the focus whether the dialog was touched or driven by the remote.
+                    isFocusableInTouchMode = true
+                    isClickable = true
+                    setPadding(14.px, 14.px, 14.px, 14.px)
+                    background = Ui.fillSelector(Color.TRANSPARENT, p.focus, 32)
+                    setColorFilter(p.text)
+                    setOnFocusChangeListener { _, has -> setColorFilter(if (has) p.onFocus else p.text) }
+                    setOnClickListener { dismiss() }
+                }
+                firstFocus = cross
+                if (b.positiveText == null && b.negativeText == null && b.neutralText == null && b.items == null) this.cross = cross
+                sheet.addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    clipChildren = false
+                    addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    // Pulled up and out a little, so the cross sits in the corner and the title keeps its place.
+                    addView(cross, LinearLayout.LayoutParams(64.px, 64.px).apply { topMargin = (-12).px; marginEnd = (-12).px })
+                }, wide)
+            }
         }
         b.message?.let { msg ->
             val text = Ui.text(context, 28, p.textMid).apply { text = msg; setLineSpacing(0f, 1.15f) }.also { messageView = it }
@@ -168,12 +208,29 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         (firstFocus ?: positive ?: negative ?: neutral)?.requestFocus()
     }
 
+    /** With only the close cross to use, the D-pad can't move the focus off it: any key brings it back, the arrows do nothing. */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val only = cross
+        if (only != null) {
+            if (!only.hasFocus()) only.requestFocus()
+            when (event.keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+                android.view.KeyEvent.KEYCODE_TAB -> return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     private fun gap() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 64.px).apply { marginStart = 12.px }
 
     private fun pill(label: CharSequence, which: Int, primary: Boolean, click: () -> DialogInterface.OnClickListener?): TextView {
         val p = Ui.p
-        val idle = if (primary) Ui.SWITCH_ON else p.fillFocused
+        val danger = primary && b.destructive
+        val idle = if (danger) Ui.DANGER_IDLE else if (primary) Ui.SWITCH_ON else p.fillFocused
         val idleText = if (primary) Color.WHITE else p.text
+        val focusFill = if (danger) Ui.DANGER else p.focus
+        val focusText = if (danger) Color.WHITE else p.onFocus
         return Ui.text(context, 28, idleText, bold = true).apply {
             text = label
             gravity = Gravity.CENTER
@@ -182,8 +239,8 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
             maxLines = 1
             setPadding(36.px, 0, 36.px, 0)
             minWidth = 140.px
-            background = Ui.fillSelector(idle, p.focus, 32)
-            Ui.focusScale(this, 1.06f) { has -> setTextColor(if (has) p.onFocus else idleText) }
+            background = Ui.fillSelector(idle, focusFill, 32)
+            Ui.focusScale(this, 1.06f) { has -> setTextColor(if (has) focusText else idleText) }
             setOnClickListener {
                 click()?.onClick(this@SofaDialog, which)
                 dismiss()

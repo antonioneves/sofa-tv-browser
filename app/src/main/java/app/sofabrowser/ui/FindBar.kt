@@ -27,6 +27,7 @@ class FindBar(context: Context, private val actions: Actions) : LinearLayout(con
         fun find(query: String)
         fun findNext(forward: Boolean)
         fun findByVoice()
+        fun findByPhone()
         fun closeFind()
     }
 
@@ -78,6 +79,8 @@ class FindBar(context: Context, private val actions: Actions) : LinearLayout(con
         addView(count)
         mic = button(R.drawable.ic_mic, R.string.voice_search) { actions.findByVoice() }
         addView(mic)
+        // Typing on the phone: its page has a Find tab.
+        addView(button(R.drawable.ic_smartphone, R.string.phone_type) { actions.findByPhone() })
         addView(button(R.drawable.ic_keyboard_arrow_up, R.string.find_previous) { actions.findNext(false) })
         next = button(R.drawable.ic_keyboard_arrow_down, R.string.find_next) { actions.findNext(true) }
         addView(next)
@@ -107,6 +110,14 @@ class FindBar(context: Context, private val actions: Actions) : LinearLayout(con
         field.requestFocus()
         field.selectAll()
         post { context.getSystemService(InputMethodManager::class.java).showSoftInput(field, 0) }
+    }
+
+    /** Shows the bar already searching for [text], as typed on the phone: no keyboard, the focus on Next. */
+    fun openWith(text: String, voice: Boolean) {
+        mic.visibility = if (voice) VISIBLE else GONE
+        visibility = VISIBLE
+        count.text = ""
+        setQuery(text)
     }
 
     fun close() {

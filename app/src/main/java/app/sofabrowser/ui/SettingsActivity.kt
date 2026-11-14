@@ -63,6 +63,31 @@ class SettingsActivity : Activity() {
     /** The Filter lists row on the main page, whose rule count is refreshed on return. */
     private var listsRow: View? = null
 
+    /** Importing and exporting bookmarks, from the Bookmarks entries below. */
+    private val transfer by lazy {
+        BookmarkTransfer(this, onUrl = ::openInBrowser, onChanged = { if (!isFinishing) build() })
+    }
+
+    /** Hands an address to the browser screen that opened the settings, and leaves the settings. */
+    private fun openInBrowser(url: String) {
+        setResult(RESULT_OK, Intent().putExtra(SearchActivity.EXTRA_URL, url))
+        finish()
+    }
+
+    @Deprecated("Framework activity result API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        if (transfer.onActivityResult(requestCode, resultCode, data)) return
+        // A bookmark opened from the list is handed on to the browser.
+        if (requestCode == REQ_BOOKMARKS && resultCode == RESULT_OK) data?.getStringExtra(SearchActivity.EXTRA_URL)?.let(::openInBrowser)
+    }
+
+    override fun onDestroy() {
+        transfer.stop()
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Ui.init(this)
@@ -148,19 +173,24 @@ class SettingsActivity : Activity() {
         prefs.autoWatchSites.size.takeIf { it > 0 }?.let { n ->
             row(getString(R.string.forget_auto_watch_sites), resources.getQuantityString(R.plurals.auto_watch_sites_count, n, n), null) {
                 prefs.forgetAutoWatchSites()
-                Toast.makeText(this, R.string.auto_watch_sites_forgotten, Toast.LENGTH_SHORT).show()
+                SofaToast.makeText(this, R.string.auto_watch_sites_forgotten, Toast.LENGTH_SHORT).show()
                 build()
             }
         }
         row(getString(R.string.forget_player_choices), getString(R.string.forget_player_choices_sub), null) {
             prefs.playerChoices = PlayerChoices()
-            Toast.makeText(this, R.string.player_choices_forgotten, Toast.LENGTH_SHORT).show()
+            SofaToast.makeText(this, R.string.player_choices_forgotten, Toast.LENGTH_SHORT).show()
         }
         row(getString(R.string.play_in), getString(R.string.play_in_setting_sub), valueText(playerLabel())) { pickPlayer() }
         switch(R.string.force_external_player, R.string.force_external_player_sub, prefs::forceExternalPlayer)
         // Only on TVs that offer another refresh rate at their resolution; many offer just one.
         if (RefreshRateMatch(this).available()) switch(R.string.match_frame_rate, R.string.match_frame_rate_sub, prefs::matchFrameRate)
         nav(R.string.downloads, null) { startActivity(android.content.Intent(this, DownloadsActivity::class.java)) }
+        nav(R.string.bookmarks, null) {
+            @Suppress("DEPRECATION")
+            startActivityForResult(Intent(this, ListActivity::class.java).putExtra(ListActivity.EXTRA_MODE, ListActivity.MODE_BOOKMARKS), REQ_BOOKMARKS)
+        }
+        nav(R.string.bookmarks_transfer_title, null) { transfer.start() }
 
         section(R.string.section_privacy)
         switch(R.string.adblock_setting, R.string.adblock_setting_sub, prefs::adBlock)
@@ -318,7 +348,7 @@ class SettingsActivity : Activity() {
                 d.dismiss()
                 if (ids[which] == "custom") askText(R.string.custom_search_engine, prefs.customSearchTemplate) {
                     if ("%s" in it && it.startsWith("https://")) { prefs.customSearchTemplate = it; prefs.searchEngineId = "custom" }
-                    else Toast.makeText(this, R.string.custom_search_invalid, Toast.LENGTH_LONG).show()
+                    else SofaToast.makeText(this, R.string.custom_search_invalid, Toast.LENGTH_LONG).show()
                     build()
                 } else { prefs.searchEngineId = ids[which]; build() }
             }.show()
@@ -340,7 +370,7 @@ class SettingsActivity : Activity() {
                 if (which == 0) askText(R.string.start_page, prefs.startPage) { text ->
                     val url = UrlInput.resolve(text, prefs.searchEngine, emptyList())
                     if (text.isEmpty() || url == prefs.searchEngine.searchUrl(text) || !Browser.isWebUrl(url)) {
-                        Toast.makeText(this, R.string.start_page_invalid, Toast.LENGTH_LONG).show()
+                        SofaToast.makeText(this, R.string.start_page_invalid, Toast.LENGTH_LONG).show()
                     } else prefs.startPage = url
                     build()
                 } else { prefs.startPage = bookmarks[which - 1].url; build() }
@@ -403,7 +433,7 @@ class SettingsActivity : Activity() {
                 d.dismiss()
                 if (DRM_MODES[which] != prefs.drmMode) {
                     prefs.drmMode = DRM_MODES[which]
-                    Toast.makeText(this, R.string.drm_saved, Toast.LENGTH_LONG).show()
+                    SofaToast.makeText(this, R.string.drm_saved, Toast.LENGTH_LONG).show()
                     build()
                 }
             }.show()
@@ -464,12 +494,12 @@ class SettingsActivity : Activity() {
             toggle.on = on
             // Chosen here either way: setup never offers it again.
             prefs.strongerAsked = true
-            if (on) Toast.makeText(this, R.string.stronger_adblock_downloading, Toast.LENGTH_LONG).show()
+            if (on) SofaToast.makeText(this, R.string.stronger_adblock_downloading, Toast.LENGTH_LONG).show()
             blocker.setStronger(on) {
                 if (isFinishing) return@setStronger
                 (listsRow as? TextView)?.text = rulesText(blocker.rules.rules)
                 blocker.lists.firstOrNull { it.stronger && it.error != null }?.let {
-                    Toast.makeText(this, getString(R.string.blocklist_failed, it.error), Toast.LENGTH_LONG).show()
+                    SofaToast.makeText(this, getString(R.string.blocklist_failed, it.error), Toast.LENGTH_LONG).show()
                 }
             }
             if (on && !prefs.autoUpdateLists) suggestListUpdates()
@@ -504,9 +534,9 @@ class SettingsActivity : Activity() {
         }
         row(getString(R.string.add_filter_list), getString(R.string.add_filter_list_sub), arrow()) { enterListAddress() }
         row(getString(R.string.update_all_lists), getString(R.string.update_all_lists_sub), arrow()) {
-            Toast.makeText(this, R.string.lists_updating, Toast.LENGTH_SHORT).show()
+            SofaToast.makeText(this, R.string.lists_updating, Toast.LENGTH_SHORT).show()
             blocker.updateAll { failed ->
-                Toast.makeText(this, if (failed == 0) getString(R.string.lists_updated)
+                SofaToast.makeText(this, if (failed == 0) getString(R.string.lists_updated)
                     else resources.getQuantityString(R.plurals.lists_update_failed, failed, failed), Toast.LENGTH_LONG).show()
                 if (!isFinishing) buildLists()
             }
@@ -582,10 +612,10 @@ class SettingsActivity : Activity() {
             blocker.setEnabled(l.id, !l.enabled) { if (!isFinishing) buildLists() }
         }
         if (l.url != null) actions += R.string.update to {
-            Toast.makeText(this, R.string.list_adding, Toast.LENGTH_SHORT).show()
+            SofaToast.makeText(this, R.string.list_adding, Toast.LENGTH_SHORT).show()
             blocker.update(l.id) { result ->
-                result.onSuccess { Toast.makeText(this, resources.getQuantityString(R.plurals.list_updated, it.rules, it.name, it.rules), Toast.LENGTH_LONG).show() }
-                    .onFailure { Toast.makeText(this, getString(R.string.blocklist_failed, it.message), Toast.LENGTH_LONG).show() }
+                result.onSuccess { SofaToast.makeText(this, resources.getQuantityString(R.plurals.list_updated, it.rules, it.name, it.rules), Toast.LENGTH_LONG).show() }
+                    .onFailure { SofaToast.makeText(this, getString(R.string.blocklist_failed, it.message), Toast.LENGTH_LONG).show() }
                 if (!isFinishing) buildLists()
             }
         }
@@ -613,11 +643,11 @@ class SettingsActivity : Activity() {
 
     private fun addListAt(url: String) {
         // Debug builds also take http://, so tests can serve a list from the development machine.
-        if (!url.startsWith("https://") && !(BuildConfig.DEBUG && url.startsWith("http://"))) { Toast.makeText(this, R.string.https_only, Toast.LENGTH_LONG).show(); return }
-        Toast.makeText(this, R.string.list_adding, Toast.LENGTH_SHORT).show()
+        if (!url.startsWith("https://") && !(BuildConfig.DEBUG && url.startsWith("http://"))) { SofaToast.makeText(this, R.string.https_only, Toast.LENGTH_LONG).show(); return }
+        SofaToast.makeText(this, R.string.list_adding, Toast.LENGTH_SHORT).show()
         blocker.add(url) { result ->
-            result.onSuccess { Toast.makeText(this, resources.getQuantityString(R.plurals.list_added, it.rules, it.name, it.rules), Toast.LENGTH_LONG).show() }
-                .onFailure { Toast.makeText(this, getString(R.string.list_add_failed, it.message), Toast.LENGTH_LONG).show() }
+            result.onSuccess { SofaToast.makeText(this, resources.getQuantityString(R.plurals.list_added, it.rules, it.name, it.rules), Toast.LENGTH_LONG).show() }
+                .onFailure { SofaToast.makeText(this, getString(R.string.list_add_failed, it.message), Toast.LENGTH_LONG).show() }
             if (!isFinishing) buildLists()
         }
     }
@@ -627,12 +657,12 @@ class SettingsActivity : Activity() {
             .setPositiveButton(R.string.clear) { _, _ ->
                 WebViews.clearBrowsingData(this, null)
                 Db.get(this).clearHistory()
-                Favicons.get(this).clear()
+                Favicons.get(this).clear(keep = Db.get(this).bookmarks().mapNotNull { Favicons.key(it.url) }.toSet())
                 prefs.clearDrmAnswers()
                 app.sofabrowser.resumeStore(this).clear()
                 forgetSiteChoices(this)
                 StreamCopyProvider.clear(this)
-                Toast.makeText(this, R.string.cleared, Toast.LENGTH_SHORT).show()
+                SofaToast.makeText(this, R.string.cleared, Toast.LENGTH_SHORT).show()
             }.setNegativeButton(android.R.string.cancel, null).show()
     }
 
@@ -748,11 +778,11 @@ class SettingsActivity : Activity() {
             val keyword = SearchShortcuts.keywordOf(text)
             when {
                 keyword == null -> {
-                    Toast.makeText(this, getString(R.string.search_shortcut_bad_keyword, SearchShortcuts.MAX_KEYWORD), Toast.LENGTH_LONG).show()
+                    SofaToast.makeText(this, getString(R.string.search_shortcut_bad_keyword, SearchShortcuts.MAX_KEYWORD), Toast.LENGTH_LONG).show()
                     showShortcuts()
                 }
                 searchShortcuts(this).any { it.keyword == keyword } -> {
-                    Toast.makeText(this, getString(R.string.search_shortcut_taken, keyword), Toast.LENGTH_LONG).show()
+                    SofaToast.makeText(this, getString(R.string.search_shortcut_taken, keyword), Toast.LENGTH_LONG).show()
                     showShortcuts()
                 }
                 else -> askShortcutAddress("https://") { savedSearchShortcuts(this)[keyword] = it }
@@ -764,7 +794,7 @@ class SettingsActivity : Activity() {
     private fun askShortcutAddress(current: String, save: (String) -> Unit) {
         askText(R.string.search_shortcut_address, current) {
             if (SearchShortcuts.validTemplate(it)) save(it)
-            else Toast.makeText(this, R.string.search_shortcut_invalid, Toast.LENGTH_LONG).show()
+            else SofaToast.makeText(this, R.string.search_shortcut_invalid, Toast.LENGTH_LONG).show()
             showShortcuts()
         }
     }
@@ -776,6 +806,7 @@ class SettingsActivity : Activity() {
         private val THEMES = listOf("dark", "light", "system")
         private val DRM_MODES = listOf(ProtectedMedia.ASK, ProtectedMedia.ALLOW, ProtectedMedia.BLOCK)
         private const val PAGE = "page"
+        private const val REQ_BOOKMARKS = 7001
         private const val PAGE_LISTS = "lists"
         private const val PAGE_SITES = "sites"
     }
