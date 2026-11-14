@@ -122,7 +122,9 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             })
         }
         // Home stays in reach with the actions folded away.
-        add(Action.HOME, R.drawable.ic_home, R.string.home, addressRow)
+        // The sofa is Sofa's home: orange at rest, like on the start screen.
+        add(Action.HOME, R.drawable.ic_sofa, R.string.home, addressRow)
+        buttons[Action.HOME]?.accent = Ui.BRAND
         addressRow.addView(address, LinearLayout.LayoutParams(0, 80.px, 1f).apply { marginEnd = 28.px })
         // Moving about the page, beside its address.
         add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, addressRow, 16)
