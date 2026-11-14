@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
@@ -17,9 +18,9 @@ import app.sofabrowser.Space
 
 /**
  * The browse menu, opened with BACK: a slim vertical bar on the left edge of the screen, with Home, the address,
- * back, forward, reload, zoom and More, one under the other. More slides a second column of action buttons out beside
- * it, and folds it away again; the menu keeps that choice. The focused button's name shows in a small label beside
- * it. Like BrowsHere's, the menu remembers the last button used and doesn't hide on its own.
+ * back, forward, reload, zoom and More, one under the other. More opens a speech balloon beside it with all the other
+ * actions, each with its name; BACK or More closes it again. The focused bar button's name shows in a small label
+ * beside it. Like BrowsHere's, the menu remembers the last button used and doesn't hide on its own.
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
 
@@ -66,7 +67,10 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     private var tipFor: android.view.View? = null
     private lateinit var zoomLabel: TextView
     private lateinit var more: LabeledIconButton
-    private lateinit var actionsPane: android.view.View
+    private lateinit var balloon: LinearLayout
+    private lateinit var balloonList: LinearLayout
+    private lateinit var balloonScroll: FocusScrollView
+    private lateinit var balloonDrawable: BalloonDrawable
     private val topRow = setOf(Action.HOME, Action.BACK, Action.FORWARD, Action.RELOAD, Action.ZOOM_OUT, Action.ZOOM_IN)
     private var lastFocused = Action.HOME
 
@@ -74,46 +78,48 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         super.onCreate(savedInstanceState)
         window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            // The whole screen, the bar at its left edge: the bar then widens smoothly as More opens it, where a window
-            // fitted to it would jump to its new size.
+            // The whole screen, the bar at its left edge and the balloon beside it: one window for both, so the
+            // balloon needs no window of its own to open in.
             setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
             setDimAmount(0f)
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         }
-        val root = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
+        val sheetColor = if (Space.active) Ui.p.sheetSpace else Ui.p.sheet
+        val bar = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
             background = GradientDrawable().apply {
-                setColor(if (Space.active) Ui.p.sheetSpace else Ui.p.sheet)
+                setColor(sheetColor)
                 // Rounded where it faces the page: the top right and bottom right corners.
                 cornerRadii = FloatArray(8) { if (it in 2..5) 16.px.toFloat() else 0f }
             }
-            clipChildren = false
-        }
-
-        fun column() = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
             setPadding(0, 48.px, 0, 48.px)
             // The focused button's scaled square may reach into the padding.
             clipChildren = false
             clipToPadding = false
         }
-        val bar = column()
-        val list = column()
+        balloonList = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val list = balloonList
         fun place(b: LabeledIconButton, into: LinearLayout, gap: Int) {
-            b.onFocused = b.onFocused.let { was -> { was?.invoke(); showTip(b) } }
+            if (into === list) {
+                into.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 4.px })
+                return
+            }
+            // In the bar the name shows beside the focused button; a balloon that is open makes way for another button.
+            b.onFocused = b.onFocused.let { was -> { was?.invoke(); showTip(b); if (b !== more && balloonOpen) setBalloon(false) } }
             into.addView(b, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = gap.px
             })
         }
         fun add(action: Action, icon: Int, label: Int, into: LinearLayout = list, gap: Int = 16) {
-            // The icons speak for themselves; the name of the focused one shows beside it.
-            val b = LabeledIconButton(context, icon, context.getString(label), labelled = false) { actions.onAction(action) }
-            b.onFocused = { lastFocused = action }
+            // In the bar the icons speak for themselves; in the balloon each action is a line with its name.
+            val inList = into === list
+            val b = LabeledIconButton(context, icon, context.getString(label), labelled = false, row = inList) { actions.onAction(action) }
+            b.onFocused = { lastFocused = action; if (inList) hideTip() }
             buttons[action] = b
             place(b, into, gap)
         }
-        // Home stays in reach with the actions folded away.
+        // Home stays in reach with the balloon closed.
         // The sofa is Sofa's home: orange at rest, like on the start screen.
         add(Action.HOME, R.drawable.ic_sofa, R.string.home, bar, 28)
         buttons[Action.HOME]?.accent = Ui.BRAND
@@ -131,8 +137,13 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         bar.addView(zoomLabel, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, 56.px))
         add(Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in, bar, 28)
         more = LabeledIconButton(context, R.drawable.ic_chevron_right, context.getString(R.string.more_actions), labelled = false) {
-            prefs.menuExpanded = !expanded
-            setExpanded(prefs.menuExpanded)
+            setBalloon(!balloonOpen, focusInside = true)
+        }
+        // Right on More opens the balloon too, as it sits in that direction.
+        more.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN && !balloonOpen) {
+                setBalloon(true, focusInside = true); true
+            } else false
         }
         place(more, bar, 0)
 
@@ -164,34 +175,37 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // How the remote moves about pages.
         add(Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode)
         add(Action.POINTER, R.drawable.ic_mouse, R.string.pointer)
-        add(Action.SETTINGS, R.drawable.ic_settings, R.string.settings, gap = 0)
+        add(Action.SETTINGS, R.drawable.ic_settings, R.string.settings)
 
-        // The second column scrolls from the top of the screen to its foot; a focused button keeps some room from
-        // both, so it is never cut.
-        actionsPane = FocusScrollView(context, 96.px).apply {
+        // The balloon: a scrolling list in a bubble whose tail points at More. A long list scrolls inside it, and a
+        // focused line keeps some room from its top and bottom edges.
+        balloonScroll = FocusScrollView(context, 96.px).apply {
             isVerticalScrollBarEnabled = false
             clipChildren = false
-            addView(list, android.widget.FrameLayout.LayoutParams(COLUMN.px, ViewGroup.LayoutParams.WRAP_CONTENT))
-            visibility = android.view.View.GONE
-            // The label follows its button as the column scrolls.
-            setOnScrollChangeListener { _, _, _, _, _ -> placeTip() }
+            addView(balloonList)
         }
-        root.addView(bar, LinearLayout.LayoutParams(COLUMN.px, LinearLayout.LayoutParams.MATCH_PARENT))
-        // Beside the bar: opening it widens the sheet.
-        root.addView(actionsPane, LinearLayout.LayoutParams(COLUMN.px, LinearLayout.LayoutParams.MATCH_PARENT))
-        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeTip() }
+        balloonDrawable = BalloonDrawable(sheetColor, Ui.p.fillFocused, 28.px.toFloat(), TAIL.px.toFloat(), 22.px.toFloat(), 2.px.toFloat())
+        balloon = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = balloonDrawable
+            setPadding(TAIL.px + 16.px, 20.px, 16.px, 20.px)
+            visibility = android.view.View.GONE
+            addView(balloonScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        }
 
         tip = Ui.text(context, 26, Ui.p.text).apply {
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.MIDDLE
             maxWidth = 900.px
-            background = Ui.rounded(if (Space.active) Ui.p.sheetSpace else Ui.p.sheet, 12)
+            background = Ui.rounded(sheetColor, 12)
             setPadding(24.px, 14.px, 24.px, 14.px)
             visibility = android.view.View.INVISIBLE
         }
         setContentView(android.widget.FrameLayout(context).apply {
-            addView(root, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START))
+            addView(bar, android.widget.FrameLayout.LayoutParams(BAR.px, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START))
+            addView(balloon, android.widget.FrameLayout.LayoutParams(BALLOON.px, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(tip, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeTip() }
         })
     }
 
@@ -202,6 +216,11 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         tip.visibility = android.view.View.VISIBLE
         // Placed once the button is where a scroll or a layout leaves it.
         tip.post { placeTip() }
+    }
+
+    private fun hideTip() {
+        tipFor = null
+        tip.visibility = android.view.View.INVISIBLE
     }
 
     private fun placeTip() {
@@ -217,75 +236,82 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         tip.y = (at[1] - origin[1] + (button.height - tip.measuredHeight) / 2).coerceIn(8.px, maxOf(8.px, frame.height - tip.measuredHeight - 8.px)).toFloat()
     }
 
-    private val prefs = app.sofabrowser.Prefs(context)
-    private var expanded = false
+    private var balloonOpen = false
 
     fun show(state: State) {
         if (!isShowing) show()
         update(state)
-        // A pending "Allow once" is why the menu was opened, most likely: it opens with the actions out, this time only.
+        // The balloon starts closed; a pending "Allow once" is why the menu was opened, most likely, so then it opens
+        // with that action focused.
         if (state.allowPending) {
-            setExpanded(true, animate = false)
+            setBalloon(true, focusInside = true, animate = false)
             buttons[Action.ALLOW_ONCE]?.requestFocus()
             return
         }
-        setExpanded(prefs.menuExpanded, animate = false)
-        // An action last used from the folded row is one press away, on More.
-        val last = buttons[lastFocused]?.takeIf { (expanded || lastFocused in topRow) && it.isEnabled && it.visibility == android.view.View.VISIBLE }
-        (last ?: if (expanded || lastFocused in topRow) buttons[Action.HOME] else more)?.requestFocus()
+        setBalloon(false, animate = false)
+        // An action last used from the balloon is one press away, on More.
+        val last = buttons[lastFocused]?.takeIf { lastFocused in topRow && it.isEnabled && it.visibility == android.view.View.VISIBLE }
+        (last ?: if (lastFocused in topRow) buttons[Action.HOME] else more)?.requestFocus()
     }
 
-    private var paneAnimator: android.animation.ValueAnimator? = null
+    /** BACK closes the balloon first, and the menu when it is already closed. */
+    @Deprecated("Framework dialog back handling")
+    override fun onBackPressed() {
+        if (balloonOpen) {
+            setBalloon(false)
+            more.requestFocus()
+        } else {
+            @Suppress("DEPRECATION")
+            super.onBackPressed()
+        }
+    }
 
-    /** Shows or hides the second column; from More ([animate]) the sheet widens or narrows to fit, with focus following. */
-    private fun setExpanded(open: Boolean, animate: Boolean = true) {
-        if (!::actionsPane.isInitialized) return
-        val changed = open != expanded || paneAnimator?.isRunning == true
-        expanded = open
-        // One chevron, pointing at where the column comes from or goes back to.
+    /** Opens or closes the balloon beside More. [focusInside] moves the focus to its last used action (or Watch). */
+    private fun setBalloon(open: Boolean, focusInside: Boolean = false, animate: Boolean = true) {
+        if (!::balloon.isInitialized) return
+        val changed = open != balloonOpen
+        balloonOpen = open
+        // One chevron, pointing at where the balloon is or goes back to.
         more.set(R.drawable.ic_chevron_right, context.getString(if (open) R.string.fewer_actions else R.string.more_actions))
         more.scaleX = if (open) -1f else 1f
-        placeTip()
-        paneAnimator?.cancel()
-        val pane = actionsPane
-        val full = COLUMN.px
-        if (!open && animate && pane.hasFocus()) more.requestFocus()
-        if (!animate || !changed) {
-            pane.layoutParams.width = full
-            pane.alpha = 1f
-            pane.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
-            pane.requestLayout()
+        if (!open) {
+            if (balloon.hasFocus()) more.requestFocus()
+            if (changed && animate) balloon.animate().alpha(0f).setDuration(120).withEndAction {
+                if (!balloonOpen) balloon.visibility = android.view.View.GONE
+            }.start() else balloon.visibility = android.view.View.GONE
             return
         }
-        // From the width it has now (part way, if it was moving) to its full width or none.
-        val from = if (pane.visibility == android.view.View.VISIBLE) pane.width else 0
-        val to = if (open) full else 0
-        pane.visibility = android.view.View.VISIBLE
-        pane.layoutParams.width = from
-        pane.requestLayout()
-        paneAnimator = android.animation.ValueAnimator.ofInt(from, to).apply {
-            duration = 200
-            interpolator = android.view.animation.DecelerateInterpolator()
-            addUpdateListener {
-                pane.layoutParams.width = it.animatedValue as Int
-                pane.alpha = if (to > 0) it.animatedFraction else 1f - it.animatedFraction
-                pane.requestLayout()
-            }
-            addListener(object : android.animation.AnimatorListenerAdapter() {
-                private var cancelled = false
-                override fun onAnimationCancel(animation: android.animation.Animator) { cancelled = true }
-                override fun onAnimationEnd(animation: android.animation.Animator) {
-                    if (cancelled) return
-                    pane.layoutParams.width = full
-                    pane.alpha = 1f
-                    if (!open) pane.visibility = android.view.View.GONE
-                    pane.requestLayout()
-                }
-            })
-            start()
+        balloon.animate().cancel()
+        balloon.visibility = android.view.View.VISIBLE
+        balloon.alpha = if (changed && animate) 0f else 1f
+        if (changed && animate) balloon.animate().alpha(1f).setDuration(120).start()
+        placeBalloon()
+        if (focusInside) {
+            hideTip()
+            (buttons[lastFocused]?.takeIf { lastFocused !in topRow && it.isEnabled && it.visibility == android.view.View.VISIBLE }
+                ?: buttons[Action.WATCH])?.requestFocus()
         }
-        if (open) (buttons[lastFocused]?.takeIf { lastFocused !in topRow && it.isEnabled && it.visibility == android.view.View.VISIBLE }
-            ?: buttons[Action.WATCH])?.requestFocus()
+    }
+
+    /** Sizes the balloon to its list (or the screen's height) and puts its tail on More. */
+    private fun placeBalloon() {
+        val frame = balloon.parent as? android.view.View ?: return
+        // Not laid out yet: tried again once it is.
+        if (frame.height == 0 || !more.isAttachedToWindow) { frame.post { if (balloonOpen) placeBalloon() }; return }
+        val margin = 24.px
+        val inner = BALLOON.px - balloon.paddingLeft - balloon.paddingRight
+        balloonList.measure(android.view.View.MeasureSpec.makeMeasureSpec(inner, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED))
+        val h = minOf(balloonList.measuredHeight + balloon.paddingTop + balloon.paddingBottom, frame.height - 2 * margin)
+        balloon.layoutParams.height = h
+        balloon.requestLayout()
+        val at = IntArray(2).also { more.getLocationInWindow(it) }
+        val origin = IntArray(2).also { frame.getLocationInWindow(it) }
+        val moreY = at[1] - origin[1] + more.height / 2
+        val top = (moreY - h / 2).coerceIn(margin, maxOf(margin, frame.height - h - margin))
+        balloon.x = (BAR.px + 4.px).toFloat()
+        balloon.y = top.toFloat()
+        balloonDrawable.tailY = (moreY - top).toFloat()
     }
 
     fun update(s: State) {
@@ -322,6 +348,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         zoomLimit(Action.ZOOM_IN, s.canZoomIn, Action.ZOOM_OUT)
         // The focused button may have a new name (Reload to Stop, the page's address).
         placeTip()
+        if (balloonOpen) placeBalloon()
     }
 
     private fun zoomLimit(action: Action, enabled: Boolean, other: Action) {
@@ -332,7 +359,9 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     }
 
     private companion object {
-        /** Design pixels: the width of the bar, and of the column More opens beside it. */
-        const val COLUMN = 136
+        // Design pixels: the bar's width, the balloon's width, and the room its tail takes at the balloon's left.
+        const val BAR = 136
+        const val BALLOON = 600
+        const val TAIL = 26
     }
 }

@@ -92,8 +92,6 @@ class Prefs(context: Context) {
     var searchSuggestions by boolean("search_suggestions", false)
     /** Shows the mic buttons; voice search runs on the TV's speech service. */
     var voiceSearch by boolean("voice_search", true)
-    /** The page menu shows its row of actions; only the menu's More button changes it. */
-    var menuExpanded by boolean("menu_expanded", false)
     /** The language pages are translated into, by Translator's codes; "" for the TV's own language. */
     var translateLanguage by string("translate_language", "")
     var adBlock by boolean("adblock", true)
