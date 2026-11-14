@@ -75,7 +75,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         val top = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.TOP
-            setPadding(64.px, 36.px, 64.px, 0)
+            setPadding(64.px, 36.px, 32.px, 0)
             clipChildren = false
             clipToPadding = false
         }
