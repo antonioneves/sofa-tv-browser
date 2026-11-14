@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Balloon labels in the menu bar**: the name of the focused button in the browse menu's slim bar shows in a small speech balloon, like the More menu, with its tail pointing at the button.
 - **Loading bar at the bottom**: the orange page loading bar runs along the bottom edge of the page instead of the top.
 - **A cross to close the phone card**: the "Type on your phone" card has a close cross in its top right corner, in
   place of the Close button at the bottom. The cross keeps the focus while the card is open: the arrows move nothing.
