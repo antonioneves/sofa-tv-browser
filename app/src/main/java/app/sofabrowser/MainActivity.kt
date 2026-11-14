@@ -662,15 +662,12 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 prefs.setAutoWatchSite(host, on)
                 if (on) prefs.autoWatch = WatchTarget.Auto.SITES
                 toast(if (on) R.string.auto_watch_site_added else R.string.auto_watch_site_removed)
-                menu?.dismiss()
             }
             BrowserMenu.Action.FIND -> { menu?.dismiss(); findBar.open(voice = prefs.voiceSearch && voiceInput.available) }
             BrowserMenu.Action.TRANSLATE -> if (host != null && Browser.isWebUrl(url)) {
-                menu?.dismiss()
                 if (Sites.of(host) == translateSite) showOriginal() else { translateSite = Sites.of(host); translate(announce = true) }
             }
             BrowserMenu.Action.READER -> if (Browser.isWebUrl(url)) {
-                menu?.dismiss()
                 if (reading) leaveReader() else read()
             }
             BrowserMenu.Action.HIDE_PARTS -> if (Browser.isWebUrl(url)) {
@@ -685,6 +682,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             BrowserMenu.Action.PIN -> if (Browser.isWebUrl(url)) {
                 db.pin(w.title?.ifBlank { null } ?: UrlInput.display(url), url)
                 toast(R.string.pinned)
+                menu?.dismiss()
             }
             BrowserMenu.Action.TV_SHORTCUT -> if (Browser.isWebUrl(url)) {
                 menu?.dismiss()
@@ -698,7 +696,6 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 val allowed = !browser.adBlockOff(host)
                 browser.setAdBlockOff(host, allowed)
                 toast(if (allowed) R.string.adblock_site_disabled else R.string.adblock_site_enabled)
-                menu?.dismiss()
                 browser.reload()
             }
             BrowserMenu.Action.USER_AGENT -> pickUserAgent()
@@ -708,7 +705,6 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 browser.setKeysToPage(host, keys)
                 cursor.cursorEnabled = !keys
                 toast(if (keys) R.string.pointer_off_toast else R.string.pointer_on_toast)
-                menu?.dismiss()
             }
             BrowserMenu.Action.ZOOM_IN -> if (zoomStep < MAX_ZOOM_STEP) { zoomTo(w, zoomStep + 1); browser.setSiteZoom(url, zoomStep) }
             BrowserMenu.Action.ZOOM_OUT -> if (zoomStep > MIN_ZOOM_STEP) { zoomTo(w, zoomStep - 1); browser.setSiteZoom(url, zoomStep) }
@@ -812,6 +808,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             // The pointer has nothing to do on the article: the D-pad pages through it instead.
             cursor.cursorEnabled = false
             if (cursor.scrollMode) cursor.setScrollMode(false)
+            // The menu stays open over a toggle: its line now offers to leave reader view.
+            menu?.takeIf { it.isShowing }?.update(menuState())
         }
     }
 

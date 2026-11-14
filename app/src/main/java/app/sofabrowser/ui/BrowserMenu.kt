@@ -18,7 +18,8 @@ import app.sofabrowser.Space
 /**
  * The browse menu, opened with BACK: a slim vertical bar on the left edge of the screen, with Home, the address,
  * back, forward, reload, zoom and More, one under the other. More opens a speech balloon beside it with all the other
- * actions, each with its name; BACK or More closes it again. The focused bar button's name shows in a small label
+ * actions, each with its name: the toggles first, which keep the menu open, then the single actions, which close it.
+ * BACK or More closes the balloon again. The focused bar button's name shows in a small label
  * beside it. Like BrowsHere's, the menu remembers the last button used and doesn't hide on its own.
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
@@ -139,7 +140,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         }
         place(more, bar, 0)
 
-        // Grouped by what they act on.
+        // Two groups. First the toggles: they change how the page or the site is shown, the balloon stays open and
+        // the line shows the new state. Then the actions: each does one thing and closes the menu.
         // Zoom first: out, the level, in, as wide as the balloon and as tall as the lines below, a third each.
         fun zoomButton(action: Action, icon: Int, label: Int) =
             LabeledIconButton(context, icon, context.getString(label), labelled = false, row = true, iconOnly = true) { actions.onAction(action) }.also {
@@ -155,18 +157,25 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             addView(zoomLabel, LinearLayout.LayoutParams(0, 64.px, 1f))
             addView(zoomButton(Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in), LinearLayout.LayoutParams(0, 64.px, 1f))
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 2.px })
-        // Watching, the action a TV is most often used for, first.
-        add(Action.WATCH, R.drawable.ic_play_circle, R.string.watch)
         // Kept per site; not in private browsing, which saves none.
         add(Action.AUTO_WATCH, R.drawable.ic_autoplay, R.string.auto_watch)
-        // This page: look through it, keep it.
-        add(Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page)
         add(Action.TRANSLATE, R.drawable.ic_translate, R.string.translate)
         buttons[Action.TRANSLATE]?.setOnLongClickListener { actions.onActionHeld(Action.TRANSLATE); true }
         add(Action.READER, R.drawable.ic_article, R.string.reader_view)
+        add(Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark)
+        // How this site is shown, and how the remote moves about it.
+        add(Action.ADBLOCK, R.drawable.ic_shield, R.string.adblock_site)
+        add(Action.POINTER, R.drawable.ic_mouse, R.string.pointer)
+        list.addView(android.view.View(context).apply { setBackgroundColor(Ui.p.fillFocused) },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2.px).apply { setMargins(8.px, 10.px, 8.px, 8.px) })
+        // Shown only after a block; the menu then opens with it focused.
+        add(Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once)
+        // Watching, the action a TV is most often used for, first of the actions.
+        add(Action.WATCH, R.drawable.ic_play_circle, R.string.watch)
+        // This page: look through it, hide parts, keep it.
+        add(Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page)
         add(Action.HIDE_PARTS, R.drawable.ic_visibility_off, R.string.hide_parts)
         buttons[Action.HIDE_PARTS]?.setOnLongClickListener { actions.onActionHeld(Action.HIDE_PARTS); true }
-        add(Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark)
         add(Action.PIN, R.drawable.ic_add, R.string.pin_to_home)
         // A tile on the TV's home screen would show anyone what's in the private space.
         if (!Space.active) add(Action.TV_SHORTCUT, R.drawable.ic_tv, R.string.tv_shortcut)
@@ -174,14 +183,9 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.BOOKMARKS, R.drawable.ic_bookmarks, R.string.bookmarks)
         add(Action.HISTORY, R.drawable.ic_history, R.string.history)
         add(Action.DOWNLOADS, R.drawable.ic_download, R.string.downloads)
-        // How this site is shown.
-        add(Action.ADBLOCK, R.drawable.ic_shield, R.string.adblock_site)
-        // Shown only after a block, next to the shield it belongs with; the menu then opens with it focused.
-        add(Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once)
+        // Asks which one, then closes the menu.
         add(Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent)
-        // How the remote moves about pages.
         add(Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode)
-        add(Action.POINTER, R.drawable.ic_mouse, R.string.pointer)
         add(Action.SETTINGS, R.drawable.ic_settings, R.string.settings)
 
         // The balloon: a scrolling list in a bubble whose tail points at More. A long list scrolls inside it, and a
