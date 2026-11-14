@@ -109,7 +109,6 @@
     <string name="bookmarked">Bookmarked</string>
     <string name="bookmark_added">Bookmark added</string>
     <string name="bookmark_removed">Bookmark removed</string>
-    <string name="pin_to_home">Add to home</string>
     <string name="private_space">Private space</string>
     <string name="private_space_sub">Shows a button for a second Sofa behind a PIN, with its own bookmarks, history, settings, logins and downloads. Turning this off hides the button and keeps what\'s inside.</string>
     <string name="private_space_leave">Leave private space</string>
@@ -149,6 +148,7 @@
     <string name="shortcut_failed">Couldn\'t add the TV home tile: %1$s</string>
     <string name="shortcut_allow_installs">Allow Sofa to install apps, then try again</string>
     <string name="pinned">Added to Quick access</string>
+    <string name="pin_removed">Removed from Quick access</string>
     <string name="adblock_site">Ad block</string>
     <string name="adblock_site_on">Ad block: on here</string>
     <string name="adblock_site_off">Ad block: off here</string>

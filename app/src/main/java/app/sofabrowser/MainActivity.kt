@@ -624,6 +624,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             translated = translateSite != null && host?.let(Sites::of) == translateSite,
             translateInto = Translator.name(translateCode(), Locale.getDefault()),
             reading = reading,
+            pinned = url.isNotEmpty() && db.isPinned(url),
         )
     }
 
@@ -651,8 +652,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         when (action) {
             BrowserMenu.Action.ALLOW_ONCE -> { menu?.dismiss(); browser.allowOnce()?.let(::openUrl) }
             BrowserMenu.Action.HOME -> showHome()
-            BrowserMenu.Action.BACK -> if (w.canGoBack()) browser.goBack()
-            BrowserMenu.Action.FORWARD -> if (w.canGoForward()) browser.goForward()
+            BrowserMenu.Action.BACK -> if (w.canGoBack()) { menu?.dismiss(); browser.goBack() }
+            BrowserMenu.Action.FORWARD -> if (w.canGoForward()) { menu?.dismiss(); browser.goForward() }
             BrowserMenu.Action.RELOAD -> { if (loading) w.stopLoading() else browser.reload(); menu?.dismiss() }
             BrowserMenu.Action.WATCH -> watch()
             BrowserMenu.Action.AUTO_WATCH -> if (host != null && !browser.privateMode) {
@@ -679,10 +680,10 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 if (db.isBookmarked(url)) db.removeBookmark(url) else db.addBookmark(w.title.orEmpty(), url)
                 toast(if (db.isBookmarked(url)) R.string.bookmark_added else R.string.bookmark_removed)
             }
+            // A toggle: the page is in Quick access, or it is not. The menu stays open and the line shows which.
             BrowserMenu.Action.PIN -> if (Browser.isWebUrl(url)) {
-                db.pin(w.title?.ifBlank { null } ?: UrlInput.display(url), url)
-                toast(R.string.pinned)
-                menu?.dismiss()
+                if (db.isPinned(url)) { db.unpin(url); toast(R.string.pin_removed) }
+                else { db.pin(w.title?.ifBlank { null } ?: UrlInput.display(url), url); toast(R.string.pinned) }
             }
             BrowserMenu.Action.TV_SHORTCUT -> if (Browser.isWebUrl(url)) {
                 menu?.dismiss()

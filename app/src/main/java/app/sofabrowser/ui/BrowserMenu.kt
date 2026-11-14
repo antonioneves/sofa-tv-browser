@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
@@ -19,7 +20,8 @@ import app.sofabrowser.Space
  * The browse menu, opened with BACK: a slim vertical bar on the left edge of the screen, with Home, the address,
  * back, forward, reload, zoom and More, one under the other. More opens a speech balloon beside it with all the other
  * actions, each with its name: the toggles first, which keep the menu open, then the single actions, which close it.
- * BACK or More closes the balloon again. The focused bar button's name shows in a small label
+ * BACK or More closes the balloon again, and so does LEFT from the balloon's lines (it returns to More). A tap on
+ * the page beside the menu closes the whole menu. The focused bar button's name shows in a small label
  * beside it. Like BrowsHere's, the menu remembers the last button used and doesn't hide on its own.
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
@@ -58,6 +60,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         val translateInto: String,
         /** The page shows in reader view. */
         val reading: Boolean,
+        /** The page is a bookmark in Quick access. */
+        val pinned: Boolean,
     )
 
     private val buttons = LinkedHashMap<Action, LabeledIconButton>()
@@ -94,6 +98,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             // The focused button's scaled square may reach into the padding.
             clipChildren = false
             clipToPadding = false
+            // A tap on the bar between its buttons is not a tap outside the menu.
+            isClickable = true
         }
         balloonList = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; clipChildren = false }
         val list = balloonList
@@ -103,7 +109,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
                 return
             }
             // In the bar the name shows beside the focused button; a balloon that is open makes way for another button.
-            b.onFocused = b.onFocused.let { was -> { was?.invoke(); showTip(b); if (b !== more && balloonOpen) setBalloon(false) } }
+            b.onFocused = b.onFocused.let { was -> { was?.invoke(); if (b !== more && balloonOpen) setBalloon(false); showTip(b) } }
             into.addView(b, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = gap.px
             })
@@ -132,9 +138,9 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         more = LabeledIconButton(context, R.drawable.ic_chevron_right, context.getString(R.string.more_actions), labelled = false) {
             setBalloon(!balloonOpen, focusInside = true)
         }
-        // Right on More opens the balloon too, as it sits in that direction.
+        // Right on More opens the balloon, or goes into it when it is open, as it sits in that direction.
         more.setOnKeyListener { _, keyCode, event ->
-            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN && !balloonOpen) {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
                 setBalloon(true, focusInside = true); true
             } else false
         }
@@ -165,6 +171,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         buttons[Action.TRANSLATE]?.setOnLongClickListener { actions.onActionHeld(Action.TRANSLATE); true }
         add(Action.READER, R.drawable.ic_article, R.string.reader_view)
         add(Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark)
+        add(Action.PIN, R.drawable.ic_add, R.string.add_to_quick_access)
         // How this site is shown, and how the remote moves about it.
         add(Action.ADBLOCK, R.drawable.ic_shield, R.string.adblock_site)
         add(Action.POINTER, R.drawable.ic_mouse, R.string.pointer)
@@ -178,7 +185,6 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page)
         add(Action.HIDE_PARTS, R.drawable.ic_visibility_off, R.string.hide_parts)
         buttons[Action.HIDE_PARTS]?.setOnLongClickListener { actions.onActionHeld(Action.HIDE_PARTS); true }
-        add(Action.PIN, R.drawable.ic_add, R.string.pin_to_home)
         // A tile on the TV's home screen would show anyone what's in the private space.
         if (!Space.active) add(Action.TV_SHORTCUT, R.drawable.ic_tv, R.string.tv_shortcut)
         // Somewhere else to go.
@@ -203,6 +209,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             background = balloonDrawable
             setPadding(TAIL.px + 12.px, 16.px, 12.px, 16.px)
             visibility = android.view.View.GONE
+            isClickable = true
             addView(balloonScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
 
@@ -224,6 +231,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
     /** Shows [button]'s name beside it; the address button's is the page's address. */
     private fun showTip(button: android.view.View) {
+        // With the balloon open its lines are where the label would go.
+        if (balloonOpen) return hideTip()
         tipFor = button
         tip.text = button.contentDescription
         tip.visibility = android.view.View.VISIBLE
@@ -265,6 +274,33 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // An action last used from the balloon is one press away, on More.
         val last = buttons[lastFocused]?.takeIf { lastFocused in topRow && it.isEnabled && it.visibility == android.view.View.VISIBLE }
         (last ?: if (lastFocused in topRow) buttons[Action.HOME] else more)?.requestFocus()
+    }
+
+    /** LEFT from a line of the balloon goes back to More, where the balloon came from; zoom in goes on to zoom out. */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && balloonOpen) {
+            val focus = currentFocus
+            if (focus != null && inBalloon(focus) && focus !== buttons[Action.ZOOM_IN]) {
+                if (event.action == KeyEvent.ACTION_DOWN) more.requestFocus()
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun inBalloon(view: android.view.View): Boolean {
+        var v: android.view.View? = view
+        while (v != null) {
+            if (v === balloon) return true
+            v = v.parent as? android.view.View
+        }
+        return false
+    }
+
+    /** The window covers the screen, so a tap that no part of the menu takes is a tap outside it: the menu closes. */
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_UP) dismiss()
+        return true
     }
 
     /** BACK closes the balloon first, and the menu when it is already closed. */
@@ -337,6 +373,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             context.getString(if (s.loading) R.string.stop else R.string.reload))
         buttons[Action.BOOKMARK]?.set(if (s.bookmarked) R.drawable.ic_star_filled else R.drawable.ic_star,
             context.getString(if (s.bookmarked) R.string.bookmarked else R.string.bookmark))
+        buttons[Action.PIN]?.set(if (s.pinned) R.drawable.ic_close else R.drawable.ic_add,
+            context.getString(if (s.pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access))
         buttons[Action.ADBLOCK]?.set(if (s.adBlockOn) R.drawable.ic_shield_filled else R.drawable.ic_shield,
             when {
                 !s.adBlockOn -> context.getString(R.string.adblock_site_off)
