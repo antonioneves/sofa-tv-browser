@@ -17,8 +17,10 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import app.sofabrowser.R
 
 /**
  * Sofa's dialog, in the style of Material 3 Expressive: a large rounded tonal container with a headline, supporting
@@ -53,6 +55,7 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         internal var onDismiss: DialogInterface.OnDismissListener? = null
         internal var onCancel: DialogInterface.OnCancelListener? = null
         internal var destructive = false
+        internal var closeIcon = false
 
         fun setTitle(t: CharSequence?) = apply { title = t }
         fun setTitle(res: Int) = apply { title = context.getString(res) }
@@ -79,6 +82,9 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         fun setNegativeButton(res: Int, l: DialogInterface.OnClickListener?) = setNegativeButton(context.getString(res), l)
         fun setOnDismissListener(l: DialogInterface.OnDismissListener) = apply { onDismiss = l }
         fun setOnCancelListener(l: DialogInterface.OnCancelListener) = apply { onCancel = l }
+
+        /** A cross in the top right corner closes the dialog, in place of a Close button at the bottom. */
+        fun setCloseIcon() = apply { closeIcon = true }
 
         /** Makes the positive button the red-orange one of a delete, so it can't be mistaken for a plain choice. */
         fun setDestructive() = apply { destructive = true }
@@ -121,7 +127,32 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         val wide = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
         b.title?.let {
-            sheet.addView(Ui.text(context, 40, p.text, bold = true).apply { text = it }, wide)
+            val title = Ui.text(context, 40, p.text, bold = true).apply { text = it }
+            if (!b.closeIcon) {
+                sheet.addView(title, wide)
+            } else {
+                // The title with the close cross at the end of its line: the dialog's top right corner.
+                val cross = ImageView(context).apply {
+                    setImageResource(R.drawable.ic_close)
+                    contentDescription = context.getString(R.string.close)
+                    isFocusable = true
+                    isClickable = true
+                    setPadding(14.px, 14.px, 14.px, 14.px)
+                    background = Ui.fillSelector(Color.TRANSPARENT, p.focus, 32)
+                    setColorFilter(p.text)
+                    setOnFocusChangeListener { _, has -> setColorFilter(if (has) p.onFocus else p.text) }
+                    setOnClickListener { dismiss() }
+                }
+                firstFocus = cross
+                sheet.addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    clipChildren = false
+                    addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    // Pulled up and out a little, so the cross sits in the corner and the title keeps its place.
+                    addView(cross, LinearLayout.LayoutParams(64.px, 64.px).apply { topMargin = (-12).px; marginEnd = (-12).px })
+                }, wide)
+            }
         }
         b.message?.let { msg ->
             val text = Ui.text(context, 28, p.textMid).apply { text = msg; setLineSpacing(0f, 1.15f) }.also { messageView = it }

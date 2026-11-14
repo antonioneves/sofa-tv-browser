@@ -2214,7 +2214,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             .setView(PhoneCard.view(this, address,
                 listOf(R.string.phone_step_scan, R.string.phone_step_find, R.string.phone_step_found).map(::getString),
                 getString(R.string.phone_or_open)))
-            .setNegativeButton(R.string.close, null)
+            .setCloseIcon()
             .setOnDismissListener { link.stop(); if (phoneLink === link) phoneLink = null }
             .show()
     }

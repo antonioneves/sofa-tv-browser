@@ -84,7 +84,7 @@ class BookmarkTransfer(private val activity: Activity, private val onUrl: (Strin
                 listOf(R.string.bookmarks_step_open, R.string.bookmarks_step_export, R.string.bookmarks_step_import)
                     .map(activity::getString),
                 activity.getString(R.string.bookmarks_or_open)))
-            .setNegativeButton(R.string.close, null)
+            .setCloseIcon()
             .setOnDismissListener { link.stop(); if (phoneLink === link) phoneLink = null }
             .show()
     }

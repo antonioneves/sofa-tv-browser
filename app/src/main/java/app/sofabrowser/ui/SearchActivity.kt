@@ -430,7 +430,7 @@ class SearchActivity : Activity() {
             .setView(PhoneCard.view(this, address,
                 listOf(R.string.phone_step_scan, R.string.phone_step_type, R.string.phone_step_open).map(::getString),
                 getString(R.string.phone_or_open)))
-            .setNegativeButton(R.string.close, null)
+            .setCloseIcon()
             .setOnDismissListener { link.stop(); if (phoneLink === link) phoneLink = null }
             .show()
     }
