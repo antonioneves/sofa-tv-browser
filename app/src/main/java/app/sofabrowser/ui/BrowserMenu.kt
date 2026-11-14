@@ -254,7 +254,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED))
         val at = IntArray(2).also { button.getLocationInWindow(it) }
         val origin = IntArray(2).also { frame.getLocationInWindow(it) }
-        tip.x = (at[0] - origin[0] + button.width + 8.px).toFloat()
+        tip.x = (at[0] - origin[0] + button.width + 20.px).toFloat()
         tip.y = (at[1] - origin[1] + (button.height - tip.measuredHeight) / 2).coerceIn(8.px, maxOf(8.px, frame.height - tip.measuredHeight - 8.px)).toFloat()
     }
 
