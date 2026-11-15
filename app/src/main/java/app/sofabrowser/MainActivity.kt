@@ -78,7 +78,6 @@ import app.sofabrowser.data.SignIns
 import app.sofabrowser.data.SpacePin
 import app.sofabrowser.data.Site
 import app.sofabrowser.data.SiteChoice
-import app.sofabrowser.data.UserScripts
 import app.sofabrowser.downloads.Download
 import app.sofabrowser.downloads.DownloadEngine
 import app.sofabrowser.downloads.Http
@@ -108,7 +107,6 @@ import app.sofabrowser.shortcut.TvShortcut
 import app.sofabrowser.ui.TileMenu
 import app.sofabrowser.ui.SetupActivity
 import app.sofabrowser.ui.Ui
-import app.sofabrowser.ui.UserScriptInstall
 import app.sofabrowser.ui.px
 import app.sofabrowser.update.Updater
 import java.util.Locale
@@ -413,7 +411,6 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             if (shown) screen.onPageFinished(url) else tabsChanged()
         }
         override fun onPageVisible(url: String) { if (shown) screen.onPageVisible(url) }
-        override fun onUserScriptLink(url: String) { if (shown) UserScriptInstall.fromUrl(screen, url) }
         override fun onProgress(percent: Int) {
             if (shown) screen.onProgress(percent) else if (percent >= 100) tab.loading = false
         }
@@ -1015,7 +1012,6 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             docked = prefs.menuDocked,
             tabs = tabs.map { TabStack.Tab(it.id, it.url, it.title, it.thumbnail) },
             currentTab = currentTab.id,
-            scriptsHere = browser.scriptsHere().size,
         )
     }
 
@@ -1157,7 +1153,6 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                         }
                     }.setNegativeButton(android.R.string.cancel, null).show()
             }
-            BrowserMenu.Action.SCRIPTS -> { menu?.dismiss(); scriptsHere() }
             BrowserMenu.Action.SCROLL -> { menu?.dismiss(); cursor.setScrollMode(true) }
             BrowserMenu.Action.POINTER -> if (host != null) {
                 val keys = !browser.keysToPage(host)
@@ -1496,28 +1491,6 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     /** For a result: a bookmark opened from the settings' bookmarks list comes back as an address to open. */
-    /** The user scripts made for this page: each one switched on or off here, then the page loads again with or without it. */
-    private fun scriptsHere() {
-        val scripts = browser.scriptsHere()
-        val store = UserScripts.get(this)
-        val items = scripts.map { getString(if (it.enabled) R.string.script_on else R.string.script_off, it.script.name) } +
-            getString(R.string.manage_user_scripts)
-        dialog().setTitle(R.string.scripts_here_title)
-            .setItems(items.toTypedArray()) { _, which ->
-                val s = scripts.getOrNull(which)
-                if (s == null) {
-                    @Suppress("DEPRECATION")
-                    startActivityForResult(SettingsActivity.scriptsIntent(this), REQ_URL)
-                    return@setItems
-                }
-                store.setEnabled(s.id, !s.enabled)
-                browser.reapplyUserScripts()
-                toast(getString(if (s.enabled) R.string.script_turned_off else R.string.script_turned_on, s.script.name))
-                browser.reload()
-            }
-            .setNegativeButton(android.R.string.cancel, null).show()
-    }
-
     private fun openSettings() {
         @Suppress("DEPRECATION")
         startActivityForResult(Intent(this, SettingsActivity::class.java), REQ_URL)

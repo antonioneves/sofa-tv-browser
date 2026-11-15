@@ -32,7 +32,6 @@ import app.sofabrowser.siteZooms
 import app.sofabrowser.hiddenElements
 import app.sofabrowser.cookieBannerSites
 import app.sofabrowser.data.HiddenElements
-import app.sofabrowser.data.UserScripts
 import app.sofabrowser.adblock.AdBlocker
 import app.sofabrowser.adblock.Allowlist
 import app.sofabrowser.adblock.InPageBlocking
@@ -77,8 +76,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         /** The page tried to leave for a listed host on its own; "Allow once" can follow it. */
         fun onRedirectBlocked()
         fun onRendererGone()
-        /** The user pressed a link to a user script (a .user.js address), to be shown before it is installed. */
-        fun onUserScriptLink(url: String) {}
     }
 
     var web: WebView? = null
@@ -170,9 +167,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         applySignIns(view)
         HiddenPages.install(view, key, ::onElementPicked)
         applyHidden(view)
-        UserScriptPages.install(view, key) { id, name, json -> userScripts.setValue(id, privateMode, name, json) }
-        userScripts.listen(scriptsChanged)
-        applyUserScripts(view)
         InPageBlocking.install(view, key, adBlocker, active = { blocking(pageHost) }) { url ->
             debug("trap link removed: $url")
             adBlocker.countBlocked()
@@ -196,8 +190,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         web = null
         bannerScript = null
         hiddenScript = null
-        userScripts.unlisten(scriptsChanged)
-        scriptHandlers = emptyList()
         picking = false
         frames.clear()
         host.onPlaying(false)
@@ -216,37 +208,8 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             applyBannerRejection(it)
             applySignIns(it)
             applyHidden(it)
-            applyUserScripts(it)
         }
     }
-
-    private val userScripts = UserScripts.get(context)
-    private var scriptHandlers: List<ScriptHandler> = emptyList()
-
-    /** Scripts changed or stored a value: pages loaded from now on get the new ones, a moment later so a burst is one. */
-    private val scriptsChanged: () -> Unit = {
-        web?.let { v -> v.removeCallbacks(reapplyScripts); v.postDelayed(reapplyScripts, SCRIPTS_SETTLE_MS) }
-    }
-    private val reapplyScripts = Runnable { web?.let(::applyUserScripts) }
-
-    /** Adds the switched-on user scripts to the pages loaded from now on; private browsing only those allowed there. */
-    private fun applyUserScripts(view: WebView) {
-        scriptHandlers.forEach { it.remove() }
-        val key = pageKey ?: return
-        scriptHandlers = UserScriptPages.apply(view, key, userScripts.all
-            .filter { it.enabled && (!privateMode || it.allowPrivate) }
-            .map { it to userScripts.values(it.id, privateMode) })
-    }
-
-    /** Applies the scripts now rather than a moment later, before a reload that should have them. */
-    fun reapplyUserScripts() {
-        val v = web ?: return
-        v.removeCallbacks(reapplyScripts)
-        applyUserScripts(v)
-    }
-
-    /** The user scripts made for the page in view, switched on or not, for the menu's "Scripts here". */
-    fun scriptsHere() = if (!UserScriptPages.supported()) emptyList() else userScripts.forPage(web?.url, privateMode)
 
     private var pageKey: PageKey? = null
 
@@ -465,9 +428,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val url = request.url
             return when (url.scheme?.lowercase()) {
-                "http", "https" -> if (request.isForMainFrame && request.hasGesture() && isUserScript(url) && UserScriptPages.supported()) {
-                    host.onUserScriptLink(url.toString()); true
-                } else (request.isForMainFrame && blockNavigation(view, request)).also { blocked ->
+                "http", "https" -> (request.isForMainFrame && blockNavigation(view, request)).also { blocked ->
                     if (request.isForMainFrame && !blocked) mainFrameTarget = url.toString()
                 } || (request.isForMainFrame && switchUserAgent(view, url.toString()))
                 "about", "data", "blob", "javascript", null -> false
@@ -765,10 +726,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
 
     companion object {
         private const val PRIVATE_PROFILE = "private"
-        private const val SCRIPTS_SETTLE_MS = 300L
-
-        /** A link to a user script, which a press opens on Sofa's install screen instead of as text. */
-        fun isUserScript(url: Uri) = url.path?.endsWith(".user.js", ignoreCase = true) == true
         private val PRESS_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
             KeyEvent.KEYCODE_BUTTON_A)
         private const val GPC_SCRIPT =
@@ -796,7 +753,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             deletePrivateProfile()
             privateUserAgents.clear(); privateZooms.clear(); privateHidden.clear(); privateBannerSites.clear()
             privateAdBlockOff.clear(); privateKeysToPage.clear(); privateDrmAnswers.clear()
-            UserScripts.endPrivateSession()
         }
 
         /** Deletes the private profile with all its cookies, storage and cache. Call only with no view using it. */

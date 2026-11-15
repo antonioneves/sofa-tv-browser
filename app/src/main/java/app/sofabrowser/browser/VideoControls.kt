@@ -509,8 +509,6 @@ class PageKey {
     val hide = "_" + random(12)
     /** Name of the injected object that hears which sites the cookie banner check is done with (CookieBanners). */
     val banners = "_" + random(12)
-    /** Name of the injected object that hears values user scripts store (UserScriptPages). */
-    val scripts = "_" + random(12)
 
     private companion object {
         val rng = java.security.SecureRandom()

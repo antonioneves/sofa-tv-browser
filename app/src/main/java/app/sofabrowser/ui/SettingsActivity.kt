@@ -38,7 +38,6 @@ import app.sofabrowser.browser.RefreshRateMatch
 import app.sofabrowser.browser.SearchShortcuts
 import app.sofabrowser.browser.StreamCopyProvider
 import app.sofabrowser.browser.UrlInput
-import app.sofabrowser.browser.UserScriptPages
 import app.sofabrowser.browser.WatchTarget
 import app.sofabrowser.browser.WebViews
 import app.sofabrowser.data.Db
@@ -47,7 +46,6 @@ import app.sofabrowser.data.HistoryRetention
 import app.sofabrowser.data.SignIns
 import app.sofabrowser.data.SpacePin
 import app.sofabrowser.data.SiteChoice
-import app.sofabrowser.data.UserScripts
 import app.sofabrowser.forgetSiteChoices
 import app.sofabrowser.siteChoices
 import app.sofabrowser.savedSearchShortcuts
@@ -109,7 +107,6 @@ class SettingsActivity : Activity() {
         when (page) {
             PAGE_LISTS -> buildLists()
             PAGE_SITES -> buildSites()
-            PAGE_SCRIPTS -> buildScripts()
             else -> build()
         }
     }
@@ -119,7 +116,6 @@ class SettingsActivity : Activity() {
         when (page) {
             PAGE_LISTS -> buildLists()
             PAGE_SITES -> buildSites()
-            PAGE_SCRIPTS -> buildScripts()
             // Back from Filter lists: the rule count may have changed.
             else -> (listsRow as? TextView)?.text = rulesText(blocker.rules.rules)
         }
@@ -166,7 +162,6 @@ class SettingsActivity : Activity() {
         row(getString(R.string.site_settings), getString(R.string.site_settings_sub), arrow()) {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra(PAGE, PAGE_SITES))
         }
-        scriptsRow()
         nav(R.string.cursor_speed,resources.getStringArray(R.array.cursor_speeds)[prefs.cursorSpeed - 1]) { pickCursorSpeed() }
         row(getString(R.string.game_controller), getString(R.string.game_controller_sub), arrow()) { PadHelp.dialog(this) }
         switch(R.string.back_goes_back, R.string.back_goes_back_sub, prefs::backGoesBack)
@@ -568,81 +563,6 @@ class SettingsActivity : Activity() {
         }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 32.px })
     }
 
-    // User scripts: a page of its own (PAGE_SCRIPTS); scripts are installed from a link to a .user.js file.
-
-    private fun scriptsRow() {
-        val n = UserScripts.get(this).all.size
-        val sub = when {
-            !UserScriptPages.supported() -> getString(R.string.user_scripts_unsupported)
-            n == 0 -> getString(R.string.user_scripts_none)
-            else -> resources.getQuantityString(R.plurals.user_scripts_count, n, n)
-        }
-        row(getString(R.string.user_scripts), sub, arrow()) {
-            if (!UserScriptPages.supported()) {
-                dialog().setTitle(R.string.user_scripts).setMessage(R.string.user_scripts_unsupported_message)
-                    .setPositiveButton(android.R.string.ok, null).show()
-            } else startActivity(Intent(this, SettingsActivity::class.java).putExtra(PAGE, PAGE_SCRIPTS))
-        }
-    }
-
-    private fun buildScripts() {
-        val focused = list.indexOfChild(list.focusedChild)
-        list.removeAllViews()
-        pageTitle(R.string.user_scripts, getString(R.string.user_scripts_intro))
-        UserScripts.get(this).all.forEach { s ->
-            val sites = if (s.script.allSites) getString(R.string.user_script_all_sites)
-                else s.script.siteNames().joinToString(", ")
-            val sub = listOfNotNull(
-                if (s.enabled) null else getString(R.string.user_script_off),
-                sites,
-                if (s.allowPrivate) getString(R.string.user_script_in_private) else null,
-            ).joinToString(getString(R.string.site_settings_separator))
-            val title = if (s.script.version.isEmpty()) s.script.name else s.script.name + "  " + s.script.version
-            row(title, sub, Toggle(s.enabled)) { scriptActions(s) }
-        }
-        row(getString(R.string.user_script_add), getString(R.string.user_script_add_sub), arrow()) { enterScriptAddress() }
-        list.getChildAt(if (focused < 0) 2 else focused.coerceAtMost(list.childCount - 1))?.takeIf { it.isFocusable }?.requestFocus()
-    }
-
-    private fun scriptActions(s: UserScripts.Installed) {
-        val store = UserScripts.get(this)
-        val actions = mutableListOf<Pair<Int, () -> Unit>>()
-        actions += (if (s.enabled) R.string.turn_off else R.string.turn_on) to { store.setEnabled(s.id, !s.enabled); buildScripts() }
-        actions += (if (s.allowPrivate) R.string.user_script_private_stop else R.string.user_script_private_allow) to {
-            store.setAllowPrivate(s.id, !s.allowPrivate); buildScripts()
-        }
-        actions += R.string.user_script_check_update to { UserScriptInstall.checkUpdate(this, s) { if (!isFinishing) buildScripts() } }
-        actions += R.string.user_script_view_source to { UserScriptInstall.viewSource(this, s) }
-        actions += R.string.remove to {
-            dialog().setMessage(getString(R.string.user_script_remove_confirm, s.script.name))
-                .setPositiveButton(R.string.remove) { _, _ -> store.remove(s.id); buildScripts() }
-                .setNegativeButton(android.R.string.cancel, null).show()
-        }
-        dialog().setTitle(s.script.name)
-            .setItems(actions.map { getString(it.first) }.toTypedArray()) { _, which -> actions[which].second() }
-            .setNegativeButton(android.R.string.cancel, null).show()
-    }
-
-    // "https://" is the start of an address, the same in every language.
-    @SuppressLint("SetTextI18n")
-    private fun enterScriptAddress() {
-        val field = EditText(this).apply {
-            setText("https://")
-            isSingleLine = true
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        }
-        dialog().setTitle(R.string.user_script_add)
-            .setMessage(R.string.user_script_address_message)
-            .setView(padded(field))
-            .setPositiveButton(R.string.add) { _, _ ->
-                val url = field.text.toString().trim()
-                if (!url.startsWith("https://") && !(BuildConfig.DEBUG && url.startsWith("http://"))) {
-                    SofaToast.makeText(this, R.string.https_only, Toast.LENGTH_LONG).show()
-                } else UserScriptInstall.fromUrl(this, url) { if (!isFinishing) buildScripts() }
-            }
-            .setNegativeButton(android.R.string.cancel, null).show()
-    }
-
     // Site settings: what the page menu keeps for single sites, a page of its own (PAGE_SITES).
 
     private fun buildSites() {
@@ -898,10 +818,5 @@ class SettingsActivity : Activity() {
         private const val REQ_BOOKMARKS = 7001
         private const val PAGE_LISTS = "lists"
         private const val PAGE_SITES = "sites"
-        private const val PAGE_SCRIPTS = "scripts"
-
-        /** Opens the User scripts page, from the page menu's "Scripts here". */
-        fun scriptsIntent(context: android.content.Context): Intent =
-            Intent(context, SettingsActivity::class.java).putExtra(PAGE, PAGE_SCRIPTS)
     }
 }

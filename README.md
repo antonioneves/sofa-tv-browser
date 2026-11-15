@@ -27,8 +27,6 @@ called Sofa.
 - **Downloads** that pause, resume and carry on in the background.
 - **Tabs**, **reader view**, **translation** of the page (by Google's website translator, only when you ask), and
   **typing from your phone** on a small page Sofa serves on your home network.
-- **User scripts**: install a `.user.js` link and Sofa runs it on the sites it names (see
-  [docs/user-scripts.md](docs/user-scripts.md)).
 - **Clear site data** from the menu: signs you out of one site without touching the others.
 - **Dark and Light themes.**
 
@@ -156,7 +154,8 @@ Everything is matched on the TV; nothing about your browsing leaves it.
 
 ## Not there yet
 
-Browser extensions, and syncing with other devices (the page for your phone offers a backup file instead).
+Browser extensions, and syncing with other devices (the page for your phone offers a backup file instead). User
+scripts are left out on purpose: [docs/user-scripts.md](docs/user-scripts.md) says why.
 
 ## For developers
 

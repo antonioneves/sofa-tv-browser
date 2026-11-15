@@ -228,7 +228,6 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         add(BrowserMenu.Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once, ROW_GAP)
         add(BrowserMenu.Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent, ROW_GAP)
         add(BrowserMenu.Action.CLEAR_SITE, R.drawable.ic_delete, R.string.clear_site_data, ROW_GAP)
-        add(BrowserMenu.Action.SCRIPTS, R.drawable.ic_code, R.string.scripts_here_none, ROW_GAP)
         // How the remote moves about pages.
         add(BrowserMenu.Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode, ROW_GAP)
         add(BrowserMenu.Action.POINTER, R.drawable.ic_mouse, R.string.pointer, ROW_GAP)
@@ -481,10 +480,6 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         // The label of a tab that just closed goes with it; the focused button may have a new name (Reload to Stop).
         tipFor?.let { if (it.parent == null) hideTip() else tipBox.post { placeTip() } }
         buttons[BrowserMenu.Action.ALLOW_ONCE]?.visibility = if (s.allowPending) View.VISIBLE else View.GONE
-        buttons[BrowserMenu.Action.SCRIPTS]?.let { b ->
-            b.visibility = if (s.scriptsHere > 0) View.VISIBLE else View.GONE
-            if (s.scriptsHere > 0) b.set(R.drawable.ic_code, context.getString(R.string.scripts_here, s.scriptsHere))
-        }
         // Back and Forward are not shown while they cannot be used; the focus moves on from one that goes.
         hideUnusable(BrowserMenu.Action.BACK, s.canGoBack, BrowserMenu.Action.FORWARD)
         hideUnusable(BrowserMenu.Action.FORWARD, s.canGoForward, BrowserMenu.Action.BACK)
