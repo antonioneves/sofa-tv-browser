@@ -84,7 +84,7 @@ class TabStack(
             requestLayout()
         }
         list.forEachIndexed { i, t ->
-            buttons[i].setPicture(Shadowed(Favicons.get(context).drawable(t.url, name(t), 96)))
+            buttons[i].setPicture(Shadowed(Favicons.get(context).drawable(t.url, name(t), 96)).apply { shown = !buttons[i].hasFocus() })
             buttons[i].contentDescription = name(t)
         }
         // New icons are put in place at once: only the focus moving slides them.
@@ -94,11 +94,12 @@ class TabStack(
     private fun button(id: Long): LabeledIconButton {
         val b = LabeledIconButton(context, R.drawable.ic_sofa, "", labelled = false, square = squareDp) { onPick(id) }
         b.onFocused = {
+            shadow(b, false)
             focus = buttons.indexOf(b)
             arrange(animate = true)
             onFocused(b)
         }
-        b.onBlurred = { post { if (buttons.none { it.hasFocus() } && focus >= 0) { focus = -1; arrange(animate = true) } } }
+        b.onBlurred = { shadow(b, true); post { if (buttons.none { it.hasFocus() } && focus >= 0) { focus = -1; arrange(animate = true) } } }
         // The icons overlap, so the focus moves through them in order, not by where they are drawn.
         b.setOnKeyListener { _, code, e ->
             val i = buttons.indexOf(b)
@@ -123,6 +124,10 @@ class TabStack(
         private val offset = IntArray(2)
         private val paint = Paint(Paint.FILTER_BITMAP_FLAG).apply { color = Color.argb(SHADOW_ALPHA, 0, 0, 0) }
 
+        /** Whether the shadow is drawn. */
+        var shown = true
+            set(value) { if (field != value) { field = value; invalidateSelf() } }
+
         override fun onBoundsChange(b: Rect) {
             picture.bounds = b
             shadow = null
@@ -137,7 +142,7 @@ class TabStack(
         }
 
         override fun draw(canvas: Canvas) {
-            shadow?.let { canvas.drawBitmap(it, (bounds.left + offset[0]).toFloat(), (bounds.top + offset[1] + SHADOW_DROP.px).toFloat(), paint) }
+            if (shown) shadow?.let { canvas.drawBitmap(it, (bounds.left + offset[0]).toFloat(), (bounds.top + offset[1] + SHADOW_DROP.px).toFloat(), paint) }
             picture.draw(canvas)
         }
 
@@ -149,6 +154,9 @@ class TabStack(
         @Deprecated("Deprecated in Java")
         override fun getOpacity() = PixelFormat.TRANSLUCENT
     }
+
+    /** Shows or hides [b]'s shadow: the focused icon has none, as it sits on the focus square. */
+    private fun shadow(b: LabeledIconButton, shown: Boolean) { b.picture()?.let { if (it is Shadowed) it.shown = shown } }
 
     /** Focuses the first tab; false when there is none. */
     fun focusFirst(): Boolean = buttons.firstOrNull()?.requestFocus() == true

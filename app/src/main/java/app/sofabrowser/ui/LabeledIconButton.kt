@@ -118,6 +118,9 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         if (!row) circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, Math.round((square - 8) * app.sofabrowser.data.Favicons.CORNER))
     }
 
+    /** The picture [setPicture] gave, or null when the button shows an icon. */
+    fun picture(): android.graphics.drawable.Drawable? = if (plain) image.drawable else null
+
     /** A button that cannot be used is not shown: gone, or invisible where its neighbours must stay in place. */
     fun setEnabledLook(enabled: Boolean, gone: Boolean = true) {
         isEnabled = enabled
