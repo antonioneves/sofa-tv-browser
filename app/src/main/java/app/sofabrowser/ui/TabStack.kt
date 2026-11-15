@@ -28,6 +28,9 @@ import app.sofabrowser.data.Favicons
  * The stack is never taller than [limit] leaves it. When the tabs don't fit, their icons overlap like a fanned deck,
  * and the focused one (or, without focus, the tab in view) is drawn on top with its neighbours slid off it; moving
  * the focus up and down slides the deck along.
+ *
+ * As [horizontal] (the menu along the bottom of the screen) the icons stand side by side instead, the tab in view
+ * marked under its icon, and the focus moves left and right through them.
  */
 @SuppressLint("ViewConstructor")
 class TabStack(
@@ -39,6 +42,8 @@ class TabStack(
     private val limit: () -> Int,
     private val onPick: (Long) -> Unit,
     private val onFocused: (LabeledIconButton) -> Unit,
+    /** The icons side by side, the stack as wide as [limit] and the room it is given leave it, instead of one under the other. */
+    private val horizontal: Boolean = false,
 ) : FrameLayout(context) {
 
     /** A tab: its site, its page's name, and the last picture of its page, if one was taken. */
@@ -56,12 +61,16 @@ class TabStack(
     /** The order the children are drawn in: the marker, then the icons, farthest from the focused one first. */
     private var order = IntArray(0)
     private var arranged = false
+    /** Where each icon goes along the stack, as the last [arrange] put it. */
+    private var places = IntArray(0)
 
     init {
         clipChildren = false
         clipToPadding = false
         isChildrenDrawingOrderEnabled = true
-        addView(marker, LayoutParams(6.px, MARKER.px, Gravity.TOP or Gravity.START).apply { leftMargin = 2.px })
+        // Under the icon, past the stack's foot, when the icons stand side by side.
+        addView(marker, if (horizontal) LayoutParams(MARKER.px, 6.px, Gravity.TOP or Gravity.START).apply { topMargin = square + 4.px }
+            else LayoutParams(6.px, MARKER.px, Gravity.TOP or Gravity.START).apply { leftMargin = 2.px })
     }
 
     /** Shows [list], with [currentId] the tab in view. */
@@ -102,17 +111,20 @@ class TabStack(
         }
         b.onBlurred = { shadow(b, true); post { if (buttons.none { it.hasFocus() } && focus >= 0) { focus = -1; arrange(animate = true) } } }
         // The icons overlap, so the focus moves through them in order, not by where they are drawn.
+        val previous = if (horizontal) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_UP
+        val next = if (horizontal) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_DOWN
         b.setOnKeyListener { _, code, e ->
             val i = buttons.indexOf(b)
             val down = e.action == KeyEvent.ACTION_DOWN
             when (code) {
-                KeyEvent.KEYCODE_DPAD_UP -> if (i > 0) { if (down) buttons[i - 1].requestFocus(); true } else false
-                // The last tab is the foot of the bar.
-                KeyEvent.KEYCODE_DPAD_DOWN -> { if (down && i < buttons.size - 1) buttons[i + 1].requestFocus(); true }
+                previous -> if (i > 0) { if (down) buttons[i - 1].requestFocus(); true } else false
+                // The last tab is the foot of the bar (or its right end).
+                next -> { if (down && i < buttons.size - 1) buttons[i + 1].requestFocus(); true }
                 else -> false
             }
         }
-        addView(b, LayoutParams((BrowserMenu.BAR - 4).px, square, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        addView(b, if (horizontal) LayoutParams(square, square, Gravity.TOP or Gravity.START)
+            else LayoutParams((BrowserMenu.BAR - 4).px, square, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         return b
     }
 
@@ -171,12 +183,19 @@ class TabStack(
         return Tip(name(t), UrlInput.display(t.url), t.picture.takeIf { t.id != current })
     }
 
+    /** Where [view], one of the tabs, goes along the stack once it has slid there: its left edge, or its top. */
+    fun placeOf(view: View): Int? = places.getOrNull(buttons.indexOf(view))
+
     private fun name(t: Tab) = t.title.ifBlank { Browser.hostOf(t.url)?.removePrefix("www.").orEmpty() }
         .ifBlank { context.getString(R.string.new_tab) }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val height = minOf(TabStackLayout.natural(buttons.size, slot, square), maxOf(limit(), square))
-        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
+        // Side by side, no wider than the room the row gives either.
+        val room = if (horizontal && MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED)
+            minOf(limit(), MeasureSpec.getSize(widthMeasureSpec)) else limit()
+        val length = minOf(TabStackLayout.natural(buttons.size, slot, square), maxOf(room, square))
+        if (horizontal) super.onMeasure(MeasureSpec.makeMeasureSpec(length, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(square, MeasureSpec.EXACTLY))
+        else super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(length, MeasureSpec.EXACTLY))
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
@@ -188,14 +207,16 @@ class TabStack(
     /** Puts each icon where [TabStackLayout] says, sliding there when [animate]. */
     private fun arrange(animate: Boolean) {
         val n = buttons.size
-        if (n == 0 || height == 0) return
+        val length = if (horizontal) width else height
+        if (n == 0 || length == 0) return
         val now = tabs.indexOfFirst { it.id == current }
         val f = if (focus >= 0) focus else now.coerceAtLeast(0)
-        val tops = TabStackLayout.tops(n, f, height, slot, square, MIN_STEP.px)
+        val tops = TabStackLayout.tops(n, f, length, slot, square, MIN_STEP.px)
         order = IntArray(n + 1).also { o ->
             o[0] = indexOfChild(marker)
             (0 until n).sortedByDescending { Math.abs(it - f) }.forEachIndexed { k, i -> o[k + 1] = indexOfChild(buttons[i]) }
         }
+        places = tops
         invalidate()
         buttons.forEachIndexed { i, b -> move(b, tops[i].toFloat(), animate) }
         marker.visibility = if (n > 1 && now >= 0) VISIBLE else GONE
@@ -203,10 +224,13 @@ class TabStack(
         arranged = true
     }
 
-    private fun move(v: View, y: Float, animate: Boolean) {
+    /** Slides [v] to [at] along the stack: down it, or across it when [horizontal]. */
+    private fun move(v: View, at: Float, animate: Boolean) {
         v.animate().cancel()
-        if (animate && v.translationY != y) v.animate().translationY(y).setDuration(200).setInterpolator(DecelerateInterpolator(1.5f)).start()
-        else v.translationY = y
+        val now = if (horizontal) v.translationX else v.translationY
+        if (animate && now != at) v.animate().apply { if (horizontal) translationX(at) else translationY(at) }
+            .setDuration(200).setInterpolator(DecelerateInterpolator(1.5f)).start()
+        else if (horizontal) v.translationX = at else v.translationY = at
     }
 
     override fun getChildDrawingOrder(childCount: Int, drawingPosition: Int): Int =

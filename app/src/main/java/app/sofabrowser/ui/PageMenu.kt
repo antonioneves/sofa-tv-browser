@@ -5,8 +5,8 @@ import android.view.KeyEvent
 import android.widget.FrameLayout
 
 /**
- * The page's menu, wherever Settings puts it: the slim bar at the left edge ([BrowserMenu]), which can also be docked
- * beside the page, or the bar along the bottom of the screen ([BottomMenu]), which only ever opens over the page.
+ * The page's menu, wherever Settings puts it: the slim bar at the left edge ([BrowserMenu]) or the bar along the bottom
+ * of the screen ([BottomMenu]). Either can be docked beside the page, or open over it.
  * Both take the same [BrowserMenu.State] and answer with the same [BrowserMenu.Actions].
  */
 interface PageMenu {

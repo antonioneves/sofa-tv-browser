@@ -103,6 +103,8 @@
     <string name="fewer_actions">Fewer</string>
     <string name="dock_on">Sidebar always open</string>
     <string name="dock_off">Auto collapse sidebar</string>
+    <string name="bar_dock_on">Bar always open</string>
+    <string name="bar_dock_off">Auto hide bar</string>
     <string name="menu_position">Navigation bar position</string>
     <string-array name="menu_positions">
         <item>Left</item>

@@ -4,7 +4,6 @@ import android.app.Dialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.Gravity
@@ -21,9 +20,12 @@ import app.sofabrowser.Space
 
 /**
  * The page's menu along the bottom of the screen, as Settings can have it in place of the bar at the left edge
- * ([BrowserMenu]): one slim row with Home, the address pill, back, forward, reload, zoom and More. More slides a row
- * of labelled action buttons up below it, and folds it away again; the menu keeps that choice. The tabs are on the
- * search screen, which the address opens. It remembers the last button used and doesn't hide on its own.
+ * ([BrowserMenu]): that bar turned on its side, the same buttons in the same order from left to right (Home, the
+ * page's address, More, dock, back, forward, reload) and at its right end a new tab and the open tabs ([TabStack]).
+ * More slides a row of labelled action buttons out below the bar, zoom first, and folds it away again; the menu keeps
+ * that choice. A button that cannot be used (back, forward, zoom at either end) is not shown, and the address takes
+ * its room. Like the bar at the left it can be docked: kept on screen under the page ([dock]), or opened over the
+ * page with BACK or MENU. It remembers the last button used and doesn't hide on its own.
  */
 class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
     Dialog(context, android.R.style.Theme_Translucent_NoTitleBar), PageMenu {
@@ -33,17 +35,47 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
     private lateinit var zoomLabel: TextView
     private lateinit var more: LabeledIconButton
     private lateinit var actionsPane: View
-    private val topRow = setOf(BrowserMenu.Action.HOME, BrowserMenu.Action.BACK, BrowserMenu.Action.FORWARD,
-        BrowserMenu.Action.RELOAD, BrowserMenu.Action.ZOOM_OUT, BrowserMenu.Action.ZOOM_IN)
+    private lateinit var tabStack: TabStack
+    /** The bar, whose top edge the labels sit above. */
+    private lateinit var sheet: View
+    private lateinit var tip: TextView
+    private lateinit var tipUrl: TextView
+    private lateinit var tipPicture: android.widget.ImageView
+    private lateinit var tipBox: LinearLayout
+    /** The tab in view: OK on its icon opens the address and the search, as on the bar's. */
+    private var shownTab = -1L
+    /** The room the bar's buttons take, Back and Forward while hidden too, so the tabs never take the room they come back to. */
+    private var reserved = 0
+    private val topRow = setOf(BrowserMenu.Action.HOME, BrowserMenu.Action.DOCK, BrowserMenu.Action.BACK, BrowserMenu.Action.FORWARD, BrowserMenu.Action.RELOAD,
+        BrowserMenu.Action.NEW_TAB)
     private var lastFocused = BrowserMenu.Action.HOME
     private val prefs = Prefs(context)
     private var expanded = false
 
-    override val docked get() = false
-    override val shown get() = isShowing
-    override val inUse get() = isShowing
-    override val dockHasFocus get() = false
+    /** The sheet, the label and the frame as big as the screen they lie on: in this dialog, or docked in the screen. */
+    private lateinit var content: FrameLayout
+    private var created = false
+
+    /** The bar is docked in the screen (see [dock]) and not shown in this dialog. */
+    override var docked = false
+        private set
+    private var dockHost: FrameLayout? = null
+
+    /** The bar is on screen: its dialog is showing, or it is docked and not hidden behind another screen. */
+    override val shown get() = isShowing || docked && content.visibility == View.VISIBLE
+    /** The bar is being used: its dialog is showing, or the docked bar has the focus. */
+    override val inUse get() = isShowing || dockHasFocus
+    override val dockHasFocus get() = docked && content.findFocus() != null
+    /** Called when the docked bar is left: the focus goes back to the page. */
     override var onLeave: (() -> Unit)? = null
+
+    private val leavingFocus = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, now ->
+        // Focus went to the page: the actions and the label are done with.
+        if (now == null || !within(now, content)) {
+            hideTip()
+            setExpanded(false, animate = false)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,38 +87,31 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
             setDimAmount(0f)
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         }
+        created = true
+        if (!docked) setContentView(build())
+    }
+
+    private fun build(): FrameLayout {
+        if (::content.isInitialized) return content
+        val sheetColor = if (Space.active) Ui.p.sheetSpace else Ui.p.sheet
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
-                setColor(if (Space.active) Ui.p.sheetSpace else Ui.p.sheet)
-                cornerRadii = FloatArray(8) { if (it < 4) 16.px.toFloat() else 0f }
-            }
-            setPadding(72.px, 24.px, 72.px, 24.px)
-            // The focused button's scaled square may reach into the padding.
+            // Square corners, like the bar at the left: it runs from one side of the screen to the other.
+            setBackgroundColor(sheetColor)
+            // The focused button's scaled square may reach past the bar, and the mark under the tab in view lies at its foot.
             clipToPadding = false
+            clipChildren = false
             // A tap on the sheet between its buttons is not a tap outside the menu.
             isClickable = true
         }
-
-        val addressRow = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; clipChildren = false }
-        address = Ui.text(context, 30, Ui.p.textMid).apply {
-            isFocusable = true
-            isClickable = true
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.MIDDLE
+        val bar = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(32.px, 0, 32.px, 0)
-            background = Ui.fillSelector(Ui.p.fillFocused, Ui.p.focus, 44)
-            setCompoundDrawablesRelative(tinted(R.drawable.ic_search), null, null, null)
-            compoundDrawablePadding = 20.px
-            setOnFocusChangeListener { v, has ->
-                (v as TextView).setTextColor(if (has) Ui.p.onFocus else Ui.p.textMid)
-                v.compoundDrawablesRelative[0]?.setTint(if (has) Ui.p.onFocus else Ui.p.textMid)
-            }
-            // The menu stays until the search screen comes: its sofa moves there from the Home button.
-            setOnClickListener { actions.onAddress() }
+            setPadding(SIDE.px, 0, SIDE.px, 0)
+            clipChildren = false
+            clipToPadding = false
         }
-        root.addView(addressRow)
+        root.addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, BrowserMenu.BAR.px))
 
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -94,89 +119,271 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
             clipChildren = false
             clipToPadding = false
         }
-        fun add(action: BrowserMenu.Action, icon: Int, label: Int, into: LinearLayout = row, gap: Int = 28) {
-            // Beside the address, the icons speak for themselves: a label there would crowd the row below.
-            val b = LabeledIconButton(context, icon, context.getString(label), labelled = into == row) { actions.onAction(action) }
-            b.onFocused = { lastFocused = action }
+        fun place(b: LabeledIconButton, gap: Int) {
+            b.onFocused = b.onFocused.let { was -> { was?.invoke(); showTip(b) } }
+            bar.addView(b, LinearLayout.LayoutParams(BrowserMenu.BAR_SQUARE.px, BrowserMenu.BAR_SQUARE.px).apply { marginEnd = gap.px })
+            reserved += BrowserMenu.BAR_SQUARE + gap
+        }
+        fun add(action: BrowserMenu.Action, icon: Int, label: Int, gap: Int = GAP, inBar: Boolean = false) {
+            // In the bar the icons speak for themselves, their names in a label above; in the row below each has its name under it.
+            val b = LabeledIconButton(context, icon, context.getString(label), labelled = !inBar,
+                square = if (inBar) BrowserMenu.BAR_SQUARE else 80) { actions.onAction(action) }
+            b.onFocused = { lastFocused = action; if (!inBar) hideTip() }
             buttons[action] = b
-            into.addView(b, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                marginEnd = gap.px
-            })
+            if (inBar) place(b, gap)
+            else row.addView(b, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginEnd = gap.px })
         }
         // Home stays in reach with the actions folded away.
         // The sofa is Sofa's home: orange at rest, like on the start screen.
-        add(BrowserMenu.Action.HOME, R.drawable.ic_sofa, R.string.home, addressRow)
+        add(BrowserMenu.Action.HOME, R.drawable.ic_sofa, R.string.home, BrowserMenu.GROUP_GAP, inBar = true)
         buttons[BrowserMenu.Action.HOME]?.accent = Ui.BRAND
-        addressRow.addView(address, LinearLayout.LayoutParams(0, 80.px, 1f).apply { marginEnd = 28.px })
-        // Moving about the page, beside its address.
-        add(BrowserMenu.Action.BACK, R.drawable.ic_arrow_back, R.string.back, addressRow, 16)
-        add(BrowserMenu.Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, addressRow, 16)
-        add(BrowserMenu.Action.RELOAD, R.drawable.ic_refresh, R.string.reload, addressRow, 16)
-        add(BrowserMenu.Action.ZOOM_OUT, R.drawable.ic_zoom_out, R.string.zoom_out, addressRow, 0)
-        zoomLabel = Ui.text(context, 26, Ui.p.textMid).apply { gravity = Gravity.CENTER; text = context.getString(R.string.percent, 100) }
-        addressRow.addView(zoomLabel, LinearLayout.LayoutParams(100.px, 88.px))
-        add(BrowserMenu.Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in, addressRow, 28)
-        more = LabeledIconButton(context, R.drawable.ic_keyboard_arrow_up, context.getString(R.string.more_actions), labelled = false) {
+        // The page's address, the way to the search; it takes the room of Back and Forward while they are hidden ([fitAddress]).
+        address = Ui.text(context, 26, Ui.p.textMid).apply {
+            isFocusable = true
+            isClickable = true
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.MIDDLE
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(28.px, 0, 28.px, 0)
+            background = Ui.fillSelector(Ui.p.fillFocused, Ui.p.focus, BrowserMenu.BAR_SQUARE / 2)
+            setOnFocusChangeListener { v, has -> (v as TextView).setTextColor(if (has) Ui.p.onFocus else Ui.p.textMid) }
+            // The menu stays until the search screen comes: its sofa moves there from the Home button.
+            setOnClickListener { actions.onAddress() }
+        }
+        bar.addView(address, LinearLayout.LayoutParams(ADDRESS.px, BrowserMenu.BAR_SQUARE.px).apply { marginEnd = BrowserMenu.GROUP_GAP.px })
+        reserved += ADDRESS + BrowserMenu.GROUP_GAP
+        // More comes next; the actions come out below the bar.
+        more = LabeledIconButton(context, R.drawable.ic_more_widgets, context.getString(R.string.more_actions), labelled = false,
+            square = BrowserMenu.BAR_SQUARE) {
             prefs.menuExpanded = !expanded
             setExpanded(prefs.menuExpanded)
         }
-        addressRow.addView(more, LinearLayout.LayoutParams(LabeledIconButton.WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT))
+        // Down on More opens the actions, or goes into them when they are out, as they lie in that direction.
+        more.setOnKeyListener { _, code, e ->
+            if (code == android.view.KeyEvent.KEYCODE_DPAD_DOWN && e.action == android.view.KeyEvent.ACTION_DOWN && !expanded) {
+                prefs.menuExpanded = true
+                setExpanded(true); true
+            } else false
+        }
+        place(more, GAP)
+        // How the bar lives: kept on screen under the page, or out of sight until BACK or MENU opens it.
+        add(BrowserMenu.Action.DOCK, R.drawable.ic_dock_bottom_off, R.string.bar_dock_off, BrowserMenu.GROUP_GAP, inBar = true)
+        // Moving about the page.
+        add(BrowserMenu.Action.BACK, R.drawable.ic_arrow_back, R.string.back, inBar = true)
+        add(BrowserMenu.Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, inBar = true)
+        add(BrowserMenu.Action.RELOAD, R.drawable.ic_refresh, R.string.reload, BrowserMenu.GROUP_GAP, inBar = true)
+        // The tabs at the bar's right end, after the button for a new one, an empty tab where the next goes.
+        bar.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+        add(BrowserMenu.Action.NEW_TAB, R.drawable.ic_tab_new, R.string.new_tab, GAP, inBar = true)
+        buttons[BrowserMenu.Action.NEW_TAB]?.setFullIcon(R.drawable.ic_tab_new)
+        // The tabs' icons overlap, so the focus goes on to the first of them, not to the nearest drawn.
+        buttons[BrowserMenu.Action.NEW_TAB]?.setOnKeyListener { _, code, e ->
+            code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT && (e.action != android.view.KeyEvent.ACTION_DOWN || tabStack.focusFirst())
+        }
+        // The open tabs, side by side while they fit, then overlapping: whatever the buttons and one more empty place leave.
+        tabStack = TabStack(context, BrowserMenu.BAR_SQUARE, BrowserMenu.BAR_SQUARE + BrowserMenu.TAB_GAP, limit = {
+            val w = bar.width.takeIf { it > 0 } ?: context.resources.displayMetrics.widthPixels
+            w - bar.paddingLeft - bar.paddingRight - (reserved + BrowserMenu.BAR_SQUARE + GAP).px
+        }, onPick = { id -> if (id == shownTab) actions.onAddress() else actions.onTab(id) }, onFocused = { showTip(it) }, horizontal = true)
+        bar.addView(tabStack, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        // The page's zoom first, set apart from the actions after it.
+        add(BrowserMenu.Action.ZOOM_OUT, R.drawable.ic_zoom_out, R.string.zoom_out, gap = 0)
+        zoomLabel = Ui.text(context, 26, Ui.p.textMid).apply { gravity = Gravity.CENTER; text = context.getString(R.string.percent, 100) }
+        row.addView(zoomLabel, LinearLayout.LayoutParams(100.px, 80.px))
+        add(BrowserMenu.Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in, gap = 0)
+        row.addView(View(context).apply { background = Ui.rounded(Ui.p.border, 1) }, LinearLayout.LayoutParams(2.px, 56.px).apply {
+            topMargin = 12.px
+            marginStart = 20.px
+            marginEnd = 20.px + ROW_GAP.px
+        })
 
         // Grouped by what they act on.
         // Watching, the action a TV is most often used for, first.
-        add(BrowserMenu.Action.WATCH, R.drawable.ic_play_circle, R.string.watch)
+        add(BrowserMenu.Action.WATCH, R.drawable.ic_play_circle, R.string.watch, ROW_GAP)
         // Kept per site; not in private browsing, which saves none.
-        add(BrowserMenu.Action.AUTO_WATCH, R.drawable.ic_autoplay, R.string.auto_watch)
+        add(BrowserMenu.Action.AUTO_WATCH, R.drawable.ic_autoplay, R.string.auto_watch, ROW_GAP)
         // This page: look through it, keep it.
-        add(BrowserMenu.Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page)
-        add(BrowserMenu.Action.TRANSLATE, R.drawable.ic_translate, R.string.translate)
+        add(BrowserMenu.Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page, ROW_GAP)
+        add(BrowserMenu.Action.TRANSLATE, R.drawable.ic_translate, R.string.translate, ROW_GAP)
         buttons[BrowserMenu.Action.TRANSLATE]?.setOnLongClickListener { actions.onActionHeld(BrowserMenu.Action.TRANSLATE); true }
-        add(BrowserMenu.Action.READER, R.drawable.ic_article, R.string.reader_view)
-        add(BrowserMenu.Action.HIDE_PARTS, R.drawable.ic_visibility_off, R.string.hide_parts)
+        add(BrowserMenu.Action.READER, R.drawable.ic_article, R.string.reader_view, ROW_GAP)
+        add(BrowserMenu.Action.HIDE_PARTS, R.drawable.ic_visibility_off, R.string.hide_parts, ROW_GAP)
         buttons[BrowserMenu.Action.HIDE_PARTS]?.setOnLongClickListener { actions.onActionHeld(BrowserMenu.Action.HIDE_PARTS); true }
-        add(BrowserMenu.Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark)
-        add(BrowserMenu.Action.PIN, R.drawable.ic_add, R.string.add_to_quick_access)
+        add(BrowserMenu.Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark, ROW_GAP)
+        add(BrowserMenu.Action.PIN, R.drawable.ic_add, R.string.add_to_quick_access, ROW_GAP)
         // A tile on the TV's home screen would show anyone what's in the private space.
-        if (!Space.active) add(BrowserMenu.Action.TV_SHORTCUT, R.drawable.ic_tv, R.string.tv_shortcut)
-        // The tabs: a new one, or done with this one. The others are on the search screen.
-        add(BrowserMenu.Action.NEW_TAB, R.drawable.ic_tab_new, R.string.new_tab)
-        add(BrowserMenu.Action.CLOSE_TAB, R.drawable.ic_close, R.string.close_tab)
+        if (!Space.active) add(BrowserMenu.Action.TV_SHORTCUT, R.drawable.ic_tv, R.string.tv_shortcut, ROW_GAP)
+        // Done with this tab; a new one is beside the tabs above.
+        add(BrowserMenu.Action.CLOSE_TAB, R.drawable.ic_close, R.string.close_tab, ROW_GAP)
         // Somewhere else to go.
-        add(BrowserMenu.Action.BOOKMARKS, R.drawable.ic_bookmarks, R.string.bookmarks)
-        add(BrowserMenu.Action.HISTORY, R.drawable.ic_history, R.string.history)
-        add(BrowserMenu.Action.DOWNLOADS, R.drawable.ic_download, R.string.downloads)
+        add(BrowserMenu.Action.BOOKMARKS, R.drawable.ic_bookmarks, R.string.bookmarks, ROW_GAP)
+        add(BrowserMenu.Action.HISTORY, R.drawable.ic_history, R.string.history, ROW_GAP)
+        add(BrowserMenu.Action.DOWNLOADS, R.drawable.ic_download, R.string.downloads, ROW_GAP)
         // How this site is shown.
-        add(BrowserMenu.Action.ADBLOCK, R.drawable.ic_shield, R.string.adblock_site)
+        add(BrowserMenu.Action.ADBLOCK, R.drawable.ic_shield, R.string.adblock_site, ROW_GAP)
         // Shown only after a block, next to the shield it belongs with; the menu then opens with it focused.
-        add(BrowserMenu.Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once)
-        add(BrowserMenu.Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent)
+        add(BrowserMenu.Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once, ROW_GAP)
+        add(BrowserMenu.Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent, ROW_GAP)
         // How the remote moves about pages.
-        add(BrowserMenu.Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode)
-        add(BrowserMenu.Action.POINTER, R.drawable.ic_mouse, R.string.pointer)
-        add(BrowserMenu.Action.SETTINGS, R.drawable.ic_settings, R.string.settings)
+        add(BrowserMenu.Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode, ROW_GAP)
+        add(BrowserMenu.Action.POINTER, R.drawable.ic_mouse, R.string.pointer, ROW_GAP)
+        add(BrowserMenu.Action.SETTINGS, R.drawable.ic_settings, R.string.settings, ROW_GAP)
 
-        // The row scrolls through the sheet's side padding to the screen edge, and a focused button keeps room for
-        // its label (wider than the button) plus the padding, so neither icon nor label is ever cut.
-        row.setPadding(72.px, 32.px, 72.px - 28.px, 0)
-        actionsPane = FocusRowScrollView(context, ((LabeledIconButton.LABEL_WIDTH - LabeledIconButton.WIDTH) / 2 + 72).px).apply {
+        // A focused button keeps room for its label (wider than the button) from the screen edge, so neither icon nor
+        // label is ever cut.
+        row.setPadding(SIDE.px, 8.px, SIDE.px - ROW_GAP.px, 24.px)
+        actionsPane = FocusRowScrollView(context, ((LabeledIconButton.LABEL_WIDTH - LabeledIconButton.WIDTH) / 2 + SIDE).px).apply {
             isHorizontalScrollBarEnabled = false
             clipChildren = false
             clipToPadding = false
             addView(row)
             visibility = View.GONE
         }
-        // Below the slim row: opening it lifts the sheet, the slim row with it.
-        root.addView(actionsPane, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            marginStart = -72.px
-            marginEnd = -72.px
-        })
-        setContentView(FrameLayout(context).apply {
+        // Below the bar: opening it lifts the sheet, the bar with it.
+        root.addView(actionsPane, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        // The focused button's name over the page above it; a tab's name and address, with a picture of its page when it
+        // is out of view.
+        tip = Ui.text(context, 26, Ui.p.text).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; maxWidth = TIP_TEXT.px }
+        tipUrl = Ui.text(context, 22, Ui.p.textWeak).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; maxWidth = TIP_TEXT.px }
+        tipPicture = android.widget.ImageView(context).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) =
+                    outline.setRoundRect(0, 0, view.width, view.height, 8.px.toFloat())
+            }
+            clipToOutline = true
+            visibility = View.GONE
+        }
+        tipBox = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = Ui.rounded(sheetColor, 12)
+            setPadding(24.px, 14.px, 24.px, 14.px)
+            addView(tipPicture, LinearLayout.LayoutParams(TIP_PICTURE.px, TIP_PICTURE.px * 9 / 16).apply { topMargin = 10.px; bottomMargin = 14.px })
+            addView(tip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(tipUrl, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 4.px })
+            visibility = View.INVISIBLE
+        }
+        content = FrameLayout(context).apply {
             addView(root, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
-        })
+            addView(tipBox, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        // The label goes with the focus off the bar's buttons: to the address, into the row of actions or out of the menu.
+        address.onFocusChangeListener.let { was -> address.setOnFocusChangeListener { v, has -> was.onFocusChange(v, has); if (has) hideTip() } }
+        content.viewTreeObserver.addOnGlobalFocusChangeListener { _, now -> if (now == null || !within(now, content)) hideTip() }
+        sheet = root
+        // It follows the sheet as it grows or shrinks.
+        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeTip() }
+        return content
+    }
+
+    /** Docks the bar in [host], at [index] among its views, instead of floating it over the page in a dialog. */
+    override fun dock(host: FrameLayout, index: Int) {
+        if (docked) return
+        val c = build()
+        if (isShowing) dismiss()
+        (c.parent as? ViewGroup)?.removeView(c)
+        host.addView(c, index, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        dockHost = host
+        docked = true
+        c.viewTreeObserver.addOnGlobalFocusChangeListener(leavingFocus)
+    }
+
+    /** The bar goes back to its dialog, which opens with BACK or MENU. */
+    override fun undock() {
+        if (!docked) return
+        docked = false
+        content.viewTreeObserver.removeOnGlobalFocusChangeListener(leavingFocus)
+        dockHost?.removeView(content)
+        dockHost = null
+        content.visibility = View.VISIBLE
+        if (created) setContentView(content)
+    }
+
+    /** The docked bar is shown, or out of the way of the home screen and the fullscreen video. */
+    override fun setDockVisible(visible: Boolean) {
+        if (!docked) return
+        content.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
+    /** A key while the docked bar has the focus: BACK and MENU give the focus back to the page, and so does UP from the bar, as the page is above it. */
+    override fun dockedKey(event: android.view.KeyEvent): Boolean {
+        val focus = content.findFocus() ?: return false
+        val down = event.action == android.view.KeyEvent.ACTION_DOWN
+        when (event.keyCode) {
+            android.view.KeyEvent.KEYCODE_BACK -> { if (down && event.repeatCount == 0) dismiss(); return true }
+            android.view.KeyEvent.KEYCODE_MENU -> { if (down) dismiss(); return true }
+            android.view.KeyEvent.KEYCODE_DPAD_UP -> if (!within(focus, actionsPane)) { if (down) dismiss(); return true }
+        }
+        return false
+    }
+
+    /** The sofa of the screen being left moves into the Home button: the bar docked under the page. */
+    override fun sofaTo(activity: android.app.Activity, from: SofaGlide.Spot?) {
+        val b = buttons[BrowserMenu.Action.HOME] ?: return
+        SofaGlide.to(activity, from, b.icon) { b.iconColor() }
+    }
+
+    /** Closing a docked bar leaves it where it is, and gives the focus back to the page. */
+    override fun dismiss() {
+        if (!docked) return super.dismiss()
+        if (::actionsPane.isInitialized) setExpanded(false, animate = false)
+        hideTip()
+        onLeave?.invoke()
+    }
+
+    private fun within(view: View, ancestor: View): Boolean {
+        var v: View? = view
+        while (v != null) {
+            if (v === ancestor) return true
+            v = v.parent as? View
+        }
+        return false
+    }
+
+    private var tipFor: LabeledIconButton? = null
+
+    private fun showTip(b: LabeledIconButton) {
+        tipFor = b
+        tipBox.visibility = View.VISIBLE
+        // Placed once the icon is where its slide along the row leaves it.
+        tipBox.post { placeTip() }
+    }
+
+    private fun hideTip() {
+        tipFor = null
+        tipBox.visibility = View.INVISIBLE
+    }
+
+    /** Above the sheet, centred over the button (a tab's icon where it slides to), and inside the screen. */
+    private fun placeTip() {
+        val b = tipFor ?: return
+        val frame = tipBox.parent as? View ?: return
+        if (!b.isAttachedToWindow || frame.width == 0) return
+        val t = tabStack.tipFor(b)
+        val name = t?.name ?: (b.contentDescription ?: "").toString()
+        val url = t?.url.orEmpty()
+        val picture = t?.picture
+        if (tipPicture.drawable.let { (it as? android.graphics.drawable.BitmapDrawable)?.bitmap } !== picture) tipPicture.setImageBitmap(picture)
+        tipPicture.visibility = if (picture == null) View.GONE else View.VISIBLE
+        // Only when they changed: this runs on every layout pass, and setting the same text asks for another layout.
+        if (tip.text.toString() != name) tip.text = name
+        if (tipUrl.text.toString() != url) tipUrl.text = url
+        tipUrl.visibility = if (url.isEmpty()) View.GONE else View.VISIBLE
+        tipBox.measure(View.MeasureSpec.makeMeasureSpec(900.px, View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        tipBox.layout(0, 0, tipBox.measuredWidth, tipBox.measuredHeight)
+        val origin = IntArray(2).also { frame.getLocationInWindow(it) }
+        val sheetTop = IntArray(2).also { sheet.getLocationInWindow(it) }[1]
+        val left = if (t != null) IntArray(2).also { tabStack.getLocationInWindow(it) }[0] + (tabStack.placeOf(b) ?: 0)
+            else IntArray(2).also { b.getLocationInWindow(it) }[0]
+        val centre = left - origin[0] + b.width / 2
+        tipBox.x = (centre - tipBox.measuredWidth / 2).coerceIn(16.px, maxOf(16.px, frame.width - tipBox.measuredWidth - 16.px)).toFloat()
+        tipBox.y = (sheetTop - origin[1] - tipBox.measuredHeight - 16.px).toFloat()
     }
 
     override fun show(state: BrowserMenu.State) {
-        if (!isShowing) show()
+        if (!docked && !isShowing) show()
         update(state)
         // A pending "Allow once" is why the menu was opened, most likely: it opens with the actions out, this time only.
         if (state.allowPending) {
@@ -191,7 +398,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
     }
 
     override fun sofa(): SofaGlide.Spot? {
-        if (!isShowing) return null
+        if (!shown) return null
         val b = buttons[BrowserMenu.Action.HOME] ?: return null
         return SofaGlide.spot(b.icon, b.iconColor())
     }
@@ -211,7 +418,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         if (!::actionsPane.isInitialized) return
         val changed = open != expanded || paneAnimator?.isRunning == true
         expanded = open
-        more.set(if (open) R.drawable.ic_keyboard_arrow_down else R.drawable.ic_keyboard_arrow_up,
+        more.set(R.drawable.ic_more_widgets,
             context.getString(if (open) R.string.fewer_actions else R.string.more_actions))
         paneAnimator?.cancel()
         val pane = actionsPane
@@ -257,12 +464,19 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
     }
 
     override fun update(s: BrowserMenu.State) {
-        if (!::address.isInitialized) return
+        if (!::tabStack.isInitialized) return
         address.text = s.address.ifEmpty { context.getString(R.string.search_hint) }
+        shownTab = s.currentTab
+        buttons[BrowserMenu.Action.DOCK]?.set(if (s.docked) R.drawable.ic_dock_bottom_on else R.drawable.ic_dock_bottom_off,
+            context.getString(if (s.docked) R.string.bar_dock_on else R.string.bar_dock_off))
+        tabStack.set(s.tabs, s.currentTab)
+        // The label of a tab that just closed goes with it; the focused button may have a new name (Reload to Stop).
+        tipFor?.let { if (it.parent == null) hideTip() else tipBox.post { placeTip() } }
         buttons[BrowserMenu.Action.ALLOW_ONCE]?.visibility = if (s.allowPending) View.VISIBLE else View.GONE
-        // Back and Forward stay in place, dimmed while they cannot be used; the focus moves on from one that goes.
-        dim(BrowserMenu.Action.BACK, s.canGoBack, BrowserMenu.Action.FORWARD)
-        dim(BrowserMenu.Action.FORWARD, s.canGoForward, BrowserMenu.Action.BACK)
+        // Back and Forward are not shown while they cannot be used; the focus moves on from one that goes.
+        hideUnusable(BrowserMenu.Action.BACK, s.canGoBack, BrowserMenu.Action.FORWARD)
+        hideUnusable(BrowserMenu.Action.FORWARD, s.canGoForward, BrowserMenu.Action.BACK)
+        fitAddress()
         buttons[BrowserMenu.Action.RELOAD]?.set(if (s.loading) R.drawable.ic_close else R.drawable.ic_refresh,
             context.getString(if (s.loading) R.string.stop else R.string.reload))
         buttons[BrowserMenu.Action.BOOKMARK]?.set(if (s.bookmarked) R.drawable.ic_star_filled else R.drawable.ic_star,
@@ -293,22 +507,33 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
             context.getString(if (s.pointer) R.string.pointer_on else R.string.pointer_off))
         zoomLabel.text = context.getString(R.string.percent, s.zoomPercent)
         // At either end of the zoom, focus moves to the other zoom button instead of falling out of the row.
-        dim(BrowserMenu.Action.ZOOM_OUT, s.canZoomOut, BrowserMenu.Action.ZOOM_IN)
-        dim(BrowserMenu.Action.ZOOM_IN, s.canZoomIn, BrowserMenu.Action.ZOOM_OUT)
+        hideUnusable(BrowserMenu.Action.ZOOM_OUT, s.canZoomOut, BrowserMenu.Action.ZOOM_IN)
+        hideUnusable(BrowserMenu.Action.ZOOM_IN, s.canZoomIn, BrowserMenu.Action.ZOOM_OUT)
     }
 
-    /** A button that cannot be used stays in its place, dimmed and passed over; its focus goes to [other], or Reload. */
-    private fun dim(action: BrowserMenu.Action, enabled: Boolean, other: BrowserMenu.Action) {
+    /** A button that cannot be used is not shown; its focus goes first to [other], or Reload. */
+    private fun hideUnusable(action: BrowserMenu.Action, enabled: Boolean, other: BrowserMenu.Action) {
         val b = buttons[action] ?: return
-        val focused = b.hasFocus()
-        b.isEnabled = enabled
-        b.isFocusable = enabled
-        b.alpha = if (enabled) 1f else 0.35f
-        if (focused && !enabled) (buttons[other]?.takeIf { usable(it) } ?: buttons[BrowserMenu.Action.RELOAD])?.requestFocus()
+        if (!enabled && b.hasFocus()) (buttons[other]?.takeIf { usable(it) } ?: buttons[BrowserMenu.Action.RELOAD])?.requestFocus()
+        b.setEnabledLook(enabled)
     }
 
-    private fun tinted(res: Int) = context.getDrawable(res)?.mutate()?.apply {
-        setBounds(0, 0, 40.px, 40.px)
-        setTint(Ui.p.textMid)
+    /** The address is [ADDRESS] wide with Back and Forward shown, and takes the room of each that is hidden. */
+    private fun fitAddress() {
+        val hidden = listOf(BrowserMenu.Action.BACK, BrowserMenu.Action.FORWARD).count { buttons[it]?.visibility != View.VISIBLE }
+        val width = (ADDRESS + hidden * (BrowserMenu.BAR_SQUARE + GAP)).px
+        if (address.layoutParams.width != width) { address.layoutParams.width = width; address.requestLayout() }
+    }
+
+    companion object {
+        /** The bar's room at its left and right ends; between its buttons, the left bar's gaps ([BrowserMenu.GAP]). */
+        const val SIDE = 28
+        const val GAP = BrowserMenu.GAP
+        /** Between the labelled buttons in the row below the bar. */
+        const val ROW_GAP = 14
+        /** The address's width with Back and Forward shown. */
+        const val ADDRESS = 600
+        const val TIP_TEXT = 640
+        const val TIP_PICTURE = 400
     }
 }

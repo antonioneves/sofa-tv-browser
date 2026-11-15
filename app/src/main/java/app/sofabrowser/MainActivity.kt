@@ -1011,10 +1011,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         m.onLeave = { if (!homeShown) web?.requestFocus() }
     }
 
-    /** The menu bar docked at the left edge with the page beside it (Prefs.menuDocked), or floating over the page when opened. */
+    /** The menu bar docked at the left edge or the foot of the screen with the page beside it (Prefs.menuDocked), or floating over the page when opened. */
     private fun applyDock() {
-        // The bar along the bottom only ever opens over the page.
-        if (prefs.menuDocked && !prefs.menuBottom && !standalone) menuView().dock(rootLayer, 1).also { menu?.update(menuState()) }
+        if (prefs.menuDocked && !standalone) menuView().dock(rootLayer, 1).also { menu?.update(menuState()) }
         else menu?.undock()
         syncDock()
     }
@@ -1024,8 +1023,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         val m = menu
         m?.setDockVisible(browserLayer.visibility == View.VISIBLE)
         (browserLayer.layoutParams as? FrameLayout.LayoutParams)?.let {
-            val left = if (m?.docked == true) BrowserMenu.BAR.px else 0
-            if (it.leftMargin != left) { it.leftMargin = left; browserLayer.layoutParams = it }
+            val left = if (m?.docked == true && m !is BottomMenu) BrowserMenu.BAR.px else 0
+            val bottom = if (m?.docked == true && m is BottomMenu) BrowserMenu.BAR.px else 0
+            if (it.leftMargin != left || it.bottomMargin != bottom) { it.leftMargin = left; it.bottomMargin = bottom; browserLayer.layoutParams = it }
         }
     }
 
