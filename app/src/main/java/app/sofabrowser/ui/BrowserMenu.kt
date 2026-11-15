@@ -90,6 +90,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     /** The label's box: the name, and under it, for the page's icon, the address. */
     private lateinit var tipBox: LinearLayout
     private lateinit var tipUrl: TextView
+    /** A picture of the page of a tab out of view, above its name. */
+    private lateinit var tipPicture: android.widget.ImageView
     private var tipFor: android.view.View? = null
     private lateinit var zoomLabel: TextView
     private lateinit var more: LabeledIconButton
@@ -304,10 +306,20 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             maxWidth = TIP_TEXT.px
             visibility = android.view.View.GONE
         }
+        tipPicture = android.widget.ImageView(context).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: android.view.View, outline: android.graphics.Outline) =
+                    outline.setRoundRect(0, 0, view.width, view.height, 8.px.toFloat())
+            }
+            clipToOutline = true
+            visibility = android.view.View.GONE
+        }
         tipBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = Ui.rounded(sheetColor, 12)
             setPadding(24.px, 14.px, 24.px, 14.px)
+            addView(tipPicture, LinearLayout.LayoutParams(TIP_PICTURE.px, TIP_PICTURE.px * 9 / 16).apply { topMargin = 10.px; bottomMargin = 14.px })
             // Wrapping its text, not the default of matching the box, which would size the box by the address alone.
             addView(tip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(tipUrl, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 4.px })
@@ -407,9 +419,15 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         tipBox.y = (at[1] - origin[1] + (button.height - tipBox.measuredHeight) / 2).coerceIn(8.px, maxOf(8.px, frame.height - tipBox.measuredHeight - 8.px)).toFloat()
     }
 
-    /** A tab's icon names the site and gives its address; any other button just its name. */
+    /** A tab's icon names the site and gives its address, under a picture of its page when it is out of view; any other button just its name. */
     private fun fillTip(button: android.view.View) {
-        val (name, url) = tabStack.tipFor(button) ?: ((button.contentDescription ?: "").toString() to "")
+        val tab = tabStack.tipFor(button)
+        val name = tab?.name ?: (button.contentDescription ?: "").toString()
+        val url = tab?.url.orEmpty()
+        val picture = tab?.picture
+        if (tipPicture.drawable.let { (it as? android.graphics.drawable.BitmapDrawable)?.bitmap } !== picture) tipPicture.setImageBitmap(picture)
+        val pictureShown = if (picture == null) android.view.View.GONE else android.view.View.VISIBLE
+        if (tipPicture.visibility != pictureShown) tipPicture.visibility = pictureShown
         // Only when they changed: this runs on every layout pass, and setting the same text asks for another layout.
         if (tip.text.toString() != name.toString()) tip.text = name
         if (tipUrl.text.toString() != url) tipUrl.text = url
@@ -600,6 +618,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         const val BAR = 96
         // The most the label's text can be wide before it is cut short.
         const val TIP_TEXT = 640
+        /** How wide the picture of a tab's page is in its label. */
+        const val TIP_PICTURE = 400
 
         /** The focus square of the bar's buttons; it grows by a tenth when focused, and still leaves room to the bar's edges. */
         const val BAR_SQUARE = 68

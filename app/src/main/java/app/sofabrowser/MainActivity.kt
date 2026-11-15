@@ -976,7 +976,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             reading = reading,
             pinned = url.isNotEmpty() && db.isPinned(url),
             docked = prefs.menuDocked,
-            tabs = tabs.map { TabStack.Tab(it.id, it.url, it.title) },
+            tabs = tabs.map { TabStack.Tab(it.id, it.url, it.title, it.thumbnail) },
             currentTab = currentTab.id,
         )
     }

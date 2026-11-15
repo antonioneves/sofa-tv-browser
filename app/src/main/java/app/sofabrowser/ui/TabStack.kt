@@ -41,7 +41,8 @@ class TabStack(
     private val onFocused: (LabeledIconButton) -> Unit,
 ) : FrameLayout(context) {
 
-    class Tab(val id: Long, val url: String, val title: String)
+    /** A tab: its site, its page's name, and the last picture of its page, if one was taken. */
+    class Tab(val id: Long, val url: String, val title: String, val picture: android.graphics.Bitmap? = null)
 
     private val square = squareDp.px
     private val slot = slotDp.px
@@ -161,10 +162,13 @@ class TabStack(
     /** Focuses the first tab; false when there is none. */
     fun focusFirst(): Boolean = buttons.firstOrNull()?.requestFocus() == true
 
-    /** The name and address the label shows for [view], when it is one of the tabs. */
-    fun tipFor(view: View): Pair<String, String>? {
+    /** What the label shows for a tab: its name and address, and a picture of its page when it is not the one in view. */
+    class Tip(val name: String, val url: String, val picture: android.graphics.Bitmap?)
+
+    /** The label for [view], when it is one of the tabs. */
+    fun tipFor(view: View): Tip? {
         val t = tabs.getOrNull(buttons.indexOf(view)) ?: return null
-        return name(t) to UrlInput.display(t.url)
+        return Tip(name(t), UrlInput.display(t.url), t.picture.takeIf { t.id != current })
     }
 
     private fun name(t: Tab) = t.title.ifBlank { Browser.hostOf(t.url)?.removePrefix("www.").orEmpty() }
