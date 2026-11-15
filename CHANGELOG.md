@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **One shape of focus square**: every icon button, in the menu bar and on the home screen, shows its focus as a rounded square with the same corners as the site icons, in place of the rounder one plain icons had. The sidebar button's "Sidebar collapses by itself" now reads "Auto collapse sidebar".
 - **The sofa moves between screens**: the sofa icon glides from where it was to where the next screen has it, growing or shrinking and changing colour on the way, instead of vanishing in one place and showing up in another. It moves from the menu bar's Home button to the home screen's top left corner, from the bar to the same corner as the search screen fades in around it, and from the home screen into the docked bar when a page opens beside it.
 - **The page's icon in the menu bar**: the magnifier at the top of the browse menu's slim bar is gone. The page's icon (or its coloured letter tile, like a bookmark's) sits at the bottom of the bar instead, and opens the search screen, with the page's address, when pressed.
   The icon fills almost all of its focus square, and the bar's top and bottom margins are a little smaller.

@@ -66,8 +66,9 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
                 })
             }
         } else {
-            // A rounded square, not a circle, like Sofa's other focused buttons.
-            circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, FOCUS_RADIUS)
+            // A rounded square, not a circle, with the corners a site's icon has in it ([setPicture]): every focus
+            // square in a row of buttons alike, icon or picture.
+            circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, pictureRadius())
             circle.isDuplicateParentStateEnabled = true
             // A site's icon may cast a shadow past its square (the tabs' icons).
             circle.clipChildren = false
@@ -88,7 +89,6 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
 
     fun set(icon: Int, label: String) {
         if (plain && !row) image.layoutParams = LayoutParams(48.px, 48.px, Gravity.CENTER)
-        if (plain && !row) circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, FOCUS_RADIUS)
         plain = false
         image.setImageResource(icon)
         text.text = label
@@ -99,10 +99,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
     /** A tinted icon as big as a site's icon ([setPicture]), with its corners: the new tab button beside the tabs. */
     fun setFullIcon(icon: Int) {
         plain = false
-        if (!row) {
-            image.layoutParams = LayoutParams((square - 8).px, (square - 8).px, Gravity.CENTER)
-            circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, pictureRadius())
-        }
+        if (!row) image.layoutParams = LayoutParams((square - 8).px, (square - 8).px, Gravity.CENTER)
         image.setImageResource(icon)
         tint(hasFocus())
     }
@@ -114,7 +111,6 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         if (!row) image.layoutParams = LayoutParams((square - 8).px, (square - 8).px, Gravity.CENTER)
         image.setImageDrawable(picture)
         image.clearColorFilter()
-        if (!row) circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, pictureRadius())
     }
 
     /** The picture [setPicture] gave, or null when the button shows an icon. */
@@ -155,7 +151,5 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
     companion object {
         const val WIDTH = 104
         const val LABEL_WIDTH = 320
-        /** The corner radius of the focus square, and so of a site icon inside it. */
-        const val FOCUS_RADIUS = 24
     }
 }
