@@ -249,6 +249,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2.px).apply {
                     marginStart = SIDE.px
                     marginEnd = SIDE.px
+                    topMargin = 10.px
                 })
             addView(scroller, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             visibility = View.GONE
