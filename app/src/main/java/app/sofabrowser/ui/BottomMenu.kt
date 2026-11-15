@@ -192,10 +192,11 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         zoomLabel = Ui.text(context, 26, Ui.p.textMid).apply { gravity = Gravity.CENTER; text = context.getString(R.string.percent, 100) }
         row.addView(zoomLabel, LinearLayout.LayoutParams(100.px, 80.px))
         add(BrowserMenu.Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in, gap = 0)
-        row.addView(View(context).apply { background = Ui.rounded(Ui.p.border, 1) }, LinearLayout.LayoutParams(2.px, 56.px).apply {
-            topMargin = 12.px
-            marginStart = 20.px
-            marginEnd = 20.px + ROW_GAP.px
+        // A dot level with the icons, taking the room the line it replaced had.
+        row.addView(View(context).apply { background = Ui.rounded(Ui.p.textWeak, DOT / 2) }, LinearLayout.LayoutParams(DOT.px, DOT.px).apply {
+            topMargin = (40 - DOT / 2).px
+            marginStart = (21 - DOT / 2).px
+            marginEnd = (21 - DOT / 2).px + ROW_GAP.px
         })
 
         // Grouped by what they act on.
@@ -244,7 +245,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
             orientation = LinearLayout.VERTICAL
             clipChildren = false
             clipToPadding = false
-            addView(View(context).apply { background = Ui.rounded(Ui.p.border, 1) },
+            addView(View(context).apply { background = Ui.rounded(Ui.p.textWeak, 1) },
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2.px).apply {
                     marginStart = SIDE.px
                     marginEnd = SIDE.px
@@ -543,6 +544,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         const val GAP = BrowserMenu.GAP
         /** Between the labelled buttons in the row below the bar. */
         const val ROW_GAP = 14
+        const val DOT = 8
         /** The address's width with Back and Forward shown. */
         const val ADDRESS = 600
         const val TIP_TEXT = 640
