@@ -177,13 +177,20 @@ class SearchActivity : Activity() {
         }
         root.addView(FocusScrollView(this, 48.px).apply { isVerticalScrollBarEnabled = false; clipChildren = false; addView(below) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        // From the menu bar's new tab button: the new tab card comes chosen, with the focus on it.
+        inNewTab = intent.getBooleanExtra(EXTRA_IN_NEW_TAB, false)
+        tintNewTabButton()
         showTabs()
         setContentView(root)
 
         updateEngineLabel()
-        field.setText(prefill(intent.getStringExtra(EXTRA_CURRENT_URL)))
+        if (!inNewTab) field.setText(prefill(intent.getStringExtra(EXTRA_CURRENT_URL)))
         field.setSelection(field.text.length)
-        if (intent.getBooleanExtra(EXTRA_VOICE, false) && prefs.voiceSearch) voice() else showKeyboard()
+        when {
+            inNewTab -> cards().lastOrNull()?.requestFocus() ?: showKeyboard()
+            intent.getBooleanExtra(EXTRA_VOICE, false) && prefs.voiceSearch -> voice()
+            else -> showKeyboard()
+        }
         // From the home screen's phone button: go straight to the QR code.
         if (intent.getBooleanExtra(EXTRA_PHONE, false)) field.post { typeOnPhone() }
     }
@@ -663,6 +670,8 @@ class SearchActivity : Activity() {
         const val EXTRA_VOICE = "voice"
         const val EXTRA_PHONE = "phone"
         const val EXTRA_PRIVATE = "private"
+        /** Opens with the new tab card chosen and focused: what is opened goes to a new tab. */
+        const val EXTRA_IN_NEW_TAB = "in_new_tab"
         /** Returned: the tab chosen, the ones closed, or that a new tab is wanted (with [EXTRA_URL]: to open it in). */
         const val EXTRA_TAB = "tab"
         const val EXTRA_CLOSED_TABS = "closed_tabs"

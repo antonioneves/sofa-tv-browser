@@ -1047,7 +1047,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     override fun onAction(action: BrowserMenu.Action) {
         when (action) {
-            BrowserMenu.Action.NEW_TAB -> { afterMenu { openNewTab() }; return }
+            BrowserMenu.Action.NEW_TAB -> { startSearch(voice = false, current = web?.url, newTab = true); return }
             BrowserMenu.Action.CLOSE_TAB -> { menu?.dismiss(); closeTab(currentTab); return }
             else -> Unit
         }
@@ -1425,19 +1425,19 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     /** The sofa left in the corner for the search screen to come over ([SofaGlide.glide]): takes it away. */
     private var leftSofa: (() -> Unit)? = null
 
-    private fun startSearch(voice: Boolean, current: String?, phone: Boolean = false) {
+    private fun startSearch(voice: Boolean, current: String?, phone: Boolean = false, newTab: Boolean = false) {
         // The search screen shows the tabs, the one in view as it is now, without the menu over it.
-        if (homeShown || !resumed) return openSearch(voice, current, phone)
+        if (homeShown || !resumed) return openSearch(voice, current, phone, newTab)
         // From the menu bar the sofa first moves to the corner the search screen has it in, and that screen fades in
         // over it there.
         val sofa = menu?.sofa()
         afterMenu { captureThumbnail(currentTab) {
-            if (sofa == null || isFinishing) openSearch(voice, current, phone)
-            else leftSofa = SofaGlide.glide(this, sofa, SofaGlide.corner(this), null, keep = true) { openSearch(voice, current, phone) }
+            if (sofa == null || isFinishing) openSearch(voice, current, phone, newTab)
+            else leftSofa = SofaGlide.glide(this, sofa, SofaGlide.corner(this), null, keep = true) { openSearch(voice, current, phone, newTab) }
         } }
     }
 
-    private fun openSearch(voice: Boolean, current: String?, phone: Boolean) {
+    private fun openSearch(voice: Boolean, current: String?, phone: Boolean, newTab: Boolean = false) {
         if (isFinishing || isDestroyed) return
         menu?.dismiss()
         publishTabs()
@@ -1446,6 +1446,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             .putExtra(SearchActivity.EXTRA_VOICE, voice)
             .putExtra(SearchActivity.EXTRA_PHONE, phone)
             .putExtra(SearchActivity.EXTRA_PRIVATE, prefs.privateMode)
+            .putExtra(SearchActivity.EXTRA_IN_NEW_TAB, newTab)
             .putExtra(SearchActivity.EXTRA_CURRENT_URL, current), REQ_URL)
         // Cross-fade: the search screen keeps the sofa and the field where the home screen has them.
         @Suppress("DEPRECATION")
