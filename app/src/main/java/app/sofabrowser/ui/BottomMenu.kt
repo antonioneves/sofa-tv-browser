@@ -233,7 +233,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
 
         // A focused button keeps room for its label (wider than the button) from the screen edge, so neither icon nor
         // label is ever cut.
-        row.setPadding(SIDE.px, 8.px, SIDE.px - ROW_GAP.px, 24.px)
+        row.setPadding(SIDE.px, 18.px, SIDE.px - ROW_GAP.px, 24.px)
         val scroller = FocusRowScrollView(context, ((LabeledIconButton.LABEL_WIDTH - LabeledIconButton.WIDTH) / 2 + SIDE).px).apply {
             isHorizontalScrollBarEnabled = false
             clipChildren = false
