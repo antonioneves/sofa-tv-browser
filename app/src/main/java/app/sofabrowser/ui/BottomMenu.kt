@@ -169,9 +169,10 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         // How the bar lives: kept on screen under the page, or out of sight until BACK or MENU opens it.
         add(BrowserMenu.Action.DOCK, R.drawable.ic_dock_bottom_off, R.string.bar_dock_off, BrowserMenu.GROUP_GAP, inBar = true)
         // Moving about the page.
+        // Reload comes first: it is always there, while Back and Forward come and go with the page's history.
+        add(BrowserMenu.Action.RELOAD, R.drawable.ic_refresh, R.string.reload, inBar = true)
         add(BrowserMenu.Action.BACK, R.drawable.ic_arrow_back, R.string.back, inBar = true)
-        add(BrowserMenu.Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, inBar = true)
-        add(BrowserMenu.Action.RELOAD, R.drawable.ic_refresh, R.string.reload, BrowserMenu.GROUP_GAP, inBar = true)
+        add(BrowserMenu.Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, BrowserMenu.GROUP_GAP, inBar = true)
         // The tabs at the bar's right end, after the button for a new one, an empty tab where the next goes.
         bar.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
         add(BrowserMenu.Action.NEW_TAB, R.drawable.ic_tab_new, R.string.new_tab, GAP, inBar = true)

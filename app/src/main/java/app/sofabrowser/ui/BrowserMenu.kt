@@ -200,9 +200,10 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // How the bar lives: kept on screen with the page beside it, or collapsed until BACK or MENU opens it.
         add(Action.DOCK, R.drawable.ic_dock_off, R.string.dock_off, bar, GROUP_GAP)
         // Moving about the page.
+        // Reload comes first: it is always there, while Back and Forward come and go with the page's history.
+        add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, bar)
         add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, bar)
-        add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar)
-        add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, bar, GROUP_GAP)
+        add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar, GROUP_GAP)
         // The tabs at the foot of the bar, under the button for a new one. The icon of the tab in view is the way to the
         // address and the search: the bar is too slim to spell the address out, so it shows in the label while that
         // icon is focused.
