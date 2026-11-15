@@ -1,4 +1,4 @@
-# User scripts (planned)
+# User scripts
 
 People ask for Firefox-style extensions in Sofa. Sofa is built on Android System WebView, which can't run browser
 extensions: there is no extension API, no background pages and no isolated worlds. What WebView can do is run a script
@@ -6,23 +6,27 @@ in every page Sofa loads. That is what Greasemonkey-style user scripts are: a si
 header that says which sites it runs on. Thousands exist, for example on Greasy Fork, to remove clutter, add a
 download button, skip an intro or fix a site that works badly on a TV.
 
-This document is the plan. Nothing here is built yet.
+User scripts need a WebView with document-start scripts and web message listeners (WebView 90 or so). On older ones
+Settings → User scripts says a newer Android System WebView is needed, and links to scripts open as files.
 
 ## What scripts can do
 
-The first version runs ordinary user scripts, those written with `@grant none`, which is most of them.
+Sofa runs ordinary user scripts, those written with `@grant none`, which is most of them.
 
 - **The header** (`// ==UserScript==` … `// ==/UserScript==`) is read for `@name`, `@namespace`, `@version`,
   `@description`, `@match`, `@include`, `@exclude`, `@exclude-match`, `@run-at` (`document-start`,
-  `document-end`, `document-idle`) and `@noframes`. A script without `@match` or `@include` doesn't run anywhere.
-- **Where it runs:** only on `http` and `https` pages whose address matches. WebView can only choose sites by origin,
-  so Sofa installs each script for the origins it needs and checks the full address in a small wrapper before the
-  script itself runs.
-- **When it runs:** at document start, or after the page is parsed or loaded, as `@run-at` asks.
-- **A little help:** `GM_addStyle`, and `GM.getValue` / `GM.setValue` with storage of its own for each script, kept by
-  Sofa on the TV.
+  `document-end`, `document-body`, `document-idle`, the default), `@noframes`, `@updateURL` and `@downloadURL`.
+  A script without `@match` or `@include` is refused.
+- **Where it runs:** only on `http` and `https` pages whose address (without its `#` part) matches. `@match` follows
+  Chrome's match patterns; `@include` and `@exclude` take globs, with `.tld` for any top-level domain, or
+  `/regular expressions/`. Each script is added to every document from its start, in a small wrapper that checks the
+  address before the script itself runs. An exclusion Sofa can't read refuses the script, so it never runs where it
+  was meant not to.
+- **When it runs:** at document start, once the page is parsed, or just after that, as `@run-at` asks.
+- **A little help:** `GM_addStyle`, `GM_getValue`, `GM_setValue`, `GM_deleteValue`, `GM_listValues` and `GM_info`, and
+  the same as promises under `GM.`. Values are stored per script, on the TV, as JSON.
 
-Left out at first, on purpose:
+Left out, on purpose:
 
 - **`GM_xmlhttpRequest` and `@connect`.** They let a script fetch from any site with the user's cookies, past the
   rules that keep sites apart. That is the most dangerous thing a user script can do.
@@ -40,22 +44,24 @@ working.
 
 ## Finding, installing, managing and removing scripts with a remote
 
-Nothing on the TV should need typing.
+Nothing on the TV needs typing.
 
 - **Finding:** browse a script site such as Greasy Fork in Sofa, with the pointer. Sofa doesn't ship or promote a
   catalogue of its own.
-- **Installing:** pressing a script's install link opens Sofa's install screen instead of the file. It shows the name,
-  description and version, the sites it runs on in plain words ("all sites" stands out), the help it asks for, and
-  the source in a scrollable view. Install is not the button that has focus; the user has to move to it. Pages can't
-  start an install by themselves: it needs a press on a link, like a download.
-- **By address:** Settings → User scripts → "Add from address", for a script found on a phone. Typing from a phone
-  (on the roadmap) makes this easier.
+- **Installing:** pressing a link to a `.user.js` file opens Sofa's install screen instead of the file. It shows the
+  name and version, the description, the sites it runs on ("Runs on all sites" stands out), the help it asks for, a
+  plain warning, and the source in a box that scrolls with the D-pad. Cancel has the focus; the user has to move to
+  Install. Pages can't start an install by themselves: it needs a press on a link, like a download. The script is
+  fetched without cookies, referrer or identifiers.
+- **By address:** Settings → User scripts → "Add from address", for a script found on a phone.
 - **Managing:** Settings → User scripts lists each script with its sites and an on/off switch. Pressing OK on a script
-  opens: Turn off / on, Check for an update, View source, Remove.
-- **On a page:** the Back-key menu shows "Scripts here (2)" when scripts ran on the page, with a switch for each, so a
-  script that breaks a site can be stopped where the problem is.
-- **Updates:** "Check for an update" fetches the script's `@updateURL` or `@downloadURL`. The new version is shown like
-  a new install, and it must be confirmed again if it asks for more sites or more help.
+  opens: Turn off / on, Also run in private browsing, Check for an update, View source, Remove.
+- **On a page:** More shows "Scripts here (2)" when scripts are made for the page in view, switched on or not. It
+  lists them with a switch each, so a script that breaks a site can be stopped where the problem is; the page then
+  loads again without it.
+- **Updates:** "Check for an update" fetches the script's `@downloadURL`, `@updateURL` (unless it is a `.meta.js`) or
+  the address it was installed from. When it changed, the new version is shown like a new install, with the version it
+  replaces and a note when it asks for more sites or more help. It keeps the old one's values and switches.
 - **Removing** deletes the script and its stored values.
 
 ## Privacy and security
@@ -66,15 +72,18 @@ design keeps that power in the user's hands.
 - **Only what the user installed runs.** Nothing comes with Sofa, nothing installs or updates on its own, and all of
   a script's code is in the file shown at install.
 - **No extra reach.** Scripts get no more than a page has: no cross-site requests with cookies, no files, no access
-  to Sofa's settings, history or bookmarks.
+  to Sofa's settings, history or bookmarks. A page can only store values for a script that runs on that page.
 - **Nothing leaves the TV** apart from what the user asks for: downloading a script or checking it for an update,
-  without cookies or identifiers, as for filter lists.
-- **Private browsing:** scripts don't run in private browsing unless the user allows it for that script ("Also in
+  without cookies or identifiers, as for filter lists. Only `https://` addresses are fetched.
+- **Private browsing:** scripts don't run in private browsing unless the user allows it for that script ("Also run in
   private browsing", off by default, as in Firefox). When allowed, values a script stores in private browsing are kept
-  apart and deleted when private browsing ends.
-- **Sofa's own pages are off limits.** Scripts never run on Sofa's home screen or other built-in pages.
+  apart, in memory, and deleted when private browsing ends.
+- **Sofa's own screens are off limits.** The home screen, search screen and settings are not web pages, so scripts
+  never reach them.
+- **The private space** has its own scripts and values, apart from the normal ones.
 - **Limits:** scripts of at most 1 MB, and stored values of at most 1 MB per script, so a script can't fill the TV.
-- **Honest wording.** The install screen says, in plain words, that the script can see and change the sites it runs on.
+- **Honest wording.** The install screen says, in plain words, that the script can see and change the sites it runs
+  on, passwords included.
 
 ## Licence note
 
@@ -91,9 +100,4 @@ Sofa's ad blocking took Apache-2.0 files from Fulguris (see NOTICE.md). That doe
 - Should `@require` be allowed later when it names a fixed version with a hash (subresource integrity), so the code
   still can't change?
 - Should Sofa offer a short, reviewed list of TV-friendly scripts, or stay out of choosing?
-- How should the install screen show "the sites it runs on" for long `@match` lists, on a screen read from the sofa?
 - Should a script that fails often (errors in the console) be switched off for that site automatically?
-- How do user scripts and ad blocking meet: should the per-site ad-block switch also stop scripts?
-- Where do stored values live: in Sofa's database, or in a file per script that is easy to delete?
-- Do old WebViews without document-start scripts get the feature at all, or does Settings hide it as it hides other
-  features they lack?

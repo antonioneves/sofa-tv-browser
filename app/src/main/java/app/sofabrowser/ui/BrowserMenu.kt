@@ -33,7 +33,7 @@ import app.sofabrowser.Space
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar), PageMenu {
 
-    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, NEW_TAB, CLOSE_TAB, ADBLOCK, ALLOW_ONCE, USER_AGENT, CLEAR_SITE, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
+    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, NEW_TAB, CLOSE_TAB, ADBLOCK, ALLOW_ONCE, USER_AGENT, CLEAR_SITE, SCRIPTS, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
     interface Actions {
         fun onAddress()
@@ -79,6 +79,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         /** The open tabs, in order, and the one in view. */
         val tabs: List<TabStack.Tab> = emptyList(),
         val currentTab: Long = -1,
+        /** User scripts made for the page, switched on or not: "Scripts here (N)" shows when there are any. */
+        val scriptsHere: Int = 0,
     )
 
     private val buttons = LinkedHashMap<Action, LabeledIconButton>()
@@ -277,6 +279,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // Asks which one, then closes the menu.
         add(Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent)
         add(Action.CLEAR_SITE, R.drawable.ic_delete, R.string.clear_site_data)
+        add(Action.SCRIPTS, R.drawable.ic_code, R.string.scripts_here_none)
         add(Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode)
         add(Action.SETTINGS, R.drawable.ic_settings, R.string.settings)
 
@@ -576,6 +579,10 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         buttons[Action.DOCK]?.set(if (s.docked) R.drawable.ic_dock_on else R.drawable.ic_dock_off,
             context.getString(if (s.docked) R.string.dock_on else R.string.dock_off))
         buttons[Action.ALLOW_ONCE]?.visibility = if (s.allowPending) android.view.View.VISIBLE else android.view.View.GONE
+        buttons[Action.SCRIPTS]?.let { b ->
+            b.visibility = if (s.scriptsHere > 0) android.view.View.VISIBLE else android.view.View.GONE
+            if (s.scriptsHere > 0) b.set(R.drawable.ic_code, context.getString(R.string.scripts_here, s.scriptsHere))
+        }
         // Back and Forward take each other's place: when the one with focus goes away, the other gets the focus.
         val back = buttons[Action.BACK]
         val forward = buttons[Action.FORWARD]

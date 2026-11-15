@@ -25,6 +25,11 @@ called Sofa.
 - **Pop-ups blocked**, even from ad networks no list knows yet, with "Allow once" in the menu when you need one.
 - **Search** with the engine you choose at first start, and voice search.
 - **Downloads** that pause, resume and carry on in the background.
+- **Tabs**, **reader view**, **translation** of the page (by Google's website translator, only when you ask), and
+  **typing from your phone** on a small page Sofa serves on your home network.
+- **User scripts**: install a `.user.js` link and Sofa runs it on the sites it names (see
+  [docs/user-scripts.md](docs/user-scripts.md)).
+- **Clear site data** from the menu: signs you out of one site without touching the others.
 - **Dark and Light themes.**
 
 The app is about 2 MB.
@@ -71,7 +76,8 @@ Everything is matched on the TV; nothing about your browsing leaves it.
   lists takes any other list by its address, in hosts, Adblock Plus or uBlock Origin format, and switches each list
   on or off.
 - **Element hiding** removes the empty boxes and banners that blocked ads leave, also when a page adds them later.
-- **Pop-ups:** with one view and no tabs, a pop-up would replace the page you were on. Sofa blocks windows a page
+- **Pop-ups:** Sofa opens a page's new windows in the same tab, so a pop-up would replace the page you were on.
+  Sofa blocks windows a page
   opens without a press, windows to listed ad sites, windows a script opens to another site when you didn't press a
   link to it, and the invisible links pop-under networks lay over a page. Pages that send you to a listed ad site
   on their own are stopped too. The menu's "Allow once" opens the last thing blocked. This also stops buttons
@@ -150,7 +156,7 @@ Everything is matched on the TV; nothing about your browsing leaves it.
 
 ## Not there yet
 
-Tabs, reader mode, typing from a phone, translations, and user scripts (planned: [docs/user-scripts.md](docs/user-scripts.md)).
+Browser extensions, and syncing with other devices (the page for your phone offers a backup file instead).
 
 ## For developers
 

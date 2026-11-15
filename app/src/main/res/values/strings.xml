@@ -528,4 +528,60 @@
         <item>Normal</item>
         <item>Fast</item>
     </string-array>
+    <!-- User scripts -->
+    <string name="user_scripts">User scripts</string>
+    <string name="user_scripts_none">None yet</string>
+    <plurals name="user_scripts_count">
+        <item quantity="one">%d script</item>
+        <item quantity="other">%d scripts</item>
+    </plurals>
+    <string name="user_scripts_unsupported">Needs a newer Android System WebView</string>
+    <string name="user_scripts_unsupported_message">User scripts need a newer version of Android System WebView, which Sofa shows pages with. Update it in the TV\'s app store.</string>
+    <string name="user_scripts_intro">A user script changes the sites it is made for: it can remove clutter, add a button or fix a page. To install one, press a link to a .user.js file, for example on Greasy Fork. Press OK on a script for its options.</string>
+    <string name="user_script_add">Add from address</string>
+    <string name="user_script_add_sub">For a script you found on another device</string>
+    <string name="user_script_address_message">The address of the .user.js file</string>
+    <string name="user_script_getting">Getting the script…</string>
+    <string name="user_script_get_failed">Couldn\'t get the script: %1$s</string>
+    <string name="user_script_install">Install</string>
+    <string name="user_script_all_sites">Runs on all sites</string>
+    <string name="user_script_runs_on">Runs on: %1$s</string>
+    <string name="user_script_uses">Also uses: %1$s</string>
+    <string name="user_script_uses_values">values it stores on this TV</string>
+    <string name="user_script_uses_styles">styles</string>
+    <string name="user_script_uses_info">its own name and version</string>
+    <string name="user_script_warning">It can see and change everything on these sites, passwords included, and send it anywhere, as the site itself could. Install only scripts you trust.</string>
+    <string name="user_script_asks_more">This version asks for more than the one you have.</string>
+    <string name="user_script_replaces">It replaces version %1$s, and keeps what that one stored.</string>
+    <string name="user_script_source_cut">Only the start of the script is shown here.</string>
+    <string name="user_script_installed">%1$s installed</string>
+    <string name="user_script_updated">%1$s updated</string>
+    <string name="user_script_refused_title">Sofa can\'t install this script</string>
+    <string name="user_script_refused_not_a_script">This file isn\'t a user script.</string>
+    <string name="user_script_refused_too_large">The script is larger than 1 MB.</string>
+    <string name="user_script_refused_no_name">The script has no name.</string>
+    <string name="user_script_refused_no_sites">The script doesn\'t say which sites it runs on.</string>
+    <string name="user_script_refused_bad_site">Sofa can\'t read one of the sites it names: %1$s</string>
+    <string name="user_script_refused_grant">It asks for %1$s, which Sofa doesn\'t offer.</string>
+    <string name="user_script_refused_require">It loads more code from %1$s. Sofa only runs code that is in the file you can see before installing.</string>
+    <string name="user_script_refused_resource">It loads files from %1$s, which Sofa doesn\'t offer.</string>
+    <string name="user_script_refused_connect">It asks to contact %1$s with your cookies, which Sofa doesn\'t allow.</string>
+    <string name="user_script_refused_run_at">It asks to run at %1$s, which Sofa doesn\'t offer.</string>
+    <string name="user_script_off">Off</string>
+    <string name="user_script_in_private">Also in private browsing</string>
+    <string name="user_script_private_allow">Also run in private browsing</string>
+    <string name="user_script_private_stop">Don\'t run in private browsing</string>
+    <string name="user_script_check_update">Check for an update</string>
+    <string name="user_script_view_source">View source</string>
+    <string name="user_script_remove_confirm">Remove %1$s and the values it stored?</string>
+    <string name="user_script_up_to_date">%1$s is up to date</string>
+    <string name="user_script_no_update_address">This script has no address to check for updates.</string>
+    <string name="scripts_here">Scripts here (%1$d)</string>
+    <string name="scripts_here_none">Scripts here</string>
+    <string name="scripts_here_title">Scripts for this page</string>
+    <string name="script_on">%1$s: on</string>
+    <string name="script_off">%1$s: off</string>
+    <string name="manage_user_scripts">Manage user scripts</string>
+    <string name="script_turned_on">%1$s turned on</string>
+    <string name="script_turned_off">%1$s turned off</string>
 </resources>
