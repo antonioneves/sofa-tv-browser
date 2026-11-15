@@ -36,6 +36,8 @@ object SofaGlide {
     private const val MS = 300L
     /** The most a kept sofa waits for the screen coming over it: a slow one shows soon after anyway. */
     private const val KEEP_MS = 3000L
+    /** How much later than planned a held-up sofa is taken away all the same. */
+    private const val LATE_MS = 1000L
 
     fun spot(icon: ImageView, color: Int? = null): Spot? = rect(icon)?.let { Spot(it, color) }
 
@@ -94,7 +96,13 @@ object SofaGlide {
     fun glide(activity: Activity, from: Spot, to: RectF, toColor: Int?, keep: Boolean = false, end: () -> Unit = {}): () -> Unit {
         val decor = activity.window.decorView
         val sofa = activity.getDrawable(R.drawable.ic_sofa)?.mutate() ?: run { end(); return {} }
-        val remove = { decor.overlay.remove(sofa) }
+        var animator: ValueAnimator? = null
+        // Taken away once, whichever comes first: the end of its move, the caller, or the deadline below. The moving
+        // sofa must never stay on the page, even if the move is held up (an app out of sight has its animations paused).
+        var gone = false
+        val remove = {
+            if (!gone) { gone = true; animator?.cancel(); decor.overlay.remove(sofa) }
+        }
         val at = IntArray(2).also { decor.getLocationOnScreen(it) }
         val a = RectF(from.rect).apply { offset(-at[0].toFloat(), -at[1].toFloat()) }
         val b = RectF(to).apply { offset(-at[0].toFloat(), -at[1].toFloat()) }
@@ -111,13 +119,15 @@ object SofaGlide {
         }
         frame(0f)
         decor.overlay.add(sofa)
-        ValueAnimator.ofFloat(0f, 1f).apply {
+        decor.postDelayed(remove, MS + (if (keep) KEEP_MS else 0L) + LATE_MS)
+        animator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = MS
             // Quick to leave, slow to settle, like the screens' other movements.
             interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
             addUpdateListener { frame(it.animatedValue as Float) }
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
+                    if (gone) return
                     end()
                     if (keep) decor.postDelayed(remove, KEEP_MS) else remove()
                 }

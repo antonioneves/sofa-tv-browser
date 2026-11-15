@@ -333,12 +333,6 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         return false
     }
 
-    /** The sofa of the screen being left moves into the Home button: the bar docked under the page. */
-    override fun sofaTo(activity: android.app.Activity, from: SofaGlide.Spot?) {
-        val b = buttons[BrowserMenu.Action.HOME] ?: return
-        SofaGlide.to(activity, from, b.icon) { b.iconColor() }
-    }
-
     /** Closing a docked bar leaves it where it is, and gives the focus back to the page. */
     override fun dismiss() {
         if (!docked) return super.dismiss()
@@ -411,11 +405,8 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         (last ?: if (expanded || lastFocused in topRow) buttons[BrowserMenu.Action.HOME] else more)?.requestFocus()
     }
 
-    override fun sofa(): SofaGlide.Spot? {
-        if (!shown) return null
-        val b = buttons[BrowserMenu.Action.HOME] ?: return null
-        return SofaGlide.spot(b.icon, b.iconColor())
-    }
+    /** The bar's sofa stays put: no sofa glides out of it, or into it, when the screen changes. */
+    override fun sofa(): SofaGlide.Spot? = null
 
     /** The window covers the screen, so a tap that the sheet doesn't take is a tap outside it: the menu closes. */
     override fun onTouchEvent(event: MotionEvent): Boolean {

@@ -2643,6 +2643,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onResume() {
         super.onResume()
         resumed = true
+        // Back from the search screen: the sofa that glided into its corner goes, whichever way the screen closed.
+        leftSofa?.invoke(); leftSofa = null
         playInSince = 0L
         // A theme change in Settings rebuilds the screen (and the WebView, whose pages follow the theme).
         if (Ui.paletteFor(this, prefs.theme) !== palette) { recreate(); return }
