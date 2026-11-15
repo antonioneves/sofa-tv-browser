@@ -101,7 +101,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         plain = false
         if (!row) {
             image.layoutParams = LayoutParams((square - 8).px, (square - 8).px, Gravity.CENTER)
-            circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, Math.round((square - 8) * app.sofabrowser.data.Favicons.CORNER))
+            circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, pictureRadius())
         }
         image.setImageResource(icon)
         tint(hasFocus())
@@ -114,12 +114,17 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         if (!row) image.layoutParams = LayoutParams((square - 8).px, (square - 8).px, Gravity.CENTER)
         image.setImageDrawable(picture)
         image.clearColorFilter()
-        // The focus square takes the corner radius of the site's icon (Favicons.CORNER of its size), not the usual one.
-        if (!row) circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, Math.round((square - 8) * app.sofabrowser.data.Favicons.CORNER))
+        if (!row) circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, pictureRadius())
     }
 
     /** The picture [setPicture] gave, or null when the button shows an icon. */
     fun picture(): android.graphics.drawable.Drawable? = if (plain) image.drawable else null
+
+    /**
+     * The focus square's corner radius around a site's icon: the icon's own (Favicons.CORNER of its size) plus the margin
+     * around it, so that the two curves run side by side and the focus ring is as thick at the corners as on the sides.
+     */
+    private fun pictureRadius() = Math.round((square - 8) * app.sofabrowser.data.Favicons.CORNER + 4)
 
     /** A button that cannot be used is not shown: gone, or invisible where its neighbours must stay in place. */
     fun setEnabledLook(enabled: Boolean, gone: Boolean = true) {
