@@ -109,6 +109,7 @@
         <item>Bottom</item>
     </string-array>
     <string name="new_tab">New tab</string>
+    <string name="open_in_new_tab">Open in a new tab</string>
     <string name="close_tab">Close tab</string>
     <string name="open_tabs">Tabs</string>
     <string name="link_open_new_tab">Open in new tab</string>

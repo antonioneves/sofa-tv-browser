@@ -646,7 +646,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         tabs.firstOrNull { it.id == id }?.let { t ->
             if (t !== currentTab) switchTo(t) else if (homeShown && !t.empty) showTabPage()
         }
-        if (data.getBooleanExtra(SearchActivity.EXTRA_NEW_TAB, false)) openNewTab()
+        if (data.getBooleanExtra(SearchActivity.EXTRA_NEW_TAB, false)) openNewTab(data.getStringExtra(SearchActivity.EXTRA_URL))
     }
 
     override fun onTrimMemory(level: Int) {
@@ -1470,7 +1470,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         super.onActivityResult(requestCode, resultCode, data)
         // The search screen's tabs: those closed there, then the one chosen, or a new one.
         if (requestCode == REQ_URL) data?.let { tabsChosen(it) }
-        if (requestCode == REQ_URL && resultCode == RESULT_OK) data?.getStringExtra(SearchActivity.EXTRA_URL)?.let(::openUrl)
+        if (requestCode == REQ_URL && resultCode == RESULT_OK && data?.getBooleanExtra(SearchActivity.EXTRA_NEW_TAB, false) != true) {
+            data?.getStringExtra(SearchActivity.EXTRA_URL)?.let(::openUrl)
+        }
         // What the phone typed to find on the page: the find bar opens on it, once the page is showing again.
         if (requestCode == REQ_URL && resultCode == RESULT_OK) data?.getStringExtra(SearchActivity.EXTRA_FIND)?.let { query ->
             findBar.post { if (web != null) findBar.openWith(query, voice = prefs.voiceSearch && voiceInput.available) }

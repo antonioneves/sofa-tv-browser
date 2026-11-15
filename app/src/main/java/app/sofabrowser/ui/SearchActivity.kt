@@ -51,7 +51,9 @@ import kotlin.concurrent.thread
  *
  * Until something is typed, the open tabs ([OpenTabs]) show under the field, as pictures of their pages, like a
  * phone browser's tab switcher: OK on one goes to it ([EXTRA_TAB]), its X closes it ([EXTRA_CLOSED_TABS], in every
- * result), and the last card opens a new tab ([EXTRA_NEW_TAB]).
+ * result), and the last card makes what is opened next open in a new tab ([EXTRA_NEW_TAB]): it is marked as the tab
+ * things open in, and keeps the focus until the field is reached. The button beside the magnifier opens what is typed
+ * in a new tab too, or an empty new tab with nothing typed.
  */
 class SearchActivity : Activity() {
 
@@ -71,6 +73,10 @@ class SearchActivity : Activity() {
     private lateinit var micIcon: ImageView
     private lateinit var halo: View
     private val voiceInput by lazy { VoiceInput(this, voiceListener) }
+    /** The new tab card was chosen: what is opened goes to a new tab. */
+    private var inNewTab = false
+    private lateinit var newTabButton: FrameLayout
+    private lateinit var newTabIcon: ImageView
 
     // IME_FLAG_NO_PERSONALIZED_LEARNING is a compile-time constant; keyboards before API 26 just ignore it.
     @SuppressLint("InlinedApi")
@@ -134,6 +140,16 @@ class SearchActivity : Activity() {
         box.addView(engineLabel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 96.px))
         bar.addView(box, LinearLayout.LayoutParams(0, 96.px, 1f))
         bar.addView(squareButton(R.drawable.ic_search, R.string.search) { submit(field.text.toString()) })
+        newTabButton = squareButton(R.drawable.ic_tab_new, R.string.open_in_new_tab) {
+            val t = field.text.toString()
+            if (t.isBlank()) { setResult(RESULT_OK, result().putExtra(EXTRA_NEW_TAB, true)); finish() } else submit(t, newTab = true)
+        }
+        newTabIcon = newTabButton.getChildAt(0) as ImageView
+        // The icon is a whole tab, outline and all: a little larger than the glyphs beside it, to read as large.
+        newTabIcon.layoutParams = FrameLayout.LayoutParams(56.px, 56.px, Gravity.CENTER)
+        // Orange while the new tab card is chosen, as a reminder once the cards make way for what is typed.
+        newTabButton.setOnFocusChangeListener { _, _ -> tintNewTabButton() }
+        bar.addView(newTabButton)
         // The mic sits on a halo that grows with the voice level. The holder and the bar let the halo draw
         // beyond their bounds, so it is never cut square.
         bar.clipChildren = false
@@ -228,11 +244,30 @@ class SearchActivity : Activity() {
             }.show()
     }
 
-    private fun submit(text: String) {
+    private fun submit(text: String, newTab: Boolean = inNewTab) {
         val url = UrlInput.resolve(text, prefs.searchEngine, searchShortcuts(this))
         if (url.isEmpty()) return
-        setResult(RESULT_OK, result().putExtra(EXTRA_URL, url))
-        finish()
+        open(url, newTab)
+    }
+
+    private fun tintNewTabButton() {
+        newTabIcon.setColorFilter(when {
+            newTabButton.hasFocus() -> Ui.p.onFocus
+            inNewTab -> Ui.BRAND
+            else -> Ui.p.textMid
+        }, PorterDuff.Mode.SRC_IN)
+    }
+
+    /** OK on the new tab card: it becomes (or stops being) the tab things open in, and keeps the focus. */
+    private fun toggleNewTab() {
+        inNewTab = !inNewTab
+        val current = prefill(intent.getStringExtra(EXTRA_CURRENT_URL))
+        // A new tab starts out empty: the address of the page in view makes way, and comes back when it is undone.
+        if (inNewTab && field.text.toString() == current) field.setText("")
+        if (!inNewTab && field.text.isEmpty()) { field.setText(current); field.setSelection(field.text.length) }
+        tintNewTabButton()
+        showTabs()
+        cards().lastOrNull()?.requestFocus()
     }
 
     /** A result, with the tabs closed here, whatever else it says. */
@@ -262,7 +297,7 @@ class SearchActivity : Activity() {
     /** A tab: its site and name over a picture of its page. The tab in view has an orange edge. */
     private fun tabCard(t: OpenTabs.Tab): View {
         val name = t.title.ifBlank { Browser.hostOf(t.url)?.removePrefix("www.").orEmpty() }.ifBlank { getString(R.string.new_tab) }
-        val card = cardFrame(t.current) { setResult(RESULT_OK, result().putExtra(EXTRA_TAB, t.id)); finish() }
+        val card = cardFrame(t.current && !inNewTab) { setResult(RESULT_OK, result().putExtra(EXTRA_TAB, t.id)); finish() }
         card.contentDescription = name
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val head = LinearLayout(this).apply {
@@ -318,10 +353,16 @@ class SearchActivity : Activity() {
 
     /** The last card: a new tab, which opens on the home screen. */
     private fun newTabCard(): View {
-        val card = cardFrame(false) { setResult(RESULT_OK, result().putExtra(EXTRA_NEW_TAB, true)); finish() }
-        card.contentDescription = getString(R.string.new_tab)
-        val icon = ImageView(this).apply { setImageResource(R.drawable.ic_tab_new); setColorFilter(Ui.p.textMid, PorterDuff.Mode.SRC_IN) }
-        val label = Ui.text(this, 26, Ui.p.textMid).apply { text = getString(R.string.new_tab); gravity = Gravity.CENTER }
+        val card = cardFrame(inNewTab) { toggleNewTab() }
+        card.contentDescription = getString(R.string.open_in_new_tab)
+        // Chosen, it is the tab things open in: orange, with the same words.
+        val rest = if (inNewTab) Ui.BRAND else Ui.p.textMid
+        val icon = ImageView(this).apply { setImageResource(R.drawable.ic_tab_new); setColorFilter(rest, PorterDuff.Mode.SRC_IN) }
+        val label = Ui.text(this, 26, rest).apply {
+            text = getString(R.string.open_in_new_tab)
+            gravity = Gravity.CENTER
+            setPadding(16.px, 0, 16.px, 0)
+        }
         card.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -330,7 +371,7 @@ class SearchActivity : Activity() {
         }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         card.setOnFocusChangeListener { v, has ->
             Ui.animateScale(v, if (has) 1.04f else 1f, has)
-            val c = if (has) Ui.p.onFocus else Ui.p.textMid
+            val c = if (has) Ui.p.onFocus else rest
             icon.setColorFilter(c, PorterDuff.Mode.SRC_IN)
             label.setTextColor(c)
         }
@@ -365,10 +406,13 @@ class SearchActivity : Activity() {
         closedTabs += t.id
         setResult(RESULT_CANCELED, result())
         showTabs()
-        val cards = (0 until tabsBox.childCount).map { tabsBox.getChildAt(it) }.filterIsInstance<LinearLayout>()
-            .flatMap { line -> (0 until line.childCount).map { line.getChildAt(it) }.filter { it.isFocusable } }
+        val cards = cards()
         (cards.getOrNull(at) ?: cards.lastOrNull())?.requestFocus() ?: field.requestFocus()
     }
+
+    /** The cards under the field, the new tab card last. */
+    private fun cards(): List<View> = (0 until tabsBox.childCount).map { tabsBox.getChildAt(it) }.filterIsInstance<LinearLayout>()
+        .flatMap { line -> (0 until line.childCount).map { line.getChildAt(it) }.filter { it.isFocusable } }
 
     private fun suggest(text: String) {
         list.removeAllViews()
@@ -420,8 +464,8 @@ class SearchActivity : Activity() {
         }
     }.getOrDefault(emptyList())
 
-    private fun open(url: String) {
-        setResult(RESULT_OK, result().putExtra(EXTRA_URL, url))
+    private fun open(url: String, newTab: Boolean = inNewTab) {
+        setResult(RESULT_OK, result().putExtra(EXTRA_URL, url).putExtra(EXTRA_NEW_TAB, newTab))
         finish()
     }
 
@@ -602,6 +646,12 @@ class SearchActivity : Activity() {
             list.getChildAt(0).requestFocus()
             return true
         }
+        // Typing on a keyboard with the focus away from the field (on the new tab card, say) types into the field.
+        if (!field.hasFocus() && event.isPrintingKey && event.unicodeChar != 0 && !event.isCtrlPressed) {
+            field.requestFocus()
+            field.setSelection(field.text.length)
+            return field.dispatchKeyEvent(event)
+        }
         return super.onKeyDown(keyCode, event)
     }
 
@@ -613,7 +663,7 @@ class SearchActivity : Activity() {
         const val EXTRA_VOICE = "voice"
         const val EXTRA_PHONE = "phone"
         const val EXTRA_PRIVATE = "private"
-        /** Returned: the tab chosen, the ones closed, or that a new tab is wanted. */
+        /** Returned: the tab chosen, the ones closed, or that a new tab is wanted (with [EXTRA_URL]: to open it in). */
         const val EXTRA_TAB = "tab"
         const val EXTRA_CLOSED_TABS = "closed_tabs"
         const val EXTRA_NEW_TAB = "new_tab"
