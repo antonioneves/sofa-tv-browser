@@ -90,7 +90,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     /** The label's box: the name, and under it, for the page's icon, the address. */
     private lateinit var tipBox: LinearLayout
     private lateinit var tipUrl: TextView
-    /** A picture of the page of a tab out of view, shown in place of its name and address. */
+    /** A picture of the page of a tab out of view, above its name. */
     private lateinit var tipPicture: android.widget.ImageView
     private var tipFor: android.view.View? = null
     private lateinit var zoomLabel: TextView
@@ -310,16 +310,16 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
             outlineProvider = object : android.view.ViewOutlineProvider() {
                 override fun getOutline(view: android.view.View, outline: android.graphics.Outline) =
-                    outline.setRoundRect(0, 0, view.width, view.height, (TIP_RADIUS - TIP_FRAME).px.toFloat())
+                    outline.setRoundRect(0, 0, view.width, view.height, 8.px.toFloat())
             }
             clipToOutline = true
             visibility = android.view.View.GONE
         }
         tipBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            background = Ui.rounded(sheetColor, TIP_RADIUS)
+            background = Ui.rounded(sheetColor, 12)
             setPadding(24.px, 14.px, 24.px, 14.px)
-            addView(tipPicture, LinearLayout.LayoutParams(TIP_PICTURE.px, TIP_PICTURE.px * 9 / 16))
+            addView(tipPicture, LinearLayout.LayoutParams(TIP_PICTURE.px, TIP_PICTURE.px * 9 / 16).apply { topMargin = 10.px; bottomMargin = 14.px })
             // Wrapping its text, not the default of matching the box, which would size the box by the address alone.
             addView(tip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(tipUrl, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 4.px })
@@ -388,7 +388,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         onLeave?.invoke()
     }
 
-    /** Shows [button]'s name beside it; a tab's is its page's name and address, or a picture of its page. */
+    /** Shows [button]'s name beside it; a tab's is its page's name and address. */
     private fun showTip(button: android.view.View) {
         // With the balloon open its lines are where the label would go.
         if (balloonOpen) return hideTip()
@@ -419,23 +419,19 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         tipBox.y = (at[1] - origin[1] + (button.height - tipBox.measuredHeight) / 2).coerceIn(8.px, maxOf(8.px, frame.height - tipBox.measuredHeight - 8.px)).toFloat()
     }
 
-    /** A tab's icon shows a picture of its page when it is out of view and has one, otherwise the page's name and address; any other button just its name. */
+    /** A tab's icon names the site and gives its address, under a picture of its page when it is out of view; any other button just its name. */
     private fun fillTip(button: android.view.View) {
         val tab = tabStack.tipFor(button)
         val name = tab?.name ?: (button.contentDescription ?: "").toString()
         val url = tab?.url.orEmpty()
         val picture = tab?.picture
         if (tipPicture.drawable.let { (it as? android.graphics.drawable.BitmapDrawable)?.bitmap } !== picture) tipPicture.setImageBitmap(picture)
-        // Only when they changed: this runs on every layout pass, and changing a view asks for another layout.
-        fun show(v: android.view.View, shown: Boolean) { val to = if (shown) android.view.View.VISIBLE else android.view.View.GONE; if (v.visibility != to) v.visibility = to }
-        // The picture alone, in a thin frame; without one, the name and the address.
-        show(tipPicture, picture != null)
-        show(tip, picture == null)
-        show(tipUrl, picture == null && url.isNotEmpty())
-        val pad = if (picture != null) intArrayOf(TIP_FRAME.px, TIP_FRAME.px) else intArrayOf(24.px, 14.px)
-        if (tipBox.paddingLeft != pad[0] || tipBox.paddingTop != pad[1]) tipBox.setPadding(pad[0], pad[1], pad[0], pad[1])
+        val pictureShown = if (picture == null) android.view.View.GONE else android.view.View.VISIBLE
+        if (tipPicture.visibility != pictureShown) tipPicture.visibility = pictureShown
+        // Only when they changed: this runs on every layout pass, and setting the same text asks for another layout.
         if (tip.text.toString() != name.toString()) tip.text = name
         if (tipUrl.text.toString() != url) tipUrl.text = url
+        tipUrl.visibility = if (url.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
     }
 
     private var balloonOpen = false
@@ -624,9 +620,6 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         const val TIP_TEXT = 640
         /** How wide the picture of a tab's page is in its label. */
         const val TIP_PICTURE = 400
-        /** The label's corner radius, and the frame around a picture in it, whose corners follow the label's. */
-        const val TIP_RADIUS = 12
-        const val TIP_FRAME = 6
 
         /** The focus square of the bar's buttons; it grows by a tenth when focused, and still leaves room to the bar's edges. */
         const val BAR_SQUARE = 68
