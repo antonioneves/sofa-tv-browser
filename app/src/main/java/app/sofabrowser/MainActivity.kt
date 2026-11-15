@@ -119,6 +119,15 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     private lateinit var prefs: Prefs
     private val db by lazy { Db.get(this) }
+    /**
+     * How many tabs out of view keep their page loaded. Each costs tens of MB, so a TV with under 2 GB of memory keeps
+     * only the one used last; the others load again when shown.
+     */
+    private val liveTabs by lazy {
+        val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+        val info = android.app.ActivityManager.MemoryInfo().also(am::getMemoryInfo)
+        if (am.isLowRamDevice || info.totalMem < LOW_MEMORY_BYTES) 1 else LIVE_TABS
+    }
     /** The open tabs, in the order the bar shows them, and the one in view. */
     private val tabs = ArrayList<Tab>()
     private lateinit var currentTab: Tab
@@ -172,6 +181,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         // Only a period prunes at start: "Never" removes saved pages when chosen in Settings, so updating from
         // 1.0.0 with history off (now "Never") keeps them, as 1.0.0 did.
         if (prefs.historyDays > 0) db.pruneHistory(prefs.historyDays)
+        // Most visited is worked out away from the screen, ready for the home screen.
+        db.countLater()
         DownloadEngine.init(this)
         // Private downloads don't outlive a session.
         DownloadEngine.forgetPrivate()
@@ -492,7 +503,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         enterTab()
         if (old.empty) closeTab(old)
         // Pages kept alive out of view cost memory a TV is short of: only the ones used last keep theirs.
-        tabs.filter { it !== currentTab && it.browser.web != null }.sortedByDescending { it.shownAt }.drop(LIVE_TABS).forEach(::discard)
+        tabs.filter { it !== currentTab && it.browser.web != null }.sortedByDescending { it.shownAt }.drop(liveTabs).forEach(::discard)
         tabsChanged()
     }
 
@@ -1130,6 +1141,18 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 browser.reload()
             }
             BrowserMenu.Action.USER_AGENT -> pickUserAgent()
+            BrowserMenu.Action.CLEAR_SITE -> if (host != null && Browser.isWebUrl(url)) {
+                menu?.dismiss()
+                val name = host.removePrefix("www.")
+                dialog().setMessage(getString(R.string.clear_site_data_confirm, name))
+                    .setPositiveButton(R.string.clear) { _, _ ->
+                        WebViews.clearSiteData(this, w, url) {
+                            if (isDestroyed) return@clearSiteData
+                            toast(getString(R.string.site_data_cleared, name))
+                            w.reload()
+                        }
+                    }.setNegativeButton(android.R.string.cancel, null).show()
+            }
             BrowserMenu.Action.SCROLL -> { menu?.dismiss(); cursor.setScrollMode(true) }
             BrowserMenu.Action.POINTER -> if (host != null) {
                 val keys = !browser.keysToPage(host)
@@ -2800,6 +2823,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         private const val STATE_TAB = "tab"
         /** How many tabs out of view keep their page alive; the ones used longest ago let go of it and load again when shown. */
         private const val LIVE_TABS = 3
+        private const val LOW_MEMORY_BYTES = 2L * 1024 * 1024 * 1024
         /** The width of a tab's picture in the search screen, in pixels. */
         private const val THUMB_WIDTH = 480
         /** How long the screen takes to show the page without the menu's label, before a picture of it is taken (ms). */

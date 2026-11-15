@@ -202,6 +202,7 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         } finally {
             db.endTransaction()
         }
+        if (added > 0) historyChanged()
         return added
     }
 
@@ -224,6 +225,7 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
                     put("title", title); put("url", url); put("visited", now)
                 })
             }
+            historyChanged()
         }
     }
 
@@ -238,17 +240,20 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
 
     fun removeHistory(id: Long) {
         writableDatabase.delete("history", "id = ?", arrayOf(id.toString()))
+        historyChanged()
     }
 
     /** Removes every visit to [url]. */
     fun removeHistoryOf(url: String) {
         writableDatabase.delete("history", "url = ?", arrayOf(url))
+        historyChanged()
     }
 
     // The list of removed sites names visited sites too, so it goes with the history.
     fun clearHistory() {
         writableDatabase.delete("history", null, null)
         writableDatabase.delete("most_visited_removed", null, null)
+        historyChanged()
     }
 
     /** Removes the pages "Keep history for" no longer keeps ([days] as in HistoryRetention). */
@@ -256,6 +261,7 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         val cutoff = HistoryRetention.cutoff(days, System.currentTimeMillis()) ?: return
         writableDatabase.delete("history", "visited < ?", arrayOf(cutoff.toString()))
         writableDatabase.delete("most_visited_removed", "removed < ?", arrayOf(cutoff.toString()))
+        historyChanged()
     }
 
     /** Takes [site] off Most visited, keeping its history; it comes back only if visited often again. */
@@ -264,6 +270,38 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         writableDatabase.insertWithOnConflict("most_visited_removed", null, ContentValues().apply {
             put("host", host); put("removed", System.currentTimeMillis())
         }, SQLiteDatabase.CONFLICT_REPLACE)
+        historyChanged()
+    }
+
+    /**
+     * Most visited, worked out from the history: every site with its visits, the most visited first, pinned or not.
+     * Working it out reads a month of history, too slow for the home screen to wait for on a TV, so it is done on the
+     * history thread after each change and kept here. [mostVisitedOf] is how many changes it has seen.
+     */
+    @Volatile private var mostVisitedCache: List<Ranked>? = null
+    private val historyVersion = java.util.concurrent.atomic.AtomicLong()
+    @Volatile private var mostVisitedOf = -1L
+    private val counting = java.util.concurrent.atomic.AtomicBoolean()
+
+    private class Ranked(val host: String, val site: Site, val visits: Int)
+
+    /** The history changed: the kept Most visited is out of date, and is worked out again on the history thread. */
+    private fun historyChanged() {
+        historyVersion.incrementAndGet()
+        countLater()
+    }
+
+    /** Works out Most visited on the history thread, once for any number of changes made meanwhile. */
+    fun countLater() {
+        if (!counting.compareAndSet(false, true)) return
+        writer.execute {
+            counting.set(false)
+            val version = historyVersion.get()
+            val ranked = runCatching { rankSites() }.getOrNull() ?: return@execute
+            synchronized(this) {
+                if (version >= mostVisitedOf) { mostVisitedCache = ranked; mostVisitedOf = version }
+            }
+        }
     }
 
     /**
@@ -272,8 +310,24 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
      * removed from the list.
      */
     fun mostVisited(limit: Int, minVisits: Int = 3): List<Site> {
-        val since = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
         val pinned = pinned().mapNotNull { hostOf(it.url) }.toSet()
+        // Kept from the last change, or worked out here the first time (and after a change whose count isn't done).
+        val ranked = mostVisitedCache?.takeIf { mostVisitedOf == historyVersion.get() } ?: run {
+            val version = historyVersion.get()
+            rankSites().also { r ->
+                synchronized(this) { if (version >= mostVisitedOf) { mostVisitedCache = r; mostVisitedOf = version } }
+            }
+        }
+        return ranked.asSequence()
+            .filter { it.visits >= minVisits && it.host.removePrefix("www.") !in pinned }
+            .take(limit)
+            .mapIndexed { i, r -> r.site.copy(id = -1L - i) }
+            .toList()
+    }
+
+    /** Every site visited in the last 30 days with its visits since it was last taken off Most visited, the most first. */
+    private fun rankSites(): List<Ranked> {
+        val since = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
         val removed = HashMap<String, Long>()
         readableDatabase.rawQuery("SELECT host, removed FROM most_visited_removed", null).use { c ->
             while (c.moveToNext()) removed[c.getString(0)] = c.getLong(1)
@@ -297,11 +351,9 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
             }
         }
         return byHost.entries
-            .filter { it.value.count >= minVisits && it.key.removePrefix("www.") !in pinned }
             .sortedWith(compareByDescending<Map.Entry<String, Agg>> { it.value.count }.thenByDescending { it.value.latest })
-            .take(limit)
-            .mapIndexed { i, (host, agg) ->
-                Site(-1L - i, agg.rootTitle?.takeIf { it.isNotBlank() } ?: prettyHost(host), "${agg.scheme}://$host/")
+            .map { (host, agg) ->
+                Ranked(host, Site(0L, agg.rootTitle?.takeIf { it.isNotBlank() } ?: prettyHost(host), "${agg.scheme}://$host/"), agg.count)
             }
     }
 

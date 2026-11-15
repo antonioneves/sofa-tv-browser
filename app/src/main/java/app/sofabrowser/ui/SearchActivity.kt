@@ -69,6 +69,8 @@ class SearchActivity : Activity() {
     private var typedSite: String? = null
     private val warmTyped = Runnable { Warmup.preconnect(typedSite) }
     private var remoteRequest = 0
+    /** Searches bookmarks and history for what is typed, one search at a time, newest last. */
+    private val localSearch = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "local-suggest") }
     private lateinit var micButton: FrameLayout
     private lateinit var micIcon: ImageView
     private lateinit var halo: View
@@ -467,6 +469,9 @@ class SearchActivity : Activity() {
 
     private fun suggest(text: String) {
         list.removeAllViews()
+        // Answers still on their way for what was typed before are for a list that is gone.
+        val request = ++remoteRequest
+        handler.removeCallbacksAndMessages(null)
         val q = text.trim()
         val typing = q.isNotEmpty() && q != prefill(intent.getStringExtra(EXTRA_CURRENT_URL))
         // The tabs make way for what is typed.
@@ -483,13 +488,21 @@ class SearchActivity : Activity() {
             addRow(R.drawable.ic_search, getString(R.string.search_shortcut_row, shortcut.name, query), null, shortcut.url(query)) { open(shortcut.url(query)) }
             return
         }
-        val local = Db.get(this).suggest(q, 4)
-        local.forEach { addRow(R.drawable.ic_history, it.title.ifBlank { it.url }, UrlInput.display(it.url), it.url) { open(it.url) } }
+        // Bookmarks and history are searched away from the screen, so typing never waits for the database. Their rows
+        // go first, above any of the engine's that came sooner.
+        val db = Db.get(this)
+        localSearch.execute {
+            val local = runCatching { db.suggest(q, 4) }.getOrDefault(emptyList())
+            runOnUiThread {
+                if (request != remoteRequest || isFinishing) return@runOnUiThread
+                local.forEachIndexed { i, it ->
+                    addRow(R.drawable.ic_history, it.title.ifBlank { it.url }, UrlInput.display(it.url), it.url, at = i) { open(it.url) }
+                }
+            }
+        }
         val engine = prefs.searchEngine
         val suggestUrl = engine.suggestTemplate
         if (!prefs.searchSuggestions || suggestUrl == null) return
-        val request = ++remoteRequest
-        handler.removeCallbacksAndMessages(null)
         handler.postDelayed({
             thread(name = "suggest") {
                 val words = fetchSuggestions(suggestUrl.replace("%s", Uri.encode(q)))
@@ -521,7 +534,7 @@ class SearchActivity : Activity() {
     }
 
     /** A suggestion; [url], when known, gets its connection ready while the row has the focus. */
-    private fun addRow(icon: Int, title: String, subtitle: String?, url: String? = null, onClick: () -> Unit) {
+    private fun addRow(icon: Int, title: String, subtitle: String?, url: String? = null, at: Int = -1, onClick: () -> Unit) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -545,7 +558,7 @@ class SearchActivity : Activity() {
             img.setColorFilter(c, PorterDuff.Mode.SRC_IN)
             if (has && !privateMode) Warmup.preconnect(url)
         }
-        list.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 94.px))
+        list.addView(row, at.coerceAtMost(list.childCount), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 94.px))
     }
 
     /** The mic: listens right here in the search field; pressing it again while listening stops. */
@@ -648,6 +661,7 @@ class SearchActivity : Activity() {
     }
 
     override fun onDestroy() {
+        localSearch.shutdownNow()
         voiceInput.destroy()
         phoneLink?.stop()
         super.onDestroy()

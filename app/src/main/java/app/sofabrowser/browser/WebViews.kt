@@ -10,6 +10,7 @@ import android.webkit.WebView
 import android.webkit.WebViewDatabase
 import androidx.webkit.UserAgentMetadata
 import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebStorageCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import app.sofabrowser.Prefs
@@ -131,6 +132,56 @@ object WebViews {
         WebViewCompat.addDocumentStartJavaScript(web, script, setOf("*"))
         return true
     }
+
+    /**
+     * Removes the cookies and storage of [url]'s site (its registrable domain, subdomains included), then runs [done]
+     * on the main thread. A newer WebView does it all itself; an older one loses the storage of the page's own origin
+     * and the cookies the page can see, which is what signs a person in.
+     */
+    @SuppressLint("RequiresFeature") // checked inline
+    fun clearSiteData(context: Context, web: WebView, url: String, done: () -> Unit) {
+        val host = android.net.Uri.parse(url).host?.lowercase() ?: return done()
+        val site = app.sofabrowser.adblock.Sites.of(host)
+        // Its answer to the cookie banner went with the cookies.
+        app.sofabrowser.cookieBannerSites(context).let { saved ->
+            saved.keys.filter { app.sofabrowser.adblock.Sites.of(it.lowercase()) == site }.forEach { saved.remove(it) }
+        }
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DELETE_BROWSING_DATA)) {
+            val storage = if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) WebViewCompat.getProfile(web).webStorage
+                else WebStorage.getInstance()
+            WebStorageCompat.deleteBrowsingDataForSite(storage, host) { done() }
+            return
+        }
+        val cookies = cookieManager(web)
+        val origin = android.net.Uri.parse(url).let { "${it.scheme}://${it.authority}" }
+        WebStorage.getInstance().deleteOrigin(origin)
+        val names = cookies.getCookie(url).orEmpty().split(';').mapNotNull { it.substringBefore('=').trim().ifEmpty { null } }.toSet()
+        // A cookie is only removed by setting it again, expired, with the same domain and path. The path can't be read
+        // back: the root covers nearly every sign-in.
+        val domains = buildList {
+            add(null)
+            var d = host
+            while (d.length >= site.length) { add(d); d = d.substringAfter('.', "").ifEmpty { break } }
+        }
+        for (name in names) for (domain in domains) {
+            cookies.setCookie(url, "$name=; Max-Age=0; Path=/" + (domain?.let { "; Domain=.$it" } ?: ""))
+        }
+        cookies.flush()
+        // An open page keeps its storage in memory, out of deleteOrigin's reach: it empties it itself, then loads again.
+        web.evaluateJavascript(CLEAR_STORAGE_SCRIPT) { web.postDelayed(done, STORAGE_GONE_MS) }
+    }
+
+    /** Empties the page's own storage: what an older WebView can't delete for an origin that is open. */
+    private const val CLEAR_STORAGE_SCRIPT = """(function(){
+        try { localStorage.clear(); } catch (e) {}
+        try { sessionStorage.clear(); } catch (e) {}
+        try { indexedDB.databases().then(function(l){ l.forEach(function(d){ indexedDB.deleteDatabase(d.name); }); }); } catch (e) {}
+        try { caches.keys().then(function(k){ k.forEach(function(n){ caches.delete(n); }); }); } catch (e) {}
+        try { navigator.serviceWorker.getRegistrations().then(function(r){ r.forEach(function(x){ x.unregister(); }); }); } catch (e) {}
+    })()"""
+
+    /** Long enough for the page's asynchronous deletions to go through before it loads again. */
+    private const val STORAGE_GONE_MS = 400L
 
     /** Removes every trace of browsing: cookies, site storage, cache, form data and HTTP auth. */
     fun clearBrowsingData(context: Context, web: WebView?) {

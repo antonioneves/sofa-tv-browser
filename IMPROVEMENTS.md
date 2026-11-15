@@ -45,6 +45,21 @@ This document tracks performance optimizations made to Sofa TV Browser for low-t
 - **Location:** `app/src/main/java/app/sofabrowser/browser/WebViews.kt`
 - **Change:** Sets `s.cacheMode = WebSettings.LOAD_DEFAULT`. That is already WebView's default, so this documents the intent and changes nothing.
 
+### 10. Most Visited Worked Out Off the Main Thread
+- **Location:** `app/src/main/java/app/sofabrowser/data/Db.kt`
+- **Change:** Most visited used to read and group a month of history on the main thread each time the home screen was shown. The grouped list is now kept in memory and worked out again on the history thread (`history-db`) after each change to the history, once for any number of changes in a row. The home screen only filters the kept list. It is worked out on the main thread only the first time, before the history thread has done it.
+
+### 11. History Suggestions Read Off the Main Thread
+- **Location:** `app/src/main/java/app/sofabrowser/ui/SearchActivity.kt`
+- **Change:** The history and bookmark suggestions under the search field are read on a thread of their own (`local-suggest`) as you type, then put at the top of the list on the main thread, unless something newer was typed meanwhile.
+
+### 12. One Live Tab on Low-Memory TVs
+- **Location:** `app/src/main/java/app/sofabrowser/MainActivity.kt`
+- **Change:** Tabs out of view keep their page in memory only up to a limit; the others let go of it and load again when shown. The limit is 3, and 1 on a TV that says it is a low-RAM device or has less than 2 GB of memory.
+
+### Not Changed: One History Row per Visit
+Every visit is still a row of its own. Most visited counts visits in the last 30 days and since a site was taken off it, the history list shows each visit with its time, "Keep history for" removes visits by age, and backups carry them, so merging visits into one row per page would need a count and dates per row and a change to the backup format. With items 7, 10 and 11 the rows are no longer read on the main thread, and "Keep history for" bounds how many there are.
+
 ---
 
 ## Measurements
@@ -67,7 +82,21 @@ cache and cookies each time, so first visits only. Page load event, in seconds:
 - **Most of the wait is the sites' own JavaScript:** Reddit blocks the main thread for about 10 s and BBC for about 5 s,
   with or without the app's scripts.
 - YouTube is left out: with cookies cleared on every load it never got past its consent page.
-- Not measured: repeat visits, logged-in pages, other TVs, and the memory cost of pre-warming WebView (item 3).
+- Not measured: repeat visits, logged-in pages and other TVs.
+
+### Memory cost of pre-warming WebView (item 3)
+
+Android TV emulator (x86, Android 14, WebView 113), the home screen 25 s after a cold start, 3 runs each. App
+process PSS:
+
+| | Run 1 | Run 2 | Run 3 |
+|---|---|---|---|
+| Pre-warmed | 89.6 MB | 91.5 MB | 92.6 MB |
+| Not pre-warmed | 86.9 MB | 87.1 MB | 87.0 MB |
+
+- About **4 MB** more (median 91.5 against 87.0 MB). Pre-warming creates the WebView but loads nothing, so no
+  renderer process starts: that comes with the first page either way.
+- An emulator, not a TV: an ARM WebView will differ in size, but not in where the cost is.
 
 ## User Settings Notes
 

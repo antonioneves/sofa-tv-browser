@@ -33,7 +33,7 @@ import app.sofabrowser.Space
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar), PageMenu {
 
-    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, NEW_TAB, CLOSE_TAB, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
+    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, NEW_TAB, CLOSE_TAB, ADBLOCK, ALLOW_ONCE, USER_AGENT, CLEAR_SITE, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
     interface Actions {
         fun onAddress()
@@ -276,6 +276,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.DOWNLOADS, R.drawable.ic_download, R.string.downloads)
         // Asks which one, then closes the menu.
         add(Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent)
+        add(Action.CLEAR_SITE, R.drawable.ic_delete, R.string.clear_site_data)
         add(Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode)
         add(Action.SETTINGS, R.drawable.ic_settings, R.string.settings)
 

@@ -227,6 +227,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         // Shown only after a block, next to the shield it belongs with; the menu then opens with it focused.
         add(BrowserMenu.Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once, ROW_GAP)
         add(BrowserMenu.Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent, ROW_GAP)
+        add(BrowserMenu.Action.CLEAR_SITE, R.drawable.ic_delete, R.string.clear_site_data, ROW_GAP)
         // How the remote moves about pages.
         add(BrowserMenu.Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode, ROW_GAP)
         add(BrowserMenu.Action.POINTER, R.drawable.ic_mouse, R.string.pointer, ROW_GAP)
