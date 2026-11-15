@@ -205,7 +205,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // address and the search: the bar is too slim to spell the address out, so it shows in the label while that
         // icon is focused.
         bar.addView(android.view.View(context), LinearLayout.LayoutParams(1, 0, 1f))
-        add(Action.NEW_TAB, R.drawable.ic_new_tab, R.string.new_tab, bar, GAP)
+        add(Action.NEW_TAB, R.drawable.ic_tab_new, R.string.new_tab, bar, GAP)
         // An empty tab, where the next one goes.
         buttons[Action.NEW_TAB]?.setFullIcon(R.drawable.ic_tab_new)
         // Down from the new tab button goes to the first tab, which the stack's icons, drawn over each other, can't say.

@@ -69,6 +69,8 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
             // A rounded square, not a circle, like Sofa's other focused buttons.
             circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, FOCUS_RADIUS)
             circle.isDuplicateParentStateEnabled = true
+            // A site's icon may cast a shadow past its square (the tabs' icons).
+            circle.clipChildren = false
             circle.addView(image, LayoutParams(48.px, 48.px, Gravity.CENTER))
             addView(circle, LayoutParams(square.px, square.px, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
 
@@ -105,7 +107,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         tint(hasFocus())
     }
 
-    /** A picture as it is, a site's icon, in place of a tinted icon. It fills the focus square but for a thin edge. */
+    /** A picture as it is, a site's icon, in place of a tinted icon. It fills the focus square but for a thin margin. */
     fun setPicture(picture: android.graphics.drawable.Drawable) {
         plain = true
         // Fills nearly all of the focus square, where a drawn icon keeps room around it.

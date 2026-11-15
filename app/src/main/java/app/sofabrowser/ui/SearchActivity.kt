@@ -320,12 +320,12 @@ class SearchActivity : Activity() {
     private fun newTabCard(): View {
         val card = cardFrame(false) { setResult(RESULT_OK, result().putExtra(EXTRA_NEW_TAB, true)); finish() }
         card.contentDescription = getString(R.string.new_tab)
-        val icon = ImageView(this).apply { setImageResource(R.drawable.ic_new_tab); setColorFilter(Ui.p.textMid, PorterDuff.Mode.SRC_IN) }
+        val icon = ImageView(this).apply { setImageResource(R.drawable.ic_tab_new); setColorFilter(Ui.p.textMid, PorterDuff.Mode.SRC_IN) }
         val label = Ui.text(this, 26, Ui.p.textMid).apply { text = getString(R.string.new_tab); gravity = Gravity.CENTER }
         card.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            addView(icon, LinearLayout.LayoutParams(64.px, 64.px).apply { bottomMargin = 16.px })
+            addView(icon, LinearLayout.LayoutParams(72.px, 72.px).apply { bottomMargin = 16.px })
             addView(label)
         }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         card.setOnFocusChangeListener { v, has ->

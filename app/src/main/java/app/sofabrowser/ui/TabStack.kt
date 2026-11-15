@@ -2,6 +2,15 @@ package app.sofabrowser.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -75,7 +84,7 @@ class TabStack(
             requestLayout()
         }
         list.forEachIndexed { i, t ->
-            buttons[i].setPicture(edged(Favicons.get(context).drawable(t.url, name(t), 96)))
+            buttons[i].setPicture(Shadowed(Favicons.get(context).drawable(t.url, name(t), 96)))
             buttons[i].contentDescription = name(t)
         }
         // New icons are put in place at once: only the focus moving slides them.
@@ -105,14 +114,40 @@ class TabStack(
         return b
     }
 
-    /** [picture] with a thin edge, so that icons stacked over each other stay apart; the new tab button has the same. */
-    private fun edged(picture: android.graphics.drawable.Drawable): android.graphics.drawable.Drawable {
-        val edge = android.graphics.drawable.GradientDrawable().apply {
-            setColor(android.graphics.Color.TRANSPARENT)
-            cornerRadius = Math.round((squareDp - 8) * Favicons.CORNER).px.toFloat()
-            setStroke(EDGE.px, (Ui.p.text and 0xFFFFFF) or 0x80000000.toInt())
+    /**
+     * [picture] with a soft shadow around it (the shape of the picture itself, blurred), so that icons stacked over each
+     * other stay apart. The shadow spills past the picture's bounds, into the room around the icon.
+     */
+    private class Shadowed(private val picture: Drawable) : Drawable() {
+        private var shadow: Bitmap? = null
+        private val offset = IntArray(2)
+        private val paint = Paint(Paint.FILTER_BITMAP_FLAG).apply { color = Color.argb(SHADOW_ALPHA, 0, 0, 0) }
+
+        override fun onBoundsChange(b: Rect) {
+            picture.bounds = b
+            shadow = null
+            if (b.isEmpty) return
+            // Drawn at its size on the screen, so the blur is the same for every icon, whatever the picture's size.
+            val shape = Bitmap.createBitmap(b.width(), b.height(), Bitmap.Config.ARGB_8888)
+            picture.setBounds(0, 0, b.width(), b.height())
+            picture.draw(Canvas(shape))
+            picture.bounds = b
+            shadow = shape.extractAlpha(Paint().apply { maskFilter = BlurMaskFilter(SHADOW_BLUR.px.toFloat(), BlurMaskFilter.Blur.NORMAL) }, offset)
+            shape.recycle()
         }
-        return android.graphics.drawable.LayerDrawable(arrayOf(picture, edge))
+
+        override fun draw(canvas: Canvas) {
+            shadow?.let { canvas.drawBitmap(it, (bounds.left + offset[0]).toFloat(), (bounds.top + offset[1] + SHADOW_DROP.px).toFloat(), paint) }
+            picture.draw(canvas)
+        }
+
+        // No size of its own: the image view gives it all its room, without scaling the shadow.
+        override fun getIntrinsicWidth() = -1
+        override fun getIntrinsicHeight() = -1
+        override fun setAlpha(alpha: Int) {}
+        override fun setColorFilter(colorFilter: ColorFilter?) {}
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity() = PixelFormat.TRANSLUCENT
     }
 
     /** Focuses the first tab; false when there is none. */
@@ -170,7 +205,9 @@ class TabStack(
         const val MIN_STEP = 14
         /** How tall the mark of the tab in view is. */
         const val MARKER = 36
-        /** The edge around each icon, in design pixels. */
-        const val EDGE = 2
+        /** How soft each icon's shadow is, and how far it falls below the icon, in design pixels. */
+        const val SHADOW_BLUR = 6
+        const val SHADOW_DROP = 2
+        const val SHADOW_ALPHA = 170
     }
 }

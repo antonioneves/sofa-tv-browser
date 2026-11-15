@@ -1,4 +1,4 @@
-<!-- The new tab button: an empty tab icon (the size, corners and thin edge of a site's icon in the tab stack) with a plus. -->
+<!-- New tab (the menu bar's button and the search screen's card): an empty tab icon, the size and corners of a site's icon in the tab stack, with a plus. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="60dp"
     android:height="60dp"
