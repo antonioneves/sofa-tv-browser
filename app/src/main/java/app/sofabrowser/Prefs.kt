@@ -121,6 +121,10 @@ class Prefs(context: Context) {
     var backGoesBack by boolean("back_goes_back", false)
     /** The menu bar stays docked at the left edge, with the page beside it, instead of opening over the page. */
     var menuDocked by boolean("menu_docked", false)
+    /** The page's menu is a bar along the bottom of the screen ([app.sofabrowser.ui.BottomMenu]) instead of at the left edge. */
+    var menuBottom by boolean("menu_bottom", false)
+    /** The bottom menu shows its row of actions; only the menu's More button changes it. */
+    var menuExpanded by boolean("menu_expanded", false)
     /** Sofa starts on [startPage] instead of the home screen; off by default. */
     var startPageOn by boolean("start_page_on", false)
     /** An http(s) address, or "" until one is chosen. */

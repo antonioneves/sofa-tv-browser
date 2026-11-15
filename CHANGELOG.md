@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **The menu bar at the bottom, if you like**: Settings, Appearance has "Navigation bar position", Left or Bottom. Left is the sidebar as it is now. Bottom brings back the earlier bar along the bottom of the screen: Home, the address, Back, Forward, Reload and zoom in one row, and More sliding up a row of all the other actions under it, with greyed-out Back and Forward when they can't be used. It opens over the page with BACK or MENU and never docks; the sidebar's docking choice is kept for when you switch back to Left.
 - **One shape of focus square**: every icon button, in the menu bar and on the home screen, shows its focus as a rounded square with the same corners as the site icons, in place of the rounder one plain icons had. The sidebar button's "Sidebar collapses by itself" now reads "Auto collapse sidebar".
 - **The sofa moves between screens**: the sofa icon glides from where it was to where the next screen has it, growing or shrinking and changing colour on the way, instead of vanishing in one place and showing up in another. It moves from the menu bar's Home button to the home screen's top left corner, from the bar to the same corner as the search screen fades in around it, and from the home screen into the docked bar when a page opens beside it.
 - **The page's icon in the menu bar**: the magnifier at the top of the browse menu's slim bar is gone. The page's icon (or its coloured letter tile, like a bookmark's) sits at the bottom of the bar instead, and opens the search screen, with the page's address, when pressed.

@@ -84,7 +84,9 @@ import app.sofabrowser.downloads.Http
 import app.sofabrowser.downloads.Status as DownloadStatus
 import app.sofabrowser.player.PlayerChoices
 import app.sofabrowser.player.SofaPlayer
+import app.sofabrowser.ui.BottomMenu
 import app.sofabrowser.ui.BrowserMenu
+import app.sofabrowser.ui.PageMenu
 import app.sofabrowser.ui.SofaGlide
 import app.sofabrowser.ui.DownloadsActivity
 import app.sofabrowser.ui.FindBar
@@ -135,7 +137,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     private lateinit var scrollPill: TextView
     private lateinit var fullscreen: FullscreenLayer
     private lateinit var home: HomeView
-    private var menu: BrowserMenu? = null
+    private var menu: PageMenu? = null
     private lateinit var findBar: FindBar
     private val voiceInput by lazy { VoiceInput(this, findVoiceListener) }
 
@@ -1002,7 +1004,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         menuView().show(menuState())
     }
 
-    private fun menuView() = menu ?: BrowserMenu(this, this).also { m ->
+    /** The menu where Settings puts it: the bar at the left edge, or along the bottom of the screen. */
+    private fun menuView() = menu ?: (if (prefs.menuBottom) BottomMenu(this, this) else BrowserMenu(this, this)).also { m ->
         menu = m
         // A docked bar is left for the page, not closed.
         m.onLeave = { if (!homeShown) web?.requestFocus() }
@@ -1010,17 +1013,18 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     /** The menu bar docked at the left edge with the page beside it (Prefs.menuDocked), or floating over the page when opened. */
     private fun applyDock() {
-        if (prefs.menuDocked && !standalone) menuView().dock(rootLayer, 1).also { menu?.update(menuState()) }
+        // The bar along the bottom only ever opens over the page.
+        if (prefs.menuDocked && !prefs.menuBottom && !standalone) menuView().dock(rootLayer, 1).also { menu?.update(menuState()) }
         else menu?.undock()
         syncDock()
     }
 
     /** The docked bar shows only with the page, and the page keeps its room beside it, also while something covers both. */
     private fun syncDock() {
-        val m = menu ?: return
-        m.setDockVisible(browserLayer.visibility == View.VISIBLE)
+        val m = menu
+        m?.setDockVisible(browserLayer.visibility == View.VISIBLE)
         (browserLayer.layoutParams as? FrameLayout.LayoutParams)?.let {
-            val left = if (m.docked) BrowserMenu.BAR.px else 0
+            val left = if (m?.docked == true) BrowserMenu.BAR.px else 0
             if (it.leftMargin != left) { it.leftMargin = left; browserLayer.layoutParams = it }
         }
     }
@@ -2625,6 +2629,15 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         playInSince = 0L
         // A theme change in Settings rebuilds the screen (and the WebView, whose pages follow the theme).
         if (Ui.paletteFor(this, prefs.theme) !== palette) { recreate(); return }
+        // The menu moved in Settings, between the left edge and the bottom of the screen: the old one goes.
+        menu?.let { m ->
+            if ((m is BottomMenu) != prefs.menuBottom) {
+                m.undock()
+                m.dismiss()
+                menu = null
+                applyDock()
+            }
+        }
         tabs.forEach { it.browser.applySettings() }
         cursor.speedLevel = prefs.cursorSpeed
         // Cheap when nothing is due: it checks at most every few hours.

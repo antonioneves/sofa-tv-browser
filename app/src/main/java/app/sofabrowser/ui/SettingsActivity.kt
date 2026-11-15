@@ -132,6 +132,7 @@ class SettingsActivity : Activity() {
         section(R.string.section_appearance)
         nav(R.string.theme, resources.getStringArray(R.array.themes)[THEMES.indexOf(prefs.theme).coerceAtLeast(0)]) { pickTheme() }
         nav(R.string.text_size, getString(R.string.percent, prefs.textZoom)) { pickTextSize() }
+        nav(R.string.menu_position, resources.getStringArray(R.array.menu_positions)[if (prefs.menuBottom) 1 else 0]) { pickMenuPosition() }
         // WebView can only darken pages for a dark app theme.
         if (Ui.p.dark && WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
             switch(R.string.dark_pages, R.string.dark_pages_sub, prefs::darkPages)
@@ -328,6 +329,14 @@ class SettingsActivity : Activity() {
                     prefs.theme = THEMES[which]
                     recreate()
                 }
+            }.show()
+    }
+
+    /** Where the page's menu bar is: at the left edge (it can be docked there), or along the bottom of the screen. */
+    private fun pickMenuPosition() {
+        dialog().setTitle(R.string.menu_position)
+            .setSingleChoiceItems(R.array.menu_positions, if (prefs.menuBottom) 1 else 0) { d, which ->
+                prefs.menuBottom = which == 1; d.dismiss(); build()
             }.show()
     }
 

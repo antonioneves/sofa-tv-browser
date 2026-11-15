@@ -31,7 +31,7 @@ import app.sofabrowser.Space
  * opens it over the page and it closes after an action; docked, it is part of the screen, always shown at the left
  * edge with the page laid out beside it, and the same keys only move the focus into it, and out again.
  */
-class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
+class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar), PageMenu {
 
     enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, NEW_TAB, CLOSE_TAB, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
@@ -107,20 +107,20 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     private var created = false
 
     /** The bar is docked in the screen (see [dock]) and not shown in this dialog. */
-    var docked = false
+    override var docked = false
         private set
     private var dockHost: android.widget.FrameLayout? = null
 
     /** Called when the docked bar is left: the focus goes back to the page. */
-    var onLeave: (() -> Unit)? = null
+    override var onLeave: (() -> Unit)? = null
 
     /** The bar is on screen: its dialog is showing, or it is docked and not hidden behind another screen. */
-    val shown get() = isShowing || docked && content.visibility == android.view.View.VISIBLE
+    override val shown get() = isShowing || docked && content.visibility == android.view.View.VISIBLE
 
     /** The bar is being used: its dialog is showing, or the docked bar has the focus. */
-    val inUse get() = isShowing || dockHasFocus
+    override val inUse get() = isShowing || dockHasFocus
 
-    val dockHasFocus get() = docked && content.findFocus() != null
+    override val dockHasFocus get() = docked && content.findFocus() != null
 
     private val leavingFocus = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, now ->
         // Focus went to the page: the balloon and the label are done with.
@@ -336,7 +336,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     }
 
     /** Docks the bar in [host], at [index] among its views, instead of floating it over the page in a dialog. */
-    fun dock(host: android.widget.FrameLayout, index: Int) {
+    override fun dock(host: android.widget.FrameLayout, index: Int) {
         if (docked) return
         val c = build()
         if (isShowing) dismiss()
@@ -348,7 +348,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     }
 
     /** The bar goes back to its dialog, which opens with BACK or MENU. */
-    fun undock() {
+    override fun undock() {
         if (!docked) return
         docked = false
         content.viewTreeObserver.removeOnGlobalFocusChangeListener(leavingFocus)
@@ -359,13 +359,13 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     }
 
     /** The docked bar is shown, or out of the way of the home screen and the fullscreen video. */
-    fun setDockVisible(visible: Boolean) {
+    override fun setDockVisible(visible: Boolean) {
         if (!docked) return
         content.visibility = if (visible) android.view.View.VISIBLE else android.view.View.GONE
     }
 
     /** A key while the docked bar has the focus: what the bar adds to the usual way the focus moves. */
-    fun dockedKey(event: KeyEvent): Boolean {
+    override fun dockedKey(event: KeyEvent): Boolean {
         val focus = content.findFocus() ?: return false
         if (balloonLeft(event, focus)) return true
         val down = event.action == KeyEvent.ACTION_DOWN
@@ -382,14 +382,14 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     }
 
     /** The sofa on the Home button as it shows, for it to move on to the next screen ([SofaGlide]); null with the bar out of sight. */
-    fun sofa(): SofaGlide.Spot? {
+    override fun sofa(): SofaGlide.Spot? {
         if (!shown) return null
         val b = buttons[Action.HOME] ?: return null
         return SofaGlide.spot(b.icon, b.iconColor())
     }
 
     /** The sofa of the screen being left moves into the Home button: the bar docked beside the page. */
-    fun sofaTo(activity: android.app.Activity, from: SofaGlide.Spot?) {
+    override fun sofaTo(activity: android.app.Activity, from: SofaGlide.Spot?) {
         val b = buttons[Action.HOME] ?: return
         SofaGlide.to(activity, from, b.icon) { b.iconColor() }
     }
@@ -450,7 +450,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
     private var balloonOpen = false
 
-    fun show(state: State) {
+    override fun show(state: State) {
         if (!docked && !isShowing) show()
         update(state)
         // The balloon starts closed; a pending "Allow once" is why the menu was opened, most likely, so then it opens
@@ -565,7 +565,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     /** The tab in view: OK on its icon opens the address and the search. */
     private var shownTab = -1L
 
-    fun update(s: State) {
+    override fun update(s: State) {
         if (!::tabStack.isInitialized) return
         shownTab = s.currentTab
         tabStack.set(s.tabs, s.currentTab)
