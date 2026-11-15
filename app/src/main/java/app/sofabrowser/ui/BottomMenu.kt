@@ -233,11 +233,23 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         // A focused button keeps room for its label (wider than the button) from the screen edge, so neither icon nor
         // label is ever cut.
         row.setPadding(SIDE.px, 8.px, SIDE.px - ROW_GAP.px, 24.px)
-        actionsPane = FocusRowScrollView(context, ((LabeledIconButton.LABEL_WIDTH - LabeledIconButton.WIDTH) / 2 + SIDE).px).apply {
+        val scroller = FocusRowScrollView(context, ((LabeledIconButton.LABEL_WIDTH - LabeledIconButton.WIDTH) / 2 + SIDE).px).apply {
             isHorizontalScrollBarEnabled = false
             clipChildren = false
             clipToPadding = false
             addView(row)
+        }
+        // A line between the bar and the actions, coming and going with them.
+        actionsPane = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            clipChildren = false
+            clipToPadding = false
+            addView(View(context).apply { background = Ui.rounded(Ui.p.border, 1) },
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2.px).apply {
+                    marginStart = SIDE.px
+                    marginEnd = SIDE.px
+                })
+            addView(scroller, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             visibility = View.GONE
         }
         // Below the bar: opening it lifts the sheet, the bar with it.
