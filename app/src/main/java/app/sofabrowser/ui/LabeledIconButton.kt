@@ -36,6 +36,9 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
     /** Called when the button gains focus. */
     var onFocused: (() -> Unit)? = null
 
+    /** Called when the button loses focus. */
+    var onBlurred: (() -> Unit)? = null
+
     init {
         isFocusable = true
         isClickable = true
@@ -91,6 +94,17 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
         tint(hasFocus())
     }
 
+    /** A tinted icon as big as a site's icon ([setPicture]), with its corners: the new tab button beside the tabs. */
+    fun setFullIcon(icon: Int) {
+        plain = false
+        if (!row) {
+            image.layoutParams = LayoutParams((square - 8).px, (square - 8).px, Gravity.CENTER)
+            circle.background = Ui.fillSelector(Color.TRANSPARENT, Ui.p.focus, Math.round((square - 8) * app.sofabrowser.data.Favicons.CORNER))
+        }
+        image.setImageResource(icon)
+        tint(hasFocus())
+    }
+
     /** A picture as it is, a site's icon, in place of a tinted icon. It fills the focus square but for a thin edge. */
     fun setPicture(picture: android.graphics.drawable.Drawable) {
         plain = true
@@ -110,7 +124,7 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
     }
 
     private fun focused(has: Boolean) {
-        if (has) onFocused?.invoke()
+        if (has) onFocused?.invoke() else onBlurred?.invoke()
         tint(has)
         if (row) {
             text.setTextColor(if (has) Ui.p.onFocus else Ui.p.text)

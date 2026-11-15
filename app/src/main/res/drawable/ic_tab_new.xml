@@ -1,0 +1,16 @@
+<!-- The new tab button: an empty tab icon (the size, corners and thin edge of a site's icon in the tab stack) with a plus. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="60dp"
+    android:height="60dp"
+    android:viewportWidth="60"
+    android:viewportHeight="60"
+>
+  <path
+      android:strokeColor="#FFFFFFFF"
+      android:strokeAlpha="0.5"
+      android:strokeWidth="2"
+      android:pathData="M14.2,1H45.8A13.2,13.2 0 0 1 59,14.2V45.8A13.2,13.2 0 0 1 45.8,59H14.2A13.2,13.2 0 0 1 1,45.8V14.2A13.2,13.2 0 0 1 14.2,1Z"/>
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M28.5,19h3v9.5h9.5v3h-9.5v9.5h-3v-9.5h-9.5v-3h9.5z"/>
+</vector>

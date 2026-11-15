@@ -98,6 +98,8 @@ import app.sofabrowser.ui.SettingsActivity
 import app.sofabrowser.ui.PhoneCard
 import app.sofabrowser.ui.SofaDialog
 import app.sofabrowser.ui.SofaToast
+import app.sofabrowser.ui.OpenTabs
+import app.sofabrowser.ui.TabStack
 import app.sofabrowser.shortcut.TvShortcut
 import app.sofabrowser.ui.TileMenu
 import app.sofabrowser.ui.SetupActivity
@@ -114,7 +116,16 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     private lateinit var prefs: Prefs
     private val db by lazy { Db.get(this) }
-    private lateinit var browser: Browser
+    /** The open tabs, in the order the bar shows them, and the one in view. */
+    private val tabs = ArrayList<Tab>()
+    private lateinit var currentTab: Tab
+    /** The tab that was in view before this one: closing this one goes back to it. */
+    private var previousTab: Tab? = null
+    private var nextTabId = 1L
+    /** The normal tabs while private browsing runs: their addresses and histories only, no page alive. */
+    private var stashedTabs: List<Tab> = emptyList()
+    private var stashedCurrent: Tab? = null
+    private val browser get() = currentTab.browser
 
     private lateinit var browserLayer: FrameLayout
     private lateinit var rootLayer: FrameLayout
@@ -154,7 +165,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         Browser.deletePrivateProfile()
         // Copies for other players are needed only while one starts; a kill or crash may have left some.
         StreamCopyProvider.clear(this)
-        browser = Browser(this, prefs, this)
+        currentTab = Tab().also { tabs += it }
         // Only a period prunes at start: "Never" removes saved pages when chosen in Settings, so updating from
         // 1.0.0 with history off (now "Never") keeps them, as 1.0.0 did.
         if (prefs.historyDays > 0) db.pruneHistory(prefs.historyDays)
@@ -225,8 +236,14 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
      */
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        if (prefs.privateMode) return
+        // The other tabs come back by their addresses, loaded once they are shown again.
+        val kept = tabs.filter { !it.empty }
+        outState.putStringArrayList(STATE_TABS, ArrayList(kept.map { it.url }))
+        outState.putStringArrayList(STATE_TAB_TITLES, ArrayList(kept.map { it.title }))
+        outState.putInt(STATE_TAB, kept.indexOf(currentTab))
         val w = web ?: return
-        if (homeShown || prefs.privateMode || w.url == null) return
+        if (homeShown || w.url == null) return
         outState.putString(STATE_URL, w.url)
         // Android stops an app whose saved state passes about 500 KB, and a long Back history can: past a quarter of
         // that, only the address is kept.
@@ -236,6 +253,19 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     private fun restorePage(state: Bundle?): Boolean {
+        val urls = state?.getStringArrayList(STATE_TABS)
+        if (urls != null) {
+            val titles = state.getStringArrayList(STATE_TAB_TITLES)
+            val at = state.getInt(STATE_TAB, -1)
+            tabs.clear()
+            urls.forEachIndexed { i, u ->
+                tabs += (if (i == at) currentTab else Tab()).also { t ->
+                    // The tab in view loads below, unless the home screen was over it.
+                    if (i != at || state.getString(STATE_URL) == null) { t.pendingUrl = u; t.pendingTitle = titles?.getOrNull(i).orEmpty() }
+                }
+            }
+            if (currentTab !in tabs) tabs += currentTab
+        }
         val url = state?.getString(STATE_URL) ?: return false
         ensureWeb()
         showBrowser()
@@ -253,8 +283,13 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (Space.sendOut(this, intent, standalone)) return
-        handleIntent(intent)
+        // Android pauses the screen to hand it a link: it opens once the screen is back, when the page it leaves for
+        // a new tab can still have its picture taken.
+        if (resumed) handleIntent(intent) else arrivedIntent = intent
     }
+
+    /** A link that came while the screen was paused, opened in [onResume]. */
+    private var arrivedIntent: Intent? = null
 
     private fun handleIntent(intent: Intent?): Boolean {
         val url = when (intent?.action) {
@@ -266,7 +301,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         // A link from another app (or a phone remote) may come while the menu is open: the page it opens gets the keys.
         menu?.dismiss()
         if (findBar.showing) closeFind()
-        openUrl(url)
+        // In a tab of its own, as other browsers do: the page in view stays where it was.
+        if (!standalone && !currentTab.empty) openNewTab(url) else openUrl(url)
         return true
     }
 
@@ -316,6 +352,301 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         syncDock()
         if (home.findFocus() == null) home.searchPill.requestFocus()
         Updater.showPending(this)
+    }
+
+    // Tabs
+
+    /** One open tab: its own page (a [Browser] and its view), and what the screen keeps of it while another is in view. */
+    private inner class Tab {
+        val id = nextTabId++
+        val browser = Browser(this@MainActivity, prefs, TabHost(this))
+        var zoomStep = 0
+        var loading = false
+        /** When it was last in view, for letting go of the pages used longest ago. */
+        var shownAt = 0L
+        /** The page as it last showed, small, for the tabs in the search screen. */
+        var thumbnail: Bitmap? = null
+        /** A page to load once the tab is shown: its view was let go of ([discard]), or the tab was restored. */
+        var pendingUrl: String? = null
+        var pendingTitle = ""
+        var savedState: Bundle? = null
+        val url get() = browser.web?.url ?: pendingUrl.orEmpty()
+        val title get() = browser.web?.title?.takeIf { browser.web?.url != null } ?: pendingTitle
+        /** A tab with no page: the home screen is all it shows. */
+        val empty get() = url.isEmpty()
+    }
+
+    /** Hands a tab's page events on to the screen while that tab is in view; a tab out of view only keeps its own state. */
+    private inner class TabHost(private val tab: Tab) : Browser.Host {
+        private val shown get() = tab === currentTab
+        private val screen get() = this@MainActivity
+        private val records get() = HistoryRetention.records(prefs.historyDays) && !tab.browser.privateMode
+
+        override fun onPageStarted(url: String) {
+            tab.loading = true
+            if (shown) screen.onPageStarted(url) else { tab.zoomStep = 0; tabsChanged() }
+        }
+        override fun onPageFinished(url: String) {
+            tab.loading = false
+            if (shown) screen.onPageFinished(url) else tabsChanged()
+        }
+        override fun onPageVisible(url: String) { if (shown) screen.onPageVisible(url) }
+        override fun onProgress(percent: Int) {
+            if (shown) screen.onProgress(percent) else if (percent >= 100) tab.loading = false
+        }
+        override fun onTitle(url: String, title: String) {
+            if (shown) screen.onTitle(url, title) else if (records) db.updateHistoryTitle(url, title)
+            tabsChanged()
+        }
+        override fun onIcon(url: String, icon: Bitmap) {
+            if (shown) return screen.onIcon(url, icon)
+            if (!tab.browser.privateMode) Favicons.get(screen).save(url, icon)
+            tabsChanged()
+        }
+        override fun onVisited(url: String) {
+            if (shown) return screen.onVisited(url)
+            val w = tab.browser.web
+            if (records && Browser.isWebUrl(url)) db.recordVisit(w?.title?.takeIf { w.url == url }.orEmpty(), url)
+        }
+        override fun onEnterFullscreen(view: View, callback: WebChromeClient.CustomViewCallback) {
+            if (shown) screen.onEnterFullscreen(view, callback) else callback.onCustomViewHidden()
+        }
+        override fun onExitFullscreen() { if (shown) screen.onExitFullscreen() }
+        override fun onVideoState(state: VideoState) { if (shown) screen.onVideoState(state) }
+        override fun onPlaying(playing: Boolean) {
+            // A tab out of view plays nothing: a video that starts there on its own is stopped.
+            if (shown) screen.onPlaying(playing) else if (playing) VideoRelay.send(tab.browser.web, "pause")
+        }
+        override fun onVideoInfo(info: VideoInfo) { if (shown) screen.onVideoInfo(info) }
+        override fun onVideoCandidate(candidate: WatchTarget.Candidate) { if (shown) screen.onVideoCandidate(candidate) }
+        override fun onVideoSource(source: VideoSource) { if (shown) screen.onVideoSource(source) }
+        override fun onVideoFrameTimes(times: List<Double>) { if (shown) screen.onVideoFrameTimes(times) }
+        override fun onVideoStarted(frame: String) { if (shown) screen.onVideoStarted(frame) }
+        override fun onSslError(handler: SslErrorHandler, error: SslError) {
+            if (shown) screen.onSslError(handler, error) else handler.cancel()
+        }
+        override fun onProtectedMediaRequest(origin: String, grant: (Boolean) -> Unit) {
+            if (shown) screen.onProtectedMediaRequest(origin, grant) else grant(false)
+        }
+        override fun onDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?, length: Long) =
+            screen.onDownload(url, userAgent, contentDisposition, mimeType, length)
+        override fun onBlockedLink(url: String) { if (shown) screen.onBlockedLink(url) }
+        override fun onPopupBlocked(url: String?) { if (shown) screen.onPopupBlocked(url) }
+        override fun onRedirectBlocked() { if (shown) screen.onRedirectBlocked() }
+        override fun onRendererGone() {
+            if (shown) return screen.onRendererGone()
+            // Out of view, the tab only loads its page again once it is shown.
+            tab.pendingUrl = tab.url.ifEmpty { null }
+            tab.pendingTitle = tab.title
+            tab.savedState = null
+            tab.browser.destroy()
+            tabsChanged()
+        }
+        override fun onSignInSent(origin: String, user: String, password: String) { if (shown) screen.onSignInSent(origin, user, password) }
+        override fun onSignInFormGone(origin: String) { if (shown) screen.onSignInFormGone(origin) }
+        override fun onSignInForm(form: SignInPages.Form) { if (shown) screen.onSignInForm(form) }
+    }
+
+    /** The bar, when it shows, follows the tabs: a new one, one closed, a title or icon that came. */
+    private fun tabsChanged() {
+        menu?.takeIf { it.shown }?.update(menuState())
+    }
+
+    /** Opens a new tab after the others and shows it: the home screen, or [url] when given. */
+    private fun openNewTab(url: String? = null) {
+        val t = Tab()
+        tabs += t
+        switchTo(t)
+        if (url != null) openUrl(url)
+    }
+
+    /** Brings [tab] into view. The tab that was is put to rest, and closed when it had no page. */
+    private fun switchTo(tab: Tab) {
+        if (tab === currentTab || tab !in tabs) return
+        val old = currentTab
+        leaveTab()
+        previousTab = old.takeIf { !it.empty }
+        currentTab = tab
+        enterTab()
+        if (old.empty) closeTab(old)
+        // Pages kept alive out of view cost memory a TV is short of: only the ones used last keep theirs.
+        tabs.filter { it !== currentTab && it.browser.web != null }.sortedByDescending { it.shownAt }.drop(LIVE_TABS).forEach(::discard)
+        tabsChanged()
+    }
+
+    /** Closes [tab]. Closing the one in view shows the one used before it, or its neighbour; closing the last one leaves a new, empty tab. */
+    private fun closeTab(tab: Tab) {
+        val i = tabs.indexOf(tab)
+        if (i < 0) return
+        if (tab === currentTab) {
+            val next = previousTab?.takeIf { it !== tab && it in tabs } ?: tabs.getOrNull(i + 1) ?: tabs.getOrNull(i - 1)
+                ?: Tab().also { tabs += it }
+            leaveTab()
+            currentTab = next
+            previousTab = null
+            enterTab()
+        }
+        tabs.remove(tab)
+        if (previousTab === tab) previousTab = null
+        tab.browser.destroy()
+        tab.thumbnail = null
+        tabsChanged()
+    }
+
+    /** The tabs are now [list], with [current] in view (a new, empty tab when null), and the home screen showing. */
+    private fun startTabs(list: List<Tab>, current: Tab?) {
+        tabs.clear()
+        tabs.addAll(list)
+        currentTab = current?.takeIf { it in tabs } ?: Tab().also { tabs += it }
+        previousTab = null
+        zoomStep = currentTab.zoomStep
+        loading = false
+        tabsChanged()
+    }
+
+    /** Lets go of [tab]'s page to save memory, keeping its address and history to load it again when it is shown. */
+    private fun discard(tab: Tab) {
+        val w = tab.browser.web ?: return
+        val url = w.url
+        if (url != null) {
+            tab.pendingUrl = url
+            tab.pendingTitle = w.title.orEmpty()
+            tab.savedState = Bundle().also { w.saveState(it) }
+        }
+        tab.browser.destroy()
+    }
+
+    /** What the screen keeps up for the page in view is done with as it goes out of view. */
+    private fun leaveTab() {
+        val t = currentTab
+        if (findBar.showing) closeFind()
+        browser.stopPicking()
+        if (cursor.scrollMode) cursor.setScrollMode(false)
+        if (reading) leaveReader()
+        stopAutoWatch()
+        cursor.removeCallbacks(translateCheck)
+        sentSignIn = null
+        t.zoomStep = zoomStep
+        t.loading = loading
+        // A paused page draws only its background: then the picture taken once it had loaded stays.
+        if (!homeShown && resumed) captureThumbnail(t)
+        web?.let { w ->
+            VideoRelay.send(w, "pause")
+            w.onPause()
+            cursor.removeView(w)
+        }
+        onPlaying(false)
+        progress.animate().cancel()
+        progress.visibility = View.GONE
+        progress.scaleX = 0f
+    }
+
+    /** Shows the tab now in view: its page, or the home screen when it has none. */
+    private fun enterTab() {
+        val t = currentTab
+        t.shownAt = SystemClock.uptimeMillis()
+        zoomStep = t.zoomStep
+        loading = t.loading
+        pageTranslated = false
+        translateUrl = null
+        web?.let { w -> if (w.parent == null) cursor.addView(w, 0, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) }
+        if (t.empty) { showHome(); return }
+        showTabPage()
+        val host = Browser.hostOf(t.url)
+        cursor.cursorEnabled = host == null || !browser.keysToPage(host)
+        if (loading && !pageOnly) {
+            progress.visibility = View.VISIBLE
+            progress.scaleX = (web?.progress ?: 0) / 100f
+        }
+    }
+
+    /** Shows the page of the tab in view, loading it first when the tab has only its address so far. */
+    private fun showTabPage() {
+        val t = currentTab
+        val pending = t.pendingUrl ?: return showBrowser()
+        t.pendingUrl = null
+        val state = t.savedState
+        t.savedState = null
+        ensureWeb()
+        showBrowser()
+        if (state?.let { web?.restoreState(it) } == null) browser.load(pending)
+    }
+
+    /**
+     * A small picture of [tab]'s page as it shows now, for the search screen's tabs; [then] runs once it is taken. It is
+     * copied from the screen, which shows what the page painted (a page drawn again into a picture may not have yet).
+     */
+    private fun captureThumbnail(tab: Tab, then: () -> Unit = {}) {
+        val w = tab.browser.web
+        if (w == null || !w.isAttachedToWindow || w.width == 0 || w.height == 0 || w.url == null) return then()
+        val scale = THUMB_WIDTH.toFloat() / w.width
+        val picture = runCatching { Bitmap.createBitmap(THUMB_WIDTH, (w.height * scale).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888) }
+            .getOrElse { return then() }
+        // A page not drawn yet is all one colour: an earlier picture is better, and none shows the sofa instead.
+        fun keep() { if (!blank(picture)) tab.thumbnail = picture }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val at = IntArray(2).also { w.getLocationInWindow(it) }
+            val area = android.graphics.Rect(at[0], at[1], at[0] + w.width, at[1] + w.height)
+            // Asked for before the screen changes: the copy is of the frame showing now.
+            val asked = runCatching {
+                android.view.PixelCopy.request(window, area, picture, { result ->
+                    if (result == android.view.PixelCopy.SUCCESS) keep()
+                    then()
+                }, Handler(Looper.getMainLooper()))
+            }
+            if (asked.isFailure) then()
+            return
+        }
+        runCatching {
+            android.graphics.Canvas(picture).apply {
+                scale(scale, scale)
+                translate(-w.scrollX.toFloat(), -w.scrollY.toFloat())
+                w.draw(this)
+            }
+            keep()
+        }
+        then()
+    }
+
+    /** Whether [picture] is all one colour: every third row of it, all of each, since a page of text is mostly its background. */
+    private fun blank(picture: Bitmap): Boolean {
+        val first = picture.getPixel(0, 0)
+        val row = IntArray(picture.width)
+        for (y in 0 until picture.height step 3) {
+            picture.getPixels(row, 0, picture.width, 0, y, picture.width, 1)
+            if (row.any { it != first }) return false
+        }
+        return true
+    }
+
+    private val pictureLater = Runnable {
+        if (resumed && !homeShown && fullscreen.visibility != View.VISIBLE) captureThumbnail(currentTab)
+    }
+
+    /** Hands the tabs to the search screen, which shows them under the field. */
+    private fun publishTabs() {
+        // A new tab shows among them only beside others, as the one in view.
+        OpenTabs.list = tabs.filter { !it.empty || (it === currentTab && tabs.size > 1) }
+            .map { OpenTabs.Tab(it.id, it.url, it.title, it.thumbnail, it === currentTab) }
+    }
+
+    /** What was done with the tabs in the search screen: tabs closed, then one chosen or a new one opened. */
+    private fun tabsChosen(data: Intent) {
+        data.getLongArrayExtra(SearchActivity.EXTRA_CLOSED_TABS)?.forEach { id -> tabs.firstOrNull { it.id == id }?.let(::closeTab) }
+        val id = data.getLongExtra(SearchActivity.EXTRA_TAB, -1L)
+        tabs.firstOrNull { it.id == id }?.let { t ->
+            if (t !== currentTab) switchTo(t) else if (homeShown && !t.empty) showTabPage()
+        }
+        if (data.getBooleanExtra(SearchActivity.EXTRA_NEW_TAB, false)) openNewTab()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // Short of memory: the tabs out of view let go of their pages, which load again when shown.
+        @Suppress("DEPRECATION")
+        if (level == TRIM_MEMORY_RUNNING_LOW || level == TRIM_MEMORY_RUNNING_CRITICAL || level >= TRIM_MEMORY_BACKGROUND) {
+            tabs.filter { it !== currentTab }.forEach(::discard)
+        }
     }
 
     // Keys
@@ -528,7 +859,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     private fun backOnHome() {
-        if (web?.url != null) { showBrowser(); return }
+        if (!currentTab.empty) { showTabPage(); return }
+        // A new tab left without a page: back to the tab it was opened from.
+        if (tabs.size > 1) { closeTab(currentTab); return }
         val now = SystemClock.uptimeMillis()
         if (now - lastBackOnHome < 2500) finish()
         else SofaToast.makeText(this, R.string.back_again_to_exit, Toast.LENGTH_SHORT).show()
@@ -561,9 +894,11 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     private fun showLinkMenu(link: String?, image: String?): Boolean {
-        val actions = LinkMenu.actions(link, image)
+        // A page opened from a TV home screen tile has no tabs.
+        val actions = LinkMenu.actions(link, image).filter { it != LinkMenu.Action.OPEN_NEW_TAB || !standalone }
         if (actions.isEmpty()) return false
         val labels = actions.map { getString(when (it) {
+            LinkMenu.Action.OPEN_NEW_TAB -> R.string.link_open_new_tab
             LinkMenu.Action.OPEN_ELSEWHERE -> R.string.link_open_elsewhere
             LinkMenu.Action.COPY_LINK -> R.string.link_copy
             LinkMenu.Action.SHARE_LINK -> R.string.link_share
@@ -581,6 +916,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     private fun linkAction(action: LinkMenu.Action, link: String, image: String) {
         when (action) {
+            LinkMenu.Action.OPEN_NEW_TAB -> openNewTab(link)
             LinkMenu.Action.OPEN_ELSEWHERE -> openElsewhere(link)
             LinkMenu.Action.COPY_LINK -> copy(link, R.string.link_copied)
             LinkMenu.Action.SHARE_LINK -> share(link)
@@ -640,6 +976,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             reading = reading,
             pinned = url.isNotEmpty() && db.isPinned(url),
             docked = prefs.menuDocked,
+            tabs = tabs.map { TabStack.Tab(it.id, it.url, it.title) },
+            currentTab = currentTab.id,
         )
     }
 
@@ -682,7 +1020,26 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     override fun onAddress() = startSearch(voice = false, current = web?.url)
 
+    override fun onTab(id: Long) {
+        val t = tabs.firstOrNull { it.id == id } ?: return
+        afterMenu { switchTo(t) }
+    }
+
+    /**
+     * Closes the menu, the page getting the keys, and then does [action], once the screen shows the page without the
+     * menu's label over it: the picture of the tab being left is taken from the screen.
+     */
+    private fun afterMenu(action: () -> Unit) {
+        menu?.dismiss()
+        cursor.postDelayed({ if (!isFinishing) action() }, MENU_GONE_MS)
+    }
+
     override fun onAction(action: BrowserMenu.Action) {
+        when (action) {
+            BrowserMenu.Action.NEW_TAB -> { afterMenu { openNewTab() }; return }
+            BrowserMenu.Action.CLOSE_TAB -> { menu?.dismiss(); closeTab(currentTab); return }
+            else -> Unit
+        }
         val w = web ?: return
         val url = w.url.orEmpty()
         val host = Browser.hostOf(url)
@@ -759,6 +1116,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             BrowserMenu.Action.ZOOM_OUT -> if (zoomStep > MIN_ZOOM_STEP) { zoomTo(w, zoomStep - 1); browser.setSiteZoom(url, zoomStep) }
             BrowserMenu.Action.SETTINGS -> { menu?.dismiss(); openSettings() }
             BrowserMenu.Action.DOWNLOADS -> { menu?.dismiss(); onDownloads() }
+            BrowserMenu.Action.NEW_TAB, BrowserMenu.Action.CLOSE_TAB -> Unit
         }
         menu?.takeIf { it.shown }?.update(menuState())
     }
@@ -958,8 +1316,21 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onTogglePrivate() {
         val entering = !prefs.privateMode
         val wasIsolated = browser.isolated
-        // Leaving or entering private mode throws away the current page and, for private mode, everything in it.
-        browser.destroy()
+        // Private browsing has tabs of its own. Entering it puts the normal tabs away, as addresses and histories
+        // with no page alive, and leaving it throws its tabs away, with everything in them, and brings those back.
+        if (entering) {
+            tabs.forEach(::discard)
+            stashedTabs = tabs.filter { !it.empty }
+            stashedCurrent = currentTab.takeIf { !it.empty }
+            tabs.filter { it.empty }.forEach { it.browser.destroy() }
+            startTabs(emptyList(), null)
+        } else {
+            tabs.forEach { it.browser.destroy() }
+            Browser.endPrivateSession()
+            startTabs(stashedTabs, stashedCurrent)
+            stashedTabs = emptyList()
+            stashedCurrent = null
+        }
         if (!entering && !wasIsolated) WebViews.clearBrowsingData(this, null)
         // Stream copies hold what was watched (signed stream addresses); none outlives either side of the switch.
         StreamCopyProvider.clear(this)
@@ -1041,7 +1412,15 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     // Other screens
 
     private fun startSearch(voice: Boolean, current: String?, phone: Boolean = false) {
+        // The search screen shows the tabs, the one in view as it is now, without the menu over it.
+        if (homeShown || !resumed) return openSearch(voice, current, phone)
+        afterMenu { captureThumbnail(currentTab) { openSearch(voice, current, phone) } }
+    }
+
+    private fun openSearch(voice: Boolean, current: String?, phone: Boolean) {
+        if (isFinishing || isDestroyed) return
         menu?.dismiss()
+        publishTabs()
         @Suppress("DEPRECATION")
         startActivityForResult(Intent(this, SearchActivity::class.java)
             .putExtra(SearchActivity.EXTRA_VOICE, voice)
@@ -1069,6 +1448,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
+        // The search screen's tabs: those closed there, then the one chosen, or a new one.
+        if (requestCode == REQ_URL) data?.let { tabsChosen(it) }
         if (requestCode == REQ_URL && resultCode == RESULT_OK) data?.getStringExtra(SearchActivity.EXTRA_URL)?.let(::openUrl)
         // What the phone typed to find on the page: the find bar opens on it, once the page is showing again.
         if (requestCode == REQ_URL && resultCode == RESULT_OK) data?.getStringExtra(SearchActivity.EXTRA_FIND)?.let { query ->
@@ -1104,6 +1485,11 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     override fun onPageFinished(url: String) {
         loading = false
+        // Pictures for the search screen's tabs, once the page has settled, and again in case it was slow to show; another
+        // is taken as the tab is left.
+        cursor.removeCallbacks(pictureLater)
+        cursor.postDelayed(pictureLater, 1000)
+        cursor.postDelayed(pictureLater, 4000)
         splash?.let { (it.parent as? ViewGroup)?.removeView(it); splash = null }
         progress.animate().cancel()
         progress.visibility = View.GONE
@@ -2211,20 +2597,26 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         super.onStop()
     }
 
+    /** Between onResume and onPause: the page in view draws, so a picture of it can be taken. */
+    private var resumed = false
+
     override fun onResume() {
         super.onResume()
+        resumed = true
         playInSince = 0L
         // A theme change in Settings rebuilds the screen (and the WebView, whose pages follow the theme).
         if (Ui.paletteFor(this, prefs.theme) !== palette) { recreate(); return }
-        browser.applySettings()
+        tabs.forEach { it.browser.applySettings() }
         cursor.speedLevel = prefs.cursorSpeed
         // Cheap when nothing is due: it checks at most every few hours.
         browser.adBlocker.refreshIfDue(prefs.autoUpdateLists)
         // While Sofa Player plays, the page stays at rest (swapIn), past a chooser or another screen.
         if (homeShown) home.refresh(prefs.privateMode, prefs.adBlock) else if (!nativeOn && !pageRested) web?.onResume()
+        arrivedIntent?.let { arrived -> arrivedIntent = null; cursor.post { if (!isFinishing) handleIntent(arrived) } }
     }
 
     override fun onPause() {
+        resumed = false
         super.onPause()
         // In picture-in-picture the activity is paused but its video keeps playing.
         if (!inPip) web?.onPause()
@@ -2298,7 +2690,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         sofaPlayer.release()
         if (isFinishing) {
             val wasPrivate = browser.privateMode && !browser.isolated
-            browser.destroy()
+            tabs.forEach { it.browser.destroy() }
+            if (browser.privateMode || prefs.privateMode) Browser.endPrivateSession()
             StreamCopyProvider.clear(this)
             if (prefs.clearOnExit || wasPrivate) {
                 WebViews.clearBrowsingData(this, null)
@@ -2351,6 +2744,15 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         private const val SIGNIN_WAIT_MS = 3000L
         private const val STATE_URL = "page_url"
         private const val STATE_PAGE = "page_state"
+        private const val STATE_TABS = "tabs"
+        private const val STATE_TAB_TITLES = "tab_titles"
+        private const val STATE_TAB = "tab"
+        /** How many tabs out of view keep their page alive; the ones used longest ago let go of it and load again when shown. */
+        private const val LIVE_TABS = 3
+        /** The width of a tab's picture in the search screen, in pixels. */
+        private const val THUMB_WIDTH = 480
+        /** How long the screen takes to show the page without the menu's label, before a picture of it is taken (ms). */
+        private const val MENU_GONE_MS = 80L
         private const val MAX_SAVED_PAGE = 128 * 1024
         /** Zoom limits in 25% steps: 64% at the least, about 381% at the most. */
         private const val MIN_ZOOM_STEP = -2

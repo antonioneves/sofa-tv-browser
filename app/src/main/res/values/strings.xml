@@ -103,6 +103,10 @@
     <string name="fewer_actions">Fewer</string>
     <string name="dock_on">Sidebar always open</string>
     <string name="dock_off">Sidebar collapses by itself</string>
+    <string name="new_tab">New tab</string>
+    <string name="close_tab">Close tab</string>
+    <string name="open_tabs">Tabs</string>
+    <string name="link_open_new_tab">Open in new tab</string>
     <string name="back">Back</string>
     <string name="forward">Forward</string>
     <string name="reload">Reload</string>

@@ -40,8 +40,8 @@ import app.sofabrowser.adblock.Sites
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Owns the single WebView: creates it in the normal or private profile, applies settings and relays page events.
- * BrowsHere has no tabs either; one view keeps memory use low on TV hardware.
+ * Owns one tab's WebView: creates it in the normal or private profile, applies settings and relays page events.
+ * Each tab has its own; the choices made in private browsing are shared by all private tabs ([endPrivateSession]).
  */
 class Browser(private val context: Context, private val prefs: Prefs, private val host: Host) {
 
@@ -103,20 +103,6 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
 
     /** The "Browse as" mode the view has now, with the custom string when it is "custom". */
     private var appliedUserAgent: String? = null
-    /** Per-site "Browse as" choices made in private browsing, which are kept only until it closes. */
-    private val privateUserAgents = HashMap<String, String>()
-    /** Per-site zoom chosen in private browsing, likewise. */
-    private val privateZooms = HashMap<String, Int>()
-    private val privateHidden = HashMap<String, String>()
-    /** Sites the cookie banner check is done with in private browsing, which has cookies of its own. */
-    private val privateBannerSites = HashSet<String>()
-    /** Ad blocking turned off or back on per host in private browsing; read on WebView's network threads too. */
-    private val privateAdBlockOff = ConcurrentHashMap<String, Boolean>()
-    /** "Keys go to the site" per host in private browsing. */
-    private val privateKeysToPage = HashMap<String, Boolean>()
-    /** Answers to the protected-content prompt per origin in private browsing. */
-    private val privateDrmAnswers = HashMap<String, Boolean>()
-
     val adBlocker = AdBlocker.get(context)
     private val guard = NavigationGuard()
     /** Set while Sofa taps the page on its own ([unattended]), so the guard doesn't take that tap for the user's. */
@@ -207,11 +193,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         picking = false
         frames.clear()
         host.onPlaying(false)
-        if (isolated) deletePrivateProfile()
-        if (privateMode) {
-            privateUserAgents.clear(); privateZooms.clear(); privateHidden.clear(); privateBannerSites.clear()
-            privateAdBlockOff.clear(); privateKeysToPage.clear(); privateDrmAnswers.clear()
-        }
+        // The private profile and choices stay for the other private tabs: endPrivateSession ends them.
         appliedUserAgent = null
         privateMode = false
         isolated = false
@@ -516,7 +498,7 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             val pressed = pressedLink(view)
             debug("window: gesture=$isUserGesture dialog=$isDialog link=$pressed")
             if (!isUserGesture) { adBlocker.countBlocked(); host.onPopupBlocked(null); return false }
-            // Open the target in the same view (no tabs): catch the first URL the throwaway view is sent to.
+            // Open the target in the same view: catch the first URL the throwaway view is sent to.
             val catcher = WebView(view.context)
             // A page can script into a window it opened, so the throwaway view must not reach the normal profile's
             // cookies while browsing privately.
@@ -750,6 +732,28 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
             "try{Object.defineProperty(Navigator.prototype,'globalPrivacyControl',{get:()=>true,configurable:true})}catch(e){}"
 
         val profilesSupported get() = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
+
+        // What private browsing chose, kept only until it closes, and shared by its tabs.
+        /** Per-site "Browse as" choices made in private browsing. */
+        private val privateUserAgents = HashMap<String, String>()
+        /** Per-site zoom chosen in private browsing. */
+        private val privateZooms = HashMap<String, Int>()
+        private val privateHidden = HashMap<String, String>()
+        /** Sites the cookie banner check is done with in private browsing, which has cookies of its own. */
+        private val privateBannerSites = HashSet<String>()
+        /** Ad blocking turned off or back on per host in private browsing; read on WebView's network threads too. */
+        private val privateAdBlockOff = ConcurrentHashMap<String, Boolean>()
+        /** "Keys go to the site" per host in private browsing. */
+        private val privateKeysToPage = HashMap<String, Boolean>()
+        /** Answers to the protected-content prompt per origin in private browsing. */
+        private val privateDrmAnswers = HashMap<String, Boolean>()
+
+        /** Private browsing is over: its profile, with all its cookies, storage and cache, and its choices go. Call with no private view left. */
+        fun endPrivateSession() {
+            deletePrivateProfile()
+            privateUserAgents.clear(); privateZooms.clear(); privateHidden.clear(); privateBannerSites.clear()
+            privateAdBlockOff.clear(); privateKeysToPage.clear(); privateDrmAnswers.clear()
+        }
 
         /** Deletes the private profile with all its cookies, storage and cache. Call only with no view using it. */
         @SuppressLint("RequiresFeature") // MULTI_PROFILE is checked via profilesSupported

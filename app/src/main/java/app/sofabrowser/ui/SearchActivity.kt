@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PorterDuff
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.StateListDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -46,6 +48,10 @@ import kotlin.concurrent.thread
 /**
  * Address and search entry. Returns the URL to open in [EXTRA_URL]. Suggestions come from local bookmarks and
  * history; remote suggestions are opt-in and go straight to the chosen engine.
+ *
+ * Until something is typed, the open tabs ([OpenTabs]) show under the field, as pictures of their pages, like a
+ * phone browser's tab switcher: OK on one goes to it ([EXTRA_TAB]), its X closes it ([EXTRA_CLOSED_TABS], in every
+ * result), and the last card opens a new tab ([EXTRA_NEW_TAB]).
  */
 class SearchActivity : Activity() {
 
@@ -53,6 +59,9 @@ class SearchActivity : Activity() {
     private lateinit var field: EditText
     private lateinit var engineLabel: TextView
     private lateinit var list: LinearLayout
+    private lateinit var tabsBox: LinearLayout
+    private val tabs = OpenTabs.list.toMutableList()
+    private val closedTabs = ArrayList<Long>()
     private val handler = Handler(Looper.getMainLooper())
     private val privateMode by lazy { intent.getBooleanExtra(EXTRA_PRIVATE, false) }
     private var typedSite: String? = null
@@ -143,8 +152,16 @@ class SearchActivity : Activity() {
         root.addView(bar)
 
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 24.px, 0, 48.px) }
-        root.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(list) },
+        tabsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; clipChildren = false; clipToPadding = false }
+        val below = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            clipChildren = false
+            addView(list)
+            addView(tabsBox)
+        }
+        root.addView(FocusScrollView(this, 48.px).apply { isVerticalScrollBarEnabled = false; clipChildren = false; addView(below) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        showTabs()
         setContentView(root)
 
         updateEngineLabel()
@@ -214,13 +231,151 @@ class SearchActivity : Activity() {
     private fun submit(text: String) {
         val url = UrlInput.resolve(text, prefs.searchEngine, searchShortcuts(this))
         if (url.isEmpty()) return
-        setResult(RESULT_OK, Intent().putExtra(EXTRA_URL, url))
+        setResult(RESULT_OK, result().putExtra(EXTRA_URL, url))
         finish()
+    }
+
+    /** A result, with the tabs closed here, whatever else it says. */
+    private fun result() = Intent().putExtra(EXTRA_CLOSED_TABS, closedTabs.toLongArray())
+
+    // ---- The open tabs, under the field until something is typed ----
+
+    private fun showTabs() {
+        tabsBox.removeAllViews()
+        if (tabs.isEmpty()) return
+        tabsBox.addView(Ui.text(this, 26, Ui.p.textMid).apply {
+            text = getString(R.string.open_tabs)
+            setPadding(8.px, 32.px, 0, 20.px)
+        })
+        val cards: List<View> = tabs.map(::tabCard) + newTabCard()
+        cards.chunked(TAB_COLUMNS).forEach { row ->
+            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; clipChildren = false }
+            row.forEachIndexed { i, card ->
+                line.addView(card, LinearLayout.LayoutParams(0, TAB_CARD_HEIGHT.px, 1f).apply { if (i > 0) marginStart = 32.px })
+            }
+            // A short last row keeps its cards as wide as the others.
+            repeat(TAB_COLUMNS - row.size) { line.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f).apply { marginStart = 32.px }) }
+            tabsBox.addView(line, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 32.px })
+        }
+    }
+
+    /** A tab: its site and name over a picture of its page. The tab in view has an orange edge. */
+    private fun tabCard(t: OpenTabs.Tab): View {
+        val name = t.title.ifBlank { Browser.hostOf(t.url)?.removePrefix("www.").orEmpty() }.ifBlank { getString(R.string.new_tab) }
+        val card = cardFrame(t.current) { setResult(RESULT_OK, result().putExtra(EXTRA_TAB, t.id)); finish() }
+        card.contentDescription = name
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val head = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(18.px, 0, 72.px, 0)
+        }
+        head.addView(ImageView(this).apply { setImageDrawable(app.sofabrowser.data.Favicons.get(context).drawable(t.url, name, 64)) },
+            LinearLayout.LayoutParams(36.px, 36.px).apply { marginEnd = 16.px })
+        val title = Ui.text(this, 24, Ui.p.text).apply { text = name; maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+        head.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        Ui.focusScale(card) { has -> title.setTextColor(if (has) Ui.p.onFocus else Ui.p.text) }
+        column.addView(head, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, TAB_HEAD.px))
+        val picture = t.thumbnail
+        column.addView(if (picture != null) ImageView(this).apply {
+            setImageBitmap(picture)
+            scaleType = ImageView.ScaleType.MATRIX
+            // The top of the page, as wide as the card.
+            addOnLayoutChangeListener { v, l, _, r, _, _, _, _, _ ->
+                val k = (r - l).toFloat() / picture.width
+                (v as ImageView).imageMatrix = android.graphics.Matrix().apply { setScale(k, k) }
+            }
+        } else FrameLayout(this).apply {
+            setBackgroundColor(Ui.p.card)
+            addView(ImageView(context).apply { setImageResource(R.drawable.ic_sofa) }, FrameLayout.LayoutParams(96.px, 96.px, Gravity.CENTER))
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        card.addView(column, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // The X: up from the card, and only from it (moving about the cards never stops on one); down goes back to it.
+        val close = FrameLayout(this).apply {
+            id = View.generateViewId()
+            isFocusable = false
+            isClickable = true
+            contentDescription = getString(R.string.close_tab)
+            background = Ui.fillSelector(0, Ui.p.focus, 12)
+            val x = ImageView(context).apply { setImageResource(R.drawable.ic_close); setColorFilter(Ui.p.textMid, PorterDuff.Mode.SRC_IN) }
+            addView(x, FrameLayout.LayoutParams(32.px, 32.px, Gravity.CENTER))
+            setOnFocusChangeListener { v, has ->
+                x.setColorFilter(if (has) Ui.p.onFocus else Ui.p.textMid, PorterDuff.Mode.SRC_IN)
+                if (!has) v.isFocusable = false
+            }
+            setOnClickListener { closeTab(t) }
+        }
+        card.addView(close, FrameLayout.LayoutParams(52.px, 52.px, Gravity.TOP or Gravity.END).apply { setMargins(0, 6.px, 8.px, 0) })
+        card.id = View.generateViewId()
+        card.setOnKeyListener { _, code, e ->
+            if (code != KeyEvent.KEYCODE_DPAD_UP) return@setOnKeyListener false
+            if (e.action == KeyEvent.ACTION_DOWN) { close.isFocusable = true; close.requestFocus() }
+            true
+        }
+        close.nextFocusDownId = card.id
+        return card
+    }
+
+    /** The last card: a new tab, which opens on the home screen. */
+    private fun newTabCard(): View {
+        val card = cardFrame(false) { setResult(RESULT_OK, result().putExtra(EXTRA_NEW_TAB, true)); finish() }
+        card.contentDescription = getString(R.string.new_tab)
+        val icon = ImageView(this).apply { setImageResource(R.drawable.ic_new_tab); setColorFilter(Ui.p.textMid, PorterDuff.Mode.SRC_IN) }
+        val label = Ui.text(this, 26, Ui.p.textMid).apply { text = getString(R.string.new_tab); gravity = Gravity.CENTER }
+        card.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            addView(icon, LinearLayout.LayoutParams(64.px, 64.px).apply { bottomMargin = 16.px })
+            addView(label)
+        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        card.setOnFocusChangeListener { v, has ->
+            Ui.animateScale(v, if (has) 1.04f else 1f, has)
+            val c = if (has) Ui.p.onFocus else Ui.p.textMid
+            icon.setColorFilter(c, PorterDuff.Mode.SRC_IN)
+            label.setTextColor(c)
+        }
+        return card
+    }
+
+    private fun cardFrame(current: Boolean, onClick: () -> Unit) = FrameLayout(this).apply {
+        isFocusable = true
+        isClickable = true
+        setOnClickListener { onClick() }
+        background = StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), Ui.rounded(Ui.p.focus, 16))
+            addState(intArrayOf(), Ui.rounded(Ui.p.fill, 16))
+        }
+        // The picture keeps to the card's rounded corners, the ones its edge is drawn with.
+        outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: android.graphics.Outline) =
+                outline.setRoundRect(0, 0, view.width, view.height, 16.px.toFloat())
+        }
+        clipToOutline = true
+        foreground = StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), Ui.rounded(Color.TRANSPARENT, 16, Ui.p.focus, 6))
+            addState(intArrayOf(), if (current) Ui.rounded(Color.TRANSPARENT, 16, Ui.BRAND, 4) else ColorDrawable(Color.TRANSPARENT))
+        }
+        Ui.focusScale(this)
+    }
+
+    /** Closes [t] (when the search screen closes) and takes its card away; the focus goes to the card that takes its place. */
+    private fun closeTab(t: OpenTabs.Tab) {
+        val at = tabs.indexOf(t)
+        tabs.remove(t)
+        closedTabs += t.id
+        setResult(RESULT_CANCELED, result())
+        showTabs()
+        val cards = (0 until tabsBox.childCount).map { tabsBox.getChildAt(it) }.filterIsInstance<LinearLayout>()
+            .flatMap { line -> (0 until line.childCount).map { line.getChildAt(it) }.filter { it.isFocusable } }
+        (cards.getOrNull(at) ?: cards.lastOrNull())?.requestFocus() ?: field.requestFocus()
     }
 
     private fun suggest(text: String) {
         list.removeAllViews()
         val q = text.trim()
+        val typing = q.isNotEmpty() && q != prefill(intent.getStringExtra(EXTRA_CURRENT_URL))
+        // The tabs make way for what is typed.
+        tabsBox.visibility = if (typing) View.GONE else View.VISIBLE
         if (q.isEmpty() || q == intent.getStringExtra(EXTRA_CURRENT_URL)) return
         // The site OK would open gets its connection ready once the typing pauses, not for every half-typed address.
         if (!privateMode) {
@@ -266,7 +421,7 @@ class SearchActivity : Activity() {
     }.getOrDefault(emptyList())
 
     private fun open(url: String) {
-        setResult(RESULT_OK, Intent().putExtra(EXTRA_URL, url))
+        setResult(RESULT_OK, result().putExtra(EXTRA_URL, url))
         finish()
     }
 
@@ -414,7 +569,7 @@ class SearchActivity : Activity() {
         val onFind: ((String) -> Unit)? = page?.let {
             { text: String ->
                 dialog?.dismiss()
-                setResult(RESULT_OK, Intent().putExtra(EXTRA_FIND, text))
+                setResult(RESULT_OK, result().putExtra(EXTRA_FIND, text))
                 finish()
             }
         }
@@ -458,6 +613,14 @@ class SearchActivity : Activity() {
         const val EXTRA_VOICE = "voice"
         const val EXTRA_PHONE = "phone"
         const val EXTRA_PRIVATE = "private"
+        /** Returned: the tab chosen, the ones closed, or that a new tab is wanted. */
+        const val EXTRA_TAB = "tab"
+        const val EXTRA_CLOSED_TABS = "closed_tabs"
+        const val EXTRA_NEW_TAB = "new_tab"
+        private const val TAB_COLUMNS = 4
+        /** The first row of cards ends above where a TV's on-screen keyboard starts. */
+        private const val TAB_CARD_HEIGHT = 292
+        private const val TAB_HEAD = 64
         private const val REQ_VOICE = 1
         private const val REQ_MIC = 2
         private const val HALO_REST = 1.15f

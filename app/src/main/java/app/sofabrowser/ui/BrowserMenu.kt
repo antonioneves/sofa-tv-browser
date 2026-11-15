@@ -24,19 +24,24 @@ import app.sofabrowser.Space
  * the page beside the menu closes the whole menu. The focused bar button's name shows in a small label
  * beside it. Like BrowsHere's, the menu remembers the last button used and doesn't hide on its own.
  *
+ * At its foot are the open tabs ([TabStack]), with the button for a new tab above them: never more room than the
+ * bar's buttons leave, plus one empty place, so that many tabs stack up instead of crowding the buttons out.
+ *
  * Its dock button after More chooses how the bar lives: collapsed (the default), the bar is hidden until BACK or MENU
  * opens it over the page and it closes after an action; docked, it is part of the screen, always shown at the left
  * edge with the page laid out beside it, and the same keys only move the focus into it, and out again.
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar) {
 
-    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
+    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, NEW_TAB, CLOSE_TAB, ADBLOCK, ALLOW_ONCE, USER_AGENT, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
     interface Actions {
         fun onAddress()
         fun onAction(action: Action)
         /** OK held on [action]'s button; Translate answers it with its languages, Hide parts with an undo. */
         fun onActionHeld(action: Action)
+        /** OK on the tab [id], not the one in view. */
+        fun onTab(id: Long)
     }
 
     data class State(
@@ -71,25 +76,28 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         val pinned: Boolean,
         /** The bar is docked: always shown, with the page beside it. */
         val docked: Boolean = false,
+        /** The open tabs, in order, and the one in view. */
+        val tabs: List<TabStack.Tab> = emptyList(),
+        val currentTab: Long = -1,
     )
 
     private val buttons = LinkedHashMap<Action, LabeledIconButton>()
-    private lateinit var address: LabeledIconButton
+    private lateinit var tabStack: TabStack
+    /** Design pixels the bar's buttons take, each with the room to the next. */
+    private var reserved = 0
     /** The name of the focused button, floating beside it. */
     private lateinit var tip: TextView
     /** The label's box: the name, and under it, for the page's icon, the address. */
     private lateinit var tipBox: LinearLayout
     private lateinit var tipUrl: TextView
     private var tipFor: android.view.View? = null
-    private var siteName = ""
-    private var siteUrl = ""
     private lateinit var zoomLabel: TextView
     private lateinit var more: LabeledIconButton
     private lateinit var balloon: LinearLayout
     private lateinit var balloonList: LinearLayout
     private lateinit var balloonScroll: FocusScrollView
     private lateinit var balloonDrawable: BalloonDrawable
-    private val topRow = setOf(Action.HOME, Action.DOCK, Action.BACK, Action.FORWARD, Action.RELOAD)
+    private val topRow = setOf(Action.HOME, Action.DOCK, Action.BACK, Action.FORWARD, Action.RELOAD, Action.NEW_TAB)
     private var lastFocused = Action.HOME
 
     /** The bar, the balloon and the label, on a frame as big as the screen: in this dialog, or docked in the screen. */
@@ -159,11 +167,12 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             // In the bar the name shows beside the focused button; a balloon that is open makes way for another button.
             b.onFocused = b.onFocused.let { was -> { was?.invoke(); if (b !== more && balloonOpen) setBalloon(false); showTip(b) } }
             into.addView(b, LinearLayout.LayoutParams((BAR - 4).px, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                // The squares are smaller than they were, the spacing from one to the next is not.
-                bottomMargin = gap.px + (80 - BAR_SQUARE).px
+                bottomMargin = gap.px
             })
+            // Back and Forward count while hidden too: the tabs never take the room they come back to.
+            reserved += BAR_SQUARE + gap
         }
-        fun add(action: Action, icon: Int, label: Int, into: LinearLayout = list, gap: Int = 16) {
+        fun add(action: Action, icon: Int, label: Int, into: LinearLayout = list, gap: Int = GAP) {
             // In the bar the icons speak for themselves; in the balloon each action is a line with its name.
             val inList = into === list
             val b = LabeledIconButton(context, icon, context.getString(label), labelled = false, row = inList, square = BAR_SQUARE) { actions.onAction(action) }
@@ -173,11 +182,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         }
         // Home stays in reach with the balloon closed.
         // The sofa is Sofa's home: orange at rest, like on the start screen.
-        add(Action.HOME, R.drawable.ic_sofa, R.string.home, bar, 28)
+        add(Action.HOME, R.drawable.ic_sofa, R.string.home, bar, GROUP_GAP)
         buttons[Action.HOME]?.accent = Ui.BRAND
-        address = LabeledIconButton(context, R.drawable.ic_search, context.getString(R.string.search_hint), labelled = false, square = BAR_SQUARE) {
-            dismiss(); actions.onAddress()
-        }
         // More comes right after Home; the balloon opens beside it.
         more = LabeledIconButton(context, R.drawable.ic_more_widgets, context.getString(R.string.more_actions), labelled = false, square = BAR_SQUARE) {
             setBalloon(!balloonOpen, focusInside = true)
@@ -188,17 +194,35 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
                 setBalloon(true, focusInside = true); true
             } else false
         }
-        place(more, bar, 16)
+        place(more, bar, GAP)
         // How the bar lives: kept on screen with the page beside it, or collapsed until BACK or MENU opens it.
-        add(Action.DOCK, R.drawable.ic_dock_off, R.string.dock_off, bar, 28)
+        add(Action.DOCK, R.drawable.ic_dock_off, R.string.dock_off, bar, GROUP_GAP)
         // Moving about the page.
         add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, bar)
         add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar)
-        add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, bar, 28)
-        // The page's icon at the foot of the bar, the way to the address and the search: the bar is too slim to spell
-        // the address out, so it shows in the label while this button is focused.
+        add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, bar, GROUP_GAP)
+        // The tabs at the foot of the bar, under the button for a new one. The icon of the tab in view is the way to the
+        // address and the search: the bar is too slim to spell the address out, so it shows in the label while that
+        // icon is focused.
         bar.addView(android.view.View(context), LinearLayout.LayoutParams(1, 0, 1f))
-        place(address, bar, 0)
+        add(Action.NEW_TAB, R.drawable.ic_new_tab, R.string.new_tab, bar, GAP)
+        // An empty tab, where the next one goes.
+        buttons[Action.NEW_TAB]?.setFullIcon(R.drawable.ic_tab_new)
+        // Down from the new tab button goes to the first tab, which the stack's icons, drawn over each other, can't say.
+        buttons[Action.NEW_TAB]?.setOnKeyListener { _, keyCode, event ->
+            keyCode == KeyEvent.KEYCODE_DPAD_DOWN && (event.action != KeyEvent.ACTION_DOWN || tabStack.focusFirst())
+        }
+        tabStack = TabStack(context, BAR_SQUARE, BAR_SQUARE + TAB_GAP, limit = {
+            val h = bar.height.takeIf { it > 0 } ?: context.resources.displayMetrics.heightPixels
+            // Whatever the buttons and one more empty place leave.
+            h - bar.paddingTop - bar.paddingBottom - (reserved + BAR_SQUARE + GAP).px
+        }, onPick = { id ->
+            if (id == shownTab) { dismiss(); actions.onAddress() } else actions.onTab(id)
+        }, onFocused = { b ->
+            if (balloonOpen) setBalloon(false)
+            showTip(b)
+        })
+        bar.addView(tabStack, LinearLayout.LayoutParams(BAR.px, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         // Two groups. First the toggles: they change how the page or the site is shown, the balloon stays open and
         // the line shows the new state. Then the actions: each does one thing and closes the menu.
@@ -238,6 +262,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         // This page: look through it, hide parts, keep it.
         add(Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page)
         add(Action.HIDE_PARTS, R.drawable.ic_visibility_off, R.string.hide_parts)
+        add(Action.CLOSE_TAB, R.drawable.ic_close, R.string.close_tab)
         buttons[Action.HIDE_PARTS]?.setOnLongClickListener { actions.onActionHeld(Action.HIDE_PARTS); true }
         // A tile on the TV's home screen would show anyone what's in the private space.
         if (!Space.active) add(Action.TV_SHORTCUT, R.drawable.ic_tv, R.string.tv_shortcut)
@@ -351,7 +376,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         onLeave?.invoke()
     }
 
-    /** Shows [button]'s name beside it; the address button's is the page's address. */
+    /** Shows [button]'s name beside it; a tab's is its page's name and address. */
     private fun showTip(button: android.view.View) {
         // With the balloon open its lines are where the label would go.
         if (balloonOpen) return hideTip()
@@ -382,12 +407,9 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         tipBox.y = (at[1] - origin[1] + (button.height - tipBox.measuredHeight) / 2).coerceIn(8.px, maxOf(8.px, frame.height - tipBox.measuredHeight - 8.px)).toFloat()
     }
 
-    /** The page's icon names the site and gives its address; any other button just its name. */
+    /** A tab's icon names the site and gives its address; any other button just its name. */
     private fun fillTip(button: android.view.View) {
-        val name: CharSequence
-        val url: String
-        if (button === address && siteUrl.isNotEmpty()) { name = siteName; url = siteUrl }
-        else { name = button.contentDescription ?: ""; url = "" }
+        val (name, url) = tabStack.tipFor(button) ?: ((button.contentDescription ?: "").toString() to "")
         // Only when they changed: this runs on every layout pass, and setting the same text asks for another layout.
         if (tip.text.toString() != name.toString()) tip.text = name
         if (tipUrl.text.toString() != url) tipUrl.text = url
@@ -508,12 +530,15 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         balloonDrawable.tailY = (moreY - top).toFloat()
     }
 
+    /** The tab in view: OK on its icon opens the address and the search. */
+    private var shownTab = -1L
+
     fun update(s: State) {
-        if (!::address.isInitialized) return
-        address.setPicture(app.sofabrowser.data.Favicons.get(context).drawable(s.url, s.title.ifBlank { s.address }, 96))
-        address.contentDescription = s.address.ifEmpty { context.getString(R.string.search_hint) }
-        siteUrl = app.sofabrowser.browser.UrlInput.display(s.url)
-        siteName = s.title.ifBlank { app.sofabrowser.browser.Browser.hostOf(s.url)?.removePrefix("www.") ?: s.address }
+        if (!::tabStack.isInitialized) return
+        shownTab = s.currentTab
+        tabStack.set(s.tabs, s.currentTab)
+        // The label of a tab that just closed goes with it.
+        tipFor?.let { if (it.parent == null) hideTip() }
         buttons[Action.DOCK]?.set(if (s.docked) R.drawable.ic_dock_on else R.drawable.ic_dock_off,
             context.getString(if (s.docked) R.string.dock_on else R.string.dock_off))
         buttons[Action.ALLOW_ONCE]?.visibility = if (s.allowPending) android.view.View.VISIBLE else android.view.View.GONE
@@ -578,6 +603,10 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
 
         /** The focus square of the bar's buttons; it grows by a tenth when focused, and still leaves room to the bar's edges. */
         const val BAR_SQUARE = 68
+        /** Room under a bar button, and under the last one of a group of them; tabs sit closer still. */
+        const val GAP = 10
+        const val GROUP_GAP = 22
+        const val TAB_GAP = 6
         const val BALLOON = 470
         const val TAIL = 22
     }

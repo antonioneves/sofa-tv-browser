@@ -8,7 +8,7 @@ package app.sofabrowser.browser
  */
 object LinkMenu {
 
-    enum class Action { OPEN_ELSEWHERE, COPY_LINK, SHARE_LINK, DOWNLOAD_LINK, OPEN_IMAGE, DOWNLOAD_IMAGE, COPY_IMAGE, SHARE_IMAGE }
+    enum class Action { OPEN_NEW_TAB, OPEN_ELSEWHERE, COPY_LINK, SHARE_LINK, DOWNLOAD_LINK, OPEN_IMAGE, DOWNLOAD_IMAGE, COPY_IMAGE, SHARE_IMAGE }
 
     /** The menu for a hit test that found [link] (its address) and/or [image] (its source); empty when there is none. */
     fun actions(link: String?, image: String?): List<Action> = buildList {
@@ -17,6 +17,7 @@ object LinkMenu {
         if (l != null) {
             if (inPage(l)) add(Action.DOWNLOAD_LINK)
             else {
+                if (web(l)) add(Action.OPEN_NEW_TAB)
                 addAll(listOf(Action.OPEN_ELSEWHERE, Action.COPY_LINK, Action.SHARE_LINK))
                 if (web(l) && looksLikeFile(l)) add(Action.DOWNLOAD_LINK)
             }
