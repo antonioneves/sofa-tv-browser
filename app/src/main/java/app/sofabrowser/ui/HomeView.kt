@@ -56,6 +56,8 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         addView(rows)
     }
     val searchPill: View
+    /** The sofa in the top left corner. */
+    val sofa: ImageView
     private val privateButton: LabeledIconButton
     private val spaceButton: LabeledIconButton
     private val adBlockButton: LabeledIconButton
@@ -81,9 +83,10 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
             clipChildren = false
             clipToPadding = false
         }
-        top.addView(ImageView(context).apply {
-            setImageResource(R.drawable.ic_sofa)
-        }, LinearLayout.LayoutParams(64.px, 64.px).apply { marginEnd = 32.px; topMargin = 12.px })
+        // In SofaGlide's corner, where the search screen has it too: the sofa moves there from the menu bar.
+        sofa = ImageView(context).apply { setImageResource(R.drawable.ic_sofa) }
+        top.addView(sofa, LinearLayout.LayoutParams(SofaGlide.SIZE.px, SofaGlide.SIZE.px).apply {
+            marginEnd = 32.px; topMargin = (SofaGlide.CORNER_Y - 36).px })
 
         searchPill = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL

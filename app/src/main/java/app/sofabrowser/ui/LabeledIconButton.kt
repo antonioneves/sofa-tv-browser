@@ -146,6 +146,12 @@ class LabeledIconButton(context: Context, icon: Int, label: String, private val 
 
     private fun tint(focused: Boolean) { if (!plain) image.setColorFilter(if (focused) Ui.p.onFocus else accent ?: Ui.p.text) }
 
+    /** The icon, for the sofa to move from and into ([SofaGlide]). */
+    val icon: ImageView get() = image
+
+    /** The icon's colour as it shows now: null for a picture, which has its own. */
+    fun iconColor(): Int? = if (plain) null else if (hasFocus()) Ui.p.onFocus else accent ?: Ui.p.text
+
     companion object {
         const val WIDTH = 104
         const val LABEL_WIDTH = 320

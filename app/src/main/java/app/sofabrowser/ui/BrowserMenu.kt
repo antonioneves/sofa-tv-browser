@@ -219,7 +219,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             // Whatever the buttons and one more empty place leave.
             h - bar.paddingTop - bar.paddingBottom - (reserved + BAR_SQUARE + GAP).px
         }, onPick = { id ->
-            if (id == shownTab) { dismiss(); actions.onAddress() } else actions.onTab(id)
+            // The bar stays until the search screen comes: its sofa moves there from the Home button.
+            if (id == shownTab) actions.onAddress() else actions.onTab(id)
         }, onFocused = { b ->
             if (balloonOpen) setBalloon(false)
             showTip(b)
@@ -378,6 +379,19 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             KeyEvent.KEYCODE_DPAD_RIGHT -> if (focus !== more && !inBalloon(focus)) { if (down) dismiss(); return true }
         }
         return false
+    }
+
+    /** The sofa on the Home button as it shows, for it to move on to the next screen ([SofaGlide]); null with the bar out of sight. */
+    fun sofa(): SofaGlide.Spot? {
+        if (!shown) return null
+        val b = buttons[Action.HOME] ?: return null
+        return SofaGlide.spot(b.icon, b.iconColor())
+    }
+
+    /** The sofa of the screen being left moves into the Home button: the bar docked beside the page. */
+    fun sofaTo(activity: android.app.Activity, from: SofaGlide.Spot?) {
+        val b = buttons[Action.HOME] ?: return
+        SofaGlide.to(activity, from, b.icon) { b.iconColor() }
     }
 
     /** Closing a docked bar leaves it where it is, and gives the focus back to the page. */

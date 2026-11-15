@@ -85,6 +85,7 @@ import app.sofabrowser.downloads.Status as DownloadStatus
 import app.sofabrowser.player.PlayerChoices
 import app.sofabrowser.player.SofaPlayer
 import app.sofabrowser.ui.BrowserMenu
+import app.sofabrowser.ui.SofaGlide
 import app.sofabrowser.ui.DownloadsActivity
 import app.sofabrowser.ui.FindBar
 import app.sofabrowser.ui.PinActivity
@@ -330,16 +331,21 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     private fun showBrowser() {
+        // Leaving the home screen for a page beside the docked bar, the sofa moves from its corner into the bar.
+        val sofa = if (home.visibility == View.VISIBLE) SofaGlide.spot(home.sofa) else null
         home.visibility = View.GONE
         applyKeepAwake()
         browserLayer.visibility = View.VISIBLE
         syncDock()
+        menu?.takeIf { it.docked }?.sofaTo(this, sofa)
         cursor.speedLevel = prefs.cursorSpeed
         web?.onResume()
         web?.requestFocus()
     }
 
     private fun showHome() {
+        // The sofa moves from the menu bar's Home button to its corner of the home screen.
+        val sofa = menu?.sofa()
         menu?.dismiss()
         if (findBar.showing) closeFind()
         // Leaving a page for the home screen shouldn't leave its video playing behind it.
@@ -350,6 +356,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         applyKeepAwake()
         browserLayer.visibility = View.INVISIBLE
         syncDock()
+        SofaGlide.to(this, sofa, home.sofa)
         if (home.findFocus() == null) home.searchPill.requestFocus()
         Updater.showPending(this)
     }
@@ -1411,10 +1418,19 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     // Other screens
 
+    /** The sofa left in the corner for the search screen to come over ([SofaGlide.glide]): takes it away. */
+    private var leftSofa: (() -> Unit)? = null
+
     private fun startSearch(voice: Boolean, current: String?, phone: Boolean = false) {
         // The search screen shows the tabs, the one in view as it is now, without the menu over it.
         if (homeShown || !resumed) return openSearch(voice, current, phone)
-        afterMenu { captureThumbnail(currentTab) { openSearch(voice, current, phone) } }
+        // From the menu bar the sofa first moves to the corner the search screen has it in, and that screen fades in
+        // over it there.
+        val sofa = menu?.sofa()
+        afterMenu { captureThumbnail(currentTab) {
+            if (sofa == null || isFinishing) openSearch(voice, current, phone)
+            else leftSofa = SofaGlide.glide(this, sofa, SofaGlide.corner(this), null, keep = true) { openSearch(voice, current, phone) }
+        } }
     }
 
     private fun openSearch(voice: Boolean, current: String?, phone: Boolean) {
@@ -2579,6 +2595,9 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     override fun onStop() {
+        // The search screen covers the page now, with its own sofa where the moving one stopped.
+        leftSofa?.invoke()
+        leftSofa = null
         // Stopped while in picture-in-picture means its window was closed: no sound may go on playing.
         if (inPip) { VideoRelay.send(web, "pause"); web?.onPause() }
         // Out of sight (picture-in-picture keeps the activity started), Sofa Player lets go of its buffer and decoder:
