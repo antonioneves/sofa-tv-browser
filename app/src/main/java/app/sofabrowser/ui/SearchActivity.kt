@@ -300,8 +300,9 @@ class SearchActivity : Activity() {
     /** A tab: its site and name over a picture of its page. The tab in view has an orange edge. */
     private fun tabCard(t: OpenTabs.Tab): View {
         val name = t.title.ifBlank { Browser.hostOf(t.url)?.removePrefix("www.").orEmpty() }.ifBlank { getString(R.string.new_tab) }
-        val card = cardFrame(t.current && !inNewTab) { setResult(RESULT_OK, result().putExtra(EXTRA_TAB, t.id)); finish() }
+        val card = cardFrame(t.current && !inNewTab) { goTo(t) }
         card.contentDescription = name
+        card.setOnLongClickListener { tabMenu(t, name); true }
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val head = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -400,6 +401,53 @@ class SearchActivity : Activity() {
             addState(intArrayOf(), if (current) Ui.rounded(Color.TRANSPARENT, 16, Ui.BRAND, 4) else ColorDrawable(Color.TRANSPARENT))
         }
         Ui.focusScale(this)
+    }
+
+    private fun goTo(t: OpenTabs.Tab) {
+        setResult(RESULT_OK, result().putExtra(EXTRA_TAB, t.id))
+        finish()
+    }
+
+    /** Holding OK on a tab's card: what can be done with the tab, as for a home screen tile. */
+    private fun tabMenu(t: OpenTabs.Tab, name: String) {
+        val db = Db.get(this)
+        val web = Browser.isWebUrl(t.url)
+        val items = mutableListOf(TileMenu.Item(R.drawable.ic_open_in_new, R.string.open) { goTo(t) })
+        // A copy beside it, with its back and forward history, shown at once.
+        if (t.url.isNotEmpty()) items += TileMenu.Item(R.drawable.ic_tab_duplicate, R.string.duplicate_tab) {
+            setResult(RESULT_OK, result().putExtra(EXTRA_DUPLICATE_TAB, t.id))
+            finish()
+        }
+        if (web) {
+            val marked = db.isBookmarked(t.url)
+            items += TileMenu.Item(if (marked) R.drawable.ic_star_filled else R.drawable.ic_star,
+                if (marked) R.string.remove_bookmark else R.string.bookmark) {
+                // A pinned page is a bookmark: taking the bookmark away takes it out of Quick access too, and says so.
+                val wasPinned = db.isPinned(t.url)
+                if (marked) db.removeBookmark(t.url) else db.addBookmark(t.title, t.url)
+                toast(when { !marked -> R.string.bookmark_added; wasPinned -> R.string.bookmark_removed_pinned; else -> R.string.bookmark_removed })
+            }
+            val pinned = db.isPinned(t.url)
+            items += TileMenu.Item(if (pinned) R.drawable.ic_close else R.drawable.ic_add,
+                if (pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access) {
+                if (pinned) { db.unpin(t.url); toast(R.string.pin_removed) }
+                else { db.pin(t.title.ifBlank { UrlInput.display(t.url) }, t.url); toast(R.string.pinned) }
+            }
+        }
+        if (tabs.size > 1) items += TileMenu.Item(R.drawable.ic_tab_close_others, R.string.close_other_tabs) { closeOtherTabs(t) }
+        items += TileMenu.Item(R.drawable.ic_close, R.string.close_tab) { closeTab(t) }.danger()
+        TileMenu(this, app.sofabrowser.data.Site(0, name, t.url), items).show()
+    }
+
+    private fun toast(text: Int) = SofaToast.makeText(this, text, Toast.LENGTH_SHORT).show()
+
+    /** Closes every tab but [t] (when the search screen closes); the focus stays on its card. */
+    private fun closeOtherTabs(t: OpenTabs.Tab) {
+        tabs.filter { it !== t }.forEach { closedTabs += it.id }
+        tabs.retainAll { it === t }
+        setResult(RESULT_CANCELED, result())
+        showTabs()
+        cards().firstOrNull()?.requestFocus() ?: field.requestFocus()
     }
 
     /** Closes [t] (when the search screen closes) and takes its card away; the focus goes to the card that takes its place. */
@@ -671,6 +719,8 @@ class SearchActivity : Activity() {
         /** Returned: the tab chosen, the ones closed, or that a new tab is wanted (with [EXTRA_URL]: to open it in). */
         const val EXTRA_TAB = "tab"
         const val EXTRA_CLOSED_TABS = "closed_tabs"
+        /** Returned: the tab to make a copy of, shown beside it. */
+        const val EXTRA_DUPLICATE_TAB = "duplicate_tab"
         const val EXTRA_NEW_TAB = "new_tab"
         private const val TAB_COLUMNS = 4
         /** The first row of cards ends above where a TV's on-screen keyboard starts. */

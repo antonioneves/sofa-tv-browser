@@ -469,6 +469,19 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         if (url != null) openUrl(url)
     }
 
+    /** Opens a copy of [source] right after it, with its back and forward history, and shows it. */
+    private fun duplicateTab(source: Tab) {
+        if (source.empty) return
+        val copy = Tab()
+        copy.pendingUrl = source.url
+        copy.pendingTitle = source.title
+        copy.savedState = source.browser.web?.let { w -> Bundle().also { w.saveState(it) } } ?: source.savedState?.let(::Bundle)
+        copy.zoomStep = source.zoomStep
+        copy.thumbnail = source.thumbnail
+        tabs.add(tabs.indexOf(source) + 1, copy)
+        switchTo(copy)
+    }
+
     /** Brings [tab] into view. The tab that was is put to rest, and closed when it had no page. */
     private fun switchTo(tab: Tab) {
         if (tab === currentTab || tab !in tabs) return
@@ -639,9 +652,10 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             .map { OpenTabs.Tab(it.id, it.url, it.title, it.thumbnail, it === currentTab) }
     }
 
-    /** What was done with the tabs in the search screen: tabs closed, then one chosen or a new one opened. */
+    /** What was done with the tabs in the search screen: tabs closed, then one copied, chosen or a new one opened. */
     private fun tabsChosen(data: Intent) {
         data.getLongArrayExtra(SearchActivity.EXTRA_CLOSED_TABS)?.forEach { id -> tabs.firstOrNull { it.id == id }?.let(::closeTab) }
+        tabs.firstOrNull { it.id == data.getLongExtra(SearchActivity.EXTRA_DUPLICATE_TAB, -1L) }?.let(::duplicateTab)
         val id = data.getLongExtra(SearchActivity.EXTRA_TAB, -1L)
         tabs.firstOrNull { it.id == id }?.let { t ->
             if (t !== currentTab) switchTo(t) else if (homeShown && !t.empty) showTabPage()

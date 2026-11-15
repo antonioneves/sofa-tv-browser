@@ -113,6 +113,9 @@
     <string name="new_tab">New tab</string>
     <string name="open_in_new_tab">Open in a new tab</string>
     <string name="close_tab">Close tab</string>
+    <string name="duplicate_tab">Duplicate tab</string>
+    <string name="close_other_tabs">Close other tabs</string>
+    <string name="remove_bookmark">Remove bookmark</string>
     <string name="open_tabs">Tabs</string>
     <string name="link_open_new_tab">Open in new tab</string>
     <string name="back">Back</string>
