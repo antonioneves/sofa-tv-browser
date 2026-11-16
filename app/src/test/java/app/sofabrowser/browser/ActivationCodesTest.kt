@@ -33,4 +33,12 @@ class ActivationCodesTest {
         assertNull(ActivationCodes.find(json("Go to example.com/activate to find out more"), "https://example.org/"))
         assertNull(ActivationCodes.find("null", null))
     }
+
+    @Test
+    fun knownSitesHaveAnAddress() {
+        assertEquals("https://www.youtube.com/activate", ActivationCodes.siteAddress("www.youtube.com"))
+        assertEquals("https://www.netflix.com/tv8", ActivationCodes.siteAddress("netflix.com"))
+        assertNull(ActivationCodes.siteAddress("notyoutube.com"))
+        assertNull(ActivationCodes.siteAddress(null))
+    }
 }

@@ -531,6 +531,7 @@
     <string name="activation_title">Sign in with your phone</string>
     <string name="activation_step_scan">Scan this with your phone, and sign in there if it asks</string>
     <string name="activation_step_code">Enter the code %1$s</string>
+    <string name="activation_step_code_page">Enter the code this page shows</string>
     <string name="activation_step_done">This page signs in by itself</string>
     <string name="activation_or_open">Or open this address on your phone</string>
 </resources>

@@ -29,6 +29,7 @@ called Sofa.
   **typing from your phone** on a small page Sofa serves on your home network.
 - **Sign in with your phone**: pages that show a code to enter on another device (YouTube, Netflix and the like) get
   a QR code to their activation address, so your phone and its password manager do the signing in.
+  On a known site you can also open More, "Sign in with your phone", to get the QR for its activation address any time.
 - **Clear site data** from the menu: signs you out of one site without touching the others.
 - **Dark and Light themes.**
 

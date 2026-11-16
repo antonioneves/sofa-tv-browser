@@ -997,6 +997,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             loading = loading,
             bookmarked = url.isNotEmpty() && db.isBookmarked(url),
             adBlockEnabled = prefs.adBlock,
+            phoneSignIn = ActivationCodes.siteAddress(host) != null,
             adBlockOn = prefs.adBlock && (host == null || !browser.adBlockOff(host)),
             blocked = browser.adBlocker.blockedCount,
             desktop = browser.userAgentMode(url) != "mobile",
@@ -1141,6 +1142,10 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 browser.setAdBlockOff(host, allowed)
                 toast(if (allowed) R.string.adblock_site_disabled else R.string.adblock_site_enabled)
                 browser.reload()
+            }
+            BrowserMenu.Action.PHONE_SIGNIN -> ActivationCodes.siteAddress(host)?.let {
+                menu?.dismiss()
+                showActivation(ActivationCodes.Activation(it, ""))
             }
             BrowserMenu.Action.USER_AGENT -> pickUserAgent()
             BrowserMenu.Action.CLEAR_SITE -> if (host != null && Browser.isWebUrl(url)) {
@@ -1884,7 +1889,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         activationDialog = dialog()
             .setTitle(R.string.activation_title)
             .setView(PhoneCard.view(this, found.address,
-                listOf(getString(R.string.activation_step_scan), getString(R.string.activation_step_code, found.code), getString(R.string.activation_step_done)),
+                listOf(getString(R.string.activation_step_scan), if (found.code.isEmpty()) getString(R.string.activation_step_code_page) else getString(R.string.activation_step_code, found.code), getString(R.string.activation_step_done)),
                 getString(R.string.activation_or_open)))
             .setCloseIcon()
             .show()

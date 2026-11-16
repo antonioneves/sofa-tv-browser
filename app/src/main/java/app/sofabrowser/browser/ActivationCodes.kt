@@ -7,6 +7,25 @@ package app.sofabrowser.browser
  */
 object ActivationCodes {
 
+    /** Sites with a phone sign-in at a known address, by the end of their host name. */
+    private val SITES = listOf(
+        "youtube.com" to "https://www.youtube.com/activate",
+        "netflix.com" to "https://www.netflix.com/tv8",
+        "disneyplus.com" to "https://www.disneyplus.com/begin",
+        "hulu.com" to "https://www.hulu.com/activate",
+        "paramountplus.com" to "https://www.paramountplus.com/activate",
+        "primevideo.com" to "https://www.primevideo.com/mytv",
+        "amazon.com" to "https://www.amazon.com/code",
+        "twitch.tv" to "https://www.twitch.tv/activate",
+        "plex.tv" to "https://plex.tv/link",
+    )
+
+    /** Where a phone approves a TV's sign-in to [host], or null for a site without one on the list. */
+    fun siteAddress(host: String?): String? {
+        val h = host?.lowercase() ?: return null
+        return SITES.firstOrNull { (suffix, _) -> h == suffix || h.endsWith(".$suffix") }?.second
+    }
+
     /** The page's visible text, as a JSON string; the start is enough, the code is near the top. */
     const val TEXT_SCRIPT = "(document.body ? document.body.innerText : '').slice(0, 8000)"
 
