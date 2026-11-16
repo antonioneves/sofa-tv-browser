@@ -41,8 +41,8 @@ import app.sofabrowser.browser.UrlInput
 import app.sofabrowser.browser.WatchTarget
 import app.sofabrowser.browser.WebViews
 import app.sofabrowser.data.Db
+import app.sofabrowser.dns.CustomDns
 import app.sofabrowser.dns.DnsProviders
-import app.sofabrowser.dns.DohEndpoint
 import app.sofabrowser.dns.SecureDns
 import app.sofabrowser.data.Favicons
 import app.sofabrowser.data.HistoryRetention
@@ -861,19 +861,25 @@ class SettingsActivity : Activity() {
         }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 16.px; bottomMargin = 16.px })
     }
 
-    /** A choice's short name: the provider, or the custom address's host; null for the device DNS. */
+    /** A choice's short name: the provider, or the custom address's host or IP address; null for the device DNS. */
     private fun dnsName(choice: String): String? = when {
         choice.isEmpty() -> null
-        DnsProviders.isCustom(choice) -> android.net.Uri.parse(choice).host ?: choice
-        else -> DnsProviders.byId(choice)?.name
+        else -> CustomDns.parse(choice)?.name ?: DnsProviders.byId(choice)?.name
     }
 
-    /** What a choice does and its privacy tier, for the line under it. */
+    /** What a choice does and its privacy tier, or for an address typed in, whether its lookups are encrypted. */
     private fun dnsDetail(choice: String): String? = when {
         choice.isEmpty() -> null
-        DnsProviders.isCustom(choice) -> getString(R.string.dns_custom)
-        else -> DnsProviders.byId(choice)?.let { getString(R.string.filter_list_sub, getString(it.variant), getString(it.tier.label)) }
+        else -> CustomDns.parse(choice)?.let { getString(R.string.filter_list_sub, getString(R.string.dns_custom), dnsKind(it)) }
+            ?: DnsProviders.byId(choice)?.let { getString(R.string.filter_list_sub, getString(it.variant), getString(it.tier.label)) }
     }
+
+    /** What an address typed in protects, in plain words. */
+    private fun dnsKind(dns: CustomDns) = getString(when (dns.kind) {
+        CustomDns.Kind.HTTPS -> R.string.dns_kind_https
+        CustomDns.Kind.TLS -> R.string.dns_kind_tls
+        CustomDns.Kind.PLAIN -> R.string.dns_kind_plain
+    })
 
     private fun dnsValue() = dnsName(prefs.dnsMain) ?: getString(R.string.dns_device)
 
@@ -924,9 +930,10 @@ class SettingsActivity : Activity() {
             }
         }
         section(R.string.dns_custom)
-        val custom = DnsProviders.isCustom(current)
-        choice(getString(R.string.dns_custom), if (custom) current else getString(R.string.dns_custom_sub), current, isCurrent = custom) {
-            enterDnsAddress(fallback, if (custom) current else "https://")
+        val custom = CustomDns.parse(current)
+        choice(getString(R.string.dns_custom), custom?.let { getString(R.string.filter_list_sub, it.text, dnsKind(it)) } ?: getString(R.string.dns_custom_sub),
+            current, isCurrent = custom != null) {
+            enterDnsAddress(fallback, custom?.text ?: "")
         }
         (selected ?: first).requestFocus()
     }
@@ -937,13 +944,15 @@ class SettingsActivity : Activity() {
         val field = EditText(this).apply {
             setText(current)
             setSelection(text.length)
+            // Empty for a new address: it may start three ways, so no prefix to delete first.
+            setHint(R.string.dns_custom_hint)
             isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         }
         dialog().setTitle(R.string.dns_custom).setMessage(R.string.dns_custom_message).setView(padded(field))
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                val typed = field.text.toString().trim().removePrefix("https://https://").let { if ("://" in it) it else "https://$it" }
-                if (runCatching { DohEndpoint(typed) }.isSuccess) chooseDns(fallback, typed)
+                val typed = CustomDns.fromTyped(field.text.toString())
+                if (typed != null) chooseDns(fallback, typed.text)
                 else SofaToast.makeText(this, R.string.dns_custom_invalid, Toast.LENGTH_LONG).show()
             }
             .setNegativeButton(android.R.string.cancel, null).show()
