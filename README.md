@@ -30,7 +30,7 @@ called Sofa.
 - **Sign in with your phone**: pages that show a code to enter on another device (YouTube, Netflix and the like) get
   a QR code to their activation address, so your phone and its password manager do the signing in.
   On a known site you can also open More, "Sign in with your phone", to get the QR for its activation address any time.
-- **Type your sign-in on your phone**: when a page shows a sign-in form, More has "Type your sign-in on your phone". A QR code opens a small page on your phone for the user name and password; they are scrambled on the phone (the key is in the QR code's part after "#", which a browser never sends) and filled into the form on the TV, so nobody on your network can read them. The page is plain HTTP, so a phone password manager may not offer to fill it.
+- **Type your sign-in on your phone**: when a page shows a sign-in form, a phone button appears in the sidebar (and the bottom bar); nothing is shown until you press it. A QR code opens a small page on your phone for the user name and password; they are scrambled on the phone (the key is in the QR code's part after "#", which a browser never sends) and filled into the form on the TV, so nobody on your network can read them. The page is plain HTTP, so a phone password manager may not offer to fill it.
 - **Clear site data** from the menu: signs you out of one site without touching the others.
 - **Dark and Light themes.**
 

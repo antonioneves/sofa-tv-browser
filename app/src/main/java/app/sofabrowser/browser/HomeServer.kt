@@ -19,7 +19,7 @@ import kotlin.concurrent.thread
  * under that key, one request at a time, and [handle] runs on its thread. Pages such as typing on the phone run it
  * only while their code is on screen.
  */
-class HomeServer(private val maxBody: Int, private val handle: (Request) -> Response) {
+class HomeServer(private val maxBody: Int, private val preferredPort: Int = 0, private val handle: (Request) -> Response) {
 
     /** [path] is what follows the key: "" for the page itself, or "/name". */
     class Request(val method: String, val path: String, val body: ByteArray)
@@ -40,7 +40,10 @@ class HomeServer(private val maxBody: Int, private val handle: (Request) -> Resp
     /** Starts serving; the address of the page, or null without a home network. */
     fun start(context: Context): String? {
         val address = lanAddress(context) ?: return null
-        val s = try { ServerSocket(0) } catch (_: IOException) { return null }
+        // A fixed port keeps the address the same from one time to the next (a busy one gives way to any free port).
+        val s = try { ServerSocket(preferredPort) } catch (_: IOException) {
+            try { ServerSocket(0) } catch (_: IOException) { return null }
+        }
         server = s
         thread(name = "home-server", isDaemon = true) {
             while (!s.isClosed) {

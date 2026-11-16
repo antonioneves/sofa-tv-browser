@@ -105,7 +105,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     private lateinit var balloonList: LinearLayout
     private lateinit var balloonScroll: FocusScrollView
     private lateinit var balloonDrawable: BalloonDrawable
-    private val topRow = setOf(Action.HOME, Action.DOCK, Action.BACK, Action.FORWARD, Action.RELOAD, Action.NEW_TAB)
+    private val topRow = setOf(Action.HOME, Action.DOCK, Action.BACK, Action.FORWARD, Action.RELOAD, Action.NEW_TAB, Action.PHONE_CREDENTIALS)
     private var lastFocused = Action.HOME
 
     /** The bar, the balloon and the label, on a frame as big as the screen: in this dialog, or docked in the screen. */
@@ -210,6 +210,9 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.RELOAD, R.drawable.ic_refresh, R.string.reload, bar)
         add(Action.BACK, R.drawable.ic_arrow_back, R.string.back, bar)
         add(Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, bar, GROUP_GAP)
+        // Only while the page shows a sign-in form: the way to type it on the phone.
+        add(Action.PHONE_CREDENTIALS, R.drawable.ic_smartphone, R.string.signin_phone_title, bar, GROUP_GAP)
+        buttons[Action.PHONE_CREDENTIALS]?.visibility = android.view.View.GONE
         // The tabs at the foot of the bar, under the button for a new one. The icon of the tab in view is the way to the
         // address and the search: the bar is too slim to spell the address out, so it shows in the label while that
         // icon is focused.
@@ -282,7 +285,6 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.DOWNLOADS, R.drawable.ic_download, R.string.downloads)
         // Asks which one, then closes the menu.
         add(Action.PHONE_SIGNIN, R.drawable.ic_smartphone, R.string.activation_title)
-        add(Action.PHONE_CREDENTIALS, R.drawable.ic_smartphone, R.string.signin_phone_title)
         add(Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent)
         add(Action.CLEAR_SITE, R.drawable.ic_delete, R.string.clear_site_data)
         add(Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode)
@@ -604,7 +606,10 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         buttons[Action.PIN]?.set(if (s.pinned) R.drawable.ic_close else R.drawable.ic_add,
             context.getString(if (s.pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access))
         buttons[Action.PHONE_SIGNIN]?.visibility = if (s.phoneSignIn) android.view.View.VISIBLE else android.view.View.GONE
-        buttons[Action.PHONE_CREDENTIALS]?.visibility = if (s.phoneCredentials) android.view.View.VISIBLE else android.view.View.GONE
+        buttons[Action.PHONE_CREDENTIALS]?.takeIf { (it.visibility == android.view.View.VISIBLE) != s.phoneCredentials }?.let {
+            if (!s.phoneCredentials && it.hasFocus()) buttons[Action.RELOAD]?.requestFocus()
+            it.visibility = if (s.phoneCredentials) android.view.View.VISIBLE else android.view.View.GONE
+        }
         buttons[Action.ADBLOCK]?.visibility = if (s.adBlockEnabled) android.view.View.VISIBLE else android.view.View.GONE
         buttons[Action.ADBLOCK]?.set(if (s.adBlockOn) R.drawable.ic_shield_filled else R.drawable.ic_shield,
             when {

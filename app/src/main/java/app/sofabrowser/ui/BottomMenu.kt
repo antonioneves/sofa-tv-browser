@@ -47,7 +47,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
     /** The room the bar's buttons take, Back and Forward while hidden too, so the tabs never take the room they come back to. */
     private var reserved = 0
     private val topRow = setOf(BrowserMenu.Action.HOME, BrowserMenu.Action.DOCK, BrowserMenu.Action.BACK, BrowserMenu.Action.FORWARD, BrowserMenu.Action.RELOAD,
-        BrowserMenu.Action.NEW_TAB)
+        BrowserMenu.Action.NEW_TAB, BrowserMenu.Action.PHONE_CREDENTIALS)
     private var lastFocused = BrowserMenu.Action.HOME
     private val prefs = Prefs(context)
     private var expanded = false
@@ -173,6 +173,9 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         add(BrowserMenu.Action.RELOAD, R.drawable.ic_refresh, R.string.reload, inBar = true)
         add(BrowserMenu.Action.BACK, R.drawable.ic_arrow_back, R.string.back, inBar = true)
         add(BrowserMenu.Action.FORWARD, R.drawable.ic_arrow_forward, R.string.forward, BrowserMenu.GROUP_GAP, inBar = true)
+        // Only while the page shows a sign-in form: the way to type it on the phone.
+        add(BrowserMenu.Action.PHONE_CREDENTIALS, R.drawable.ic_smartphone, R.string.signin_phone_title, BrowserMenu.GROUP_GAP, inBar = true)
+        buttons[BrowserMenu.Action.PHONE_CREDENTIALS]?.visibility = View.GONE
         // The tabs at the bar's right end, after the button for a new one, an empty tab where the next goes.
         bar.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
         add(BrowserMenu.Action.NEW_TAB, R.drawable.ic_tab_new, R.string.new_tab, GAP, inBar = true)
@@ -227,7 +230,6 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         // Shown only after a block, next to the shield it belongs with; the menu then opens with it focused.
         add(BrowserMenu.Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once, ROW_GAP)
         add(BrowserMenu.Action.PHONE_SIGNIN, R.drawable.ic_smartphone, R.string.activation_title, ROW_GAP)
-        add(BrowserMenu.Action.PHONE_CREDENTIALS, R.drawable.ic_smartphone, R.string.signin_phone_title, ROW_GAP)
         add(BrowserMenu.Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent, ROW_GAP)
         add(BrowserMenu.Action.CLEAR_SITE, R.drawable.ic_delete, R.string.clear_site_data, ROW_GAP)
         // How the remote moves about pages.
@@ -497,7 +499,10 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         buttons[BrowserMenu.Action.PIN]?.set(if (s.pinned) R.drawable.ic_close else R.drawable.ic_add,
             context.getString(if (s.pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access))
         buttons[BrowserMenu.Action.PHONE_SIGNIN]?.visibility = if (s.phoneSignIn) View.VISIBLE else View.GONE
-        buttons[BrowserMenu.Action.PHONE_CREDENTIALS]?.visibility = if (s.phoneCredentials) View.VISIBLE else View.GONE
+        buttons[BrowserMenu.Action.PHONE_CREDENTIALS]?.takeIf { (it.visibility == View.VISIBLE) != s.phoneCredentials }?.let {
+            if (!s.phoneCredentials && it.hasFocus()) buttons[BrowserMenu.Action.RELOAD]?.requestFocus()
+            it.visibility = if (s.phoneCredentials) View.VISIBLE else View.GONE
+        }
         buttons[BrowserMenu.Action.ADBLOCK]?.visibility = if (s.adBlockEnabled) View.VISIBLE else View.GONE
         buttons[BrowserMenu.Action.ADBLOCK]?.set(if (s.adBlockOn) R.drawable.ic_shield_filled else R.drawable.ic_shield,
             when {

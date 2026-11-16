@@ -14,12 +14,12 @@ import org.json.JSONObject
  * sent is scrambled on the phone and opened here (see [SecureText]); [onSignIn] gets it on the main thread, once.
  * The page asks for nothing but the two fields, and works only from the QR code, which carries the key.
  */
-class PhoneSignInLink(context: Context, private val onSignIn: (user: String, password: String) -> Unit) {
+class PhoneSignInLink(context: Context, private val site: String, private val onSignIn: (user: String, password: String) -> Unit) {
 
     private val secure = SecureText()
     private val main = Handler(Looper.getMainLooper())
-    private val words = Words(context)
-    private val server = HomeServer(MAX_BODY) { r ->
+    private val words = Words(context, site)
+    private val server = HomeServer(MAX_BODY, portFor(site)) { r ->
         when {
             r.path.isEmpty() && r.method == "GET" -> Response.html(page())
             r.path == "/send" && r.method == "POST" -> {
@@ -41,8 +41,8 @@ class PhoneSignInLink(context: Context, private val onSignIn: (user: String, pas
 
     fun stop() = server.stop()
 
-    private class Words(c: Context) {
-        val title = c.getString(R.string.signin_phone_page_title)
+    private class Words(c: Context, site: String) {
+        val title = c.getString(R.string.signin_phone_page_title, site)
         val user = c.getString(R.string.signin_phone_user)
         val password = c.getString(R.string.signin_phone_password)
         val send = c.getString(R.string.signin_phone_send)
@@ -69,9 +69,9 @@ button { display: block; width: 100%; font: inherit; font-weight: 500; padding: 
 #note { margin: 16px 4px 0; color: ${css(p.textMid)}; }
 </style></head>
 <body><main><h1>${esc(words.title)}</h1>
-<form id="f" autocomplete="on">
-<input name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" placeholder="${esc(words.user)}">
-<input name="password" type="password" autocomplete="current-password" placeholder="${esc(words.password)}">
+<form id="f" name="${esc(site)}" autocomplete="on">
+<input name="username" id="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" placeholder="${esc(words.user)}">
+<input name="password" id="password" type="password" autocomplete="current-password" placeholder="${esc(words.password)}">
 <button type="submit">${esc(words.send)}</button>
 </form>
 <p id="note" role="status"></p>
@@ -97,8 +97,14 @@ f.onsubmit = function (e) {
     /** [s] as a JavaScript string inside the page's script. */
     private fun js(s: String) = JSONObject.quote(s).replace("</", "<\\/")
 
-    private companion object {
-        const val MAX_BODY = 16 * 1024
-        const val MAX_LENGTH = 512
+    companion object {
+        /**
+         * The same port for the same website, so the phone's password manager, which keeps logins by address, sees one
+         * address for each site and can save and suggest its sign-in (as long as the TV keeps its address).
+         */
+        fun portFor(site: String): Int = 20_000 + (site.lowercase().hashCode() and 0x7fffffff) % 10_000
+
+        private const val MAX_BODY = 16 * 1024
+        private const val MAX_LENGTH = 512
     }
 }

@@ -2556,7 +2556,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     /** A QR code to a page where the phone types a user name and password, sent scrambled and put in this form. */
     private fun typeSignInOnPhone(form: SignInPages.Form) {
         var card: SofaDialog? = null
-        val link = PhoneSignInLink(this) { user, password ->
+        val link = PhoneSignInLink(this, Browser.hostOf(form.origin)?.removePrefix("www.") ?: form.origin) { user, password ->
             card?.dismiss()
             if (SignInPages.origin(web?.url) == form.origin) form.fill(user, password)
         }
