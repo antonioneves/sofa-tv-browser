@@ -534,4 +534,13 @@
     <string name="activation_step_code_page">Enter the code this page shows</string>
     <string name="activation_step_done">This page signs in by itself</string>
     <string name="activation_or_open">Or open this address on your phone</string>
+    <string name="signin_phone_title">Type your sign-in on your phone</string>
+    <string name="signin_phone_page_title">Sofa sign-in</string>
+    <string name="signin_phone_user">User name or email</string>
+    <string name="signin_phone_password">Password</string>
+    <string name="signin_phone_send">Send to the TV</string>
+    <string name="signin_phone_sent">Sent. You can close this page.</string>
+    <string name="signin_phone_no_key">Scan the code on the TV to use this page: the code carries the key that keeps your password private.</string>
+    <string name="signin_phone_step_type">Type your user name and password there. They are scrambled on the phone before they leave it.</string>
+    <string name="signin_phone_step_done">They are filled in on this page, and sent only when you choose.</string>
 </resources>

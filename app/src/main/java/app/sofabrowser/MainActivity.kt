@@ -58,6 +58,7 @@ import app.sofabrowser.browser.GamePad
 import app.sofabrowser.browser.LinkMenu
 import app.sofabrowser.browser.PageDownloads
 import app.sofabrowser.browser.PhoneLink
+import app.sofabrowser.browser.PhoneSignInLink
 import app.sofabrowser.browser.PlayerRequest
 import app.sofabrowser.browser.Playlist
 import app.sofabrowser.browser.ProtectedMedia
@@ -998,6 +999,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             bookmarked = url.isNotEmpty() && db.isBookmarked(url),
             adBlockEnabled = prefs.adBlock,
             phoneSignIn = ActivationCodes.siteAddress(host) != null,
+            phoneCredentials = signInForm?.takeIf { SignInPages.origin(url) == it.origin } != null,
             adBlockOn = prefs.adBlock && (host == null || !browser.adBlockOff(host)),
             blocked = browser.adBlocker.blockedCount,
             desktop = browser.userAgentMode(url) != "mobile",
@@ -1142,6 +1144,10 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 browser.setAdBlockOff(host, allowed)
                 toast(if (allowed) R.string.adblock_site_disabled else R.string.adblock_site_enabled)
                 browser.reload()
+            }
+            BrowserMenu.Action.PHONE_CREDENTIALS -> signInForm?.let { form ->
+                menu?.dismiss()
+                typeSignInOnPhone(form)
             }
             BrowserMenu.Action.PHONE_SIGNIN -> ActivationCodes.siteAddress(host)?.let {
                 menu?.dismiss()
@@ -1532,6 +1538,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     // Browser events
 
     override fun onPageStarted(url: String) {
+        signInForm = null
         holdSignIn()
         if (findBar.showing) closeFind()
         loading = true
@@ -2542,8 +2549,33 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         else w.evaluateJavascript(SignInRejected.TEXT_SCRIPT) { if (!SignInRejected.matches(it)) show() }
     }
 
+    /** The sign-in form the page showed last, for typing it on the phone while the page is still there. */
+    private var signInForm: SignInPages.Form? = null
+    private var signInLink: PhoneSignInLink? = null
+
+    /** A QR code to a page where the phone types a user name and password, sent scrambled and put in this form. */
+    private fun typeSignInOnPhone(form: SignInPages.Form) {
+        var card: SofaDialog? = null
+        val link = PhoneSignInLink(this) { user, password ->
+            card?.dismiss()
+            if (SignInPages.origin(web?.url) == form.origin) form.fill(user, password)
+        }
+        val address = link.start(this) ?: return toast(R.string.phone_no_network)
+        signInLink?.stop()
+        signInLink = link
+        card = dialog()
+            .setTitle(R.string.signin_phone_title)
+            .setView(PhoneCard.view(this, address,
+                listOf(R.string.phone_step_scan, R.string.signin_phone_step_type, R.string.signin_phone_step_done).map(::getString),
+                getString(R.string.phone_or_open)))
+            .setCloseIcon()
+            .setOnDismissListener { link.stop(); if (signInLink === link) signInLink = null }
+            .show()
+    }
+
     /** Fills in nothing by itself: the user picks the sign-in, and it goes only to the page that asked, if still there. */
     override fun onSignInForm(form: SignInPages.Form) {
+        signInForm = form
         // The form is back after a password was sent from it: the site turned it down, so it isn't offered.
         if (sentSignIn?.origin == form.origin) {
             sentSignIn = null

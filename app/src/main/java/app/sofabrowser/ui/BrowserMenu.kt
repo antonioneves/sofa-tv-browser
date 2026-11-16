@@ -33,7 +33,7 @@ import app.sofabrowser.Space
  */
 class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar), PageMenu {
 
-    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, NEW_TAB, CLOSE_TAB, ADBLOCK, ALLOW_ONCE, PHONE_SIGNIN, USER_AGENT, CLEAR_SITE, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
+    enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, NEW_TAB, CLOSE_TAB, ADBLOCK, ALLOW_ONCE, PHONE_SIGNIN, PHONE_CREDENTIALS, USER_AGENT, CLEAR_SITE, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
     interface Actions {
         fun onAddress()
@@ -57,6 +57,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         val adBlockEnabled: Boolean,
         /** The site has a sign-in that a phone can approve (a code to enter at an address). */
         val phoneSignIn: Boolean,
+        /** The page shows a sign-in form that the phone can type into. */
+        val phoneCredentials: Boolean,
         val adBlockOn: Boolean,
         /** Requests, pop-ups and redirects blocked on this page. */
         val blocked: Int,
@@ -280,6 +282,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         add(Action.DOWNLOADS, R.drawable.ic_download, R.string.downloads)
         // Asks which one, then closes the menu.
         add(Action.PHONE_SIGNIN, R.drawable.ic_smartphone, R.string.activation_title)
+        add(Action.PHONE_CREDENTIALS, R.drawable.ic_smartphone, R.string.signin_phone_title)
         add(Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent)
         add(Action.CLEAR_SITE, R.drawable.ic_delete, R.string.clear_site_data)
         add(Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode)
@@ -601,6 +604,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         buttons[Action.PIN]?.set(if (s.pinned) R.drawable.ic_close else R.drawable.ic_add,
             context.getString(if (s.pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access))
         buttons[Action.PHONE_SIGNIN]?.visibility = if (s.phoneSignIn) android.view.View.VISIBLE else android.view.View.GONE
+        buttons[Action.PHONE_CREDENTIALS]?.visibility = if (s.phoneCredentials) android.view.View.VISIBLE else android.view.View.GONE
         buttons[Action.ADBLOCK]?.visibility = if (s.adBlockEnabled) android.view.View.VISIBLE else android.view.View.GONE
         buttons[Action.ADBLOCK]?.set(if (s.adBlockOn) R.drawable.ic_shield_filled else R.drawable.ic_shield,
             when {

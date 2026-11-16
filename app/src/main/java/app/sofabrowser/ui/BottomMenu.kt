@@ -227,6 +227,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         // Shown only after a block, next to the shield it belongs with; the menu then opens with it focused.
         add(BrowserMenu.Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once, ROW_GAP)
         add(BrowserMenu.Action.PHONE_SIGNIN, R.drawable.ic_smartphone, R.string.activation_title, ROW_GAP)
+        add(BrowserMenu.Action.PHONE_CREDENTIALS, R.drawable.ic_smartphone, R.string.signin_phone_title, ROW_GAP)
         add(BrowserMenu.Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent, ROW_GAP)
         add(BrowserMenu.Action.CLEAR_SITE, R.drawable.ic_delete, R.string.clear_site_data, ROW_GAP)
         // How the remote moves about pages.
@@ -496,6 +497,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         buttons[BrowserMenu.Action.PIN]?.set(if (s.pinned) R.drawable.ic_close else R.drawable.ic_add,
             context.getString(if (s.pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access))
         buttons[BrowserMenu.Action.PHONE_SIGNIN]?.visibility = if (s.phoneSignIn) View.VISIBLE else View.GONE
+        buttons[BrowserMenu.Action.PHONE_CREDENTIALS]?.visibility = if (s.phoneCredentials) View.VISIBLE else View.GONE
         buttons[BrowserMenu.Action.ADBLOCK]?.visibility = if (s.adBlockEnabled) View.VISIBLE else View.GONE
         buttons[BrowserMenu.Action.ADBLOCK]?.set(if (s.adBlockOn) R.drawable.ic_shield_filled else R.drawable.ic_shield,
             when {
