@@ -385,7 +385,7 @@
     <string name="most_visited_setting">Most visited on home</string>
     <string name="most_visited_setting_sub">Worked out on this device from your history</string>
     <string name="adblock_setting">Block ads and trackers</string>
-    <string name="adblock_setting_sub">Matched on this device against filter lists</string>
+    <string name="adblock_setting_sub">Matched on this device against filter lists. Turning it off hides the ad blocker\'s options and buttons.</string>
     <string name="filter_lists">Filter lists</string>
     <string name="stronger_adblock">Stronger ad blocking</string>
     <string name="stronger_adblock_sub">Adds EasyList and EasyPrivacy: more ads, trackers and pop-ups blocked, and the empty boxes ads leave hidden. Uses about 4 MB more memory; best with automatic list updates.</string>

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Turn the ad blocker off for good**: Settings, Privacy and security, "Block ads and trackers", off hides everything about the ad blocker: Stronger ad blocking, the automatic list updates and Filter lists in Settings, the shield button on the home screen, the Ad block item in the page menu, the ad-block entries in Site settings and the ad-block questions in first-run setup. Nothing is blocked or updated while it is off; turning it back on brings it all back as it was.
 - **README**: the feature list now has tabs, reader view, translation, typing from your phone and Clear site data, and the pop-up line says why they are blocked.
 - **Clear site data**: More has "Clear site data". After you confirm, it deletes the cookies and storage of the site in view (local storage, databases, caches and service workers), which signs you out of it, and loads the page again. The site's history, bookmarks and settings are kept. Newer WebViews delete everything the site stored, its subdomains included; older ones delete the cookies the page can see and the page's own storage.
 - **A quicker home screen and search screen**: Most visited is worked out in the background after each visit, so the home screen no longer reads a month of history before it shows. The history suggestions under the search field are read in the background as you type, too.

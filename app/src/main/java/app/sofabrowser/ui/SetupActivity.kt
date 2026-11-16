@@ -42,7 +42,7 @@ class SetupActivity : Activity() {
         // Before the list question, which then covers the two new lists too.
         offerStronger(this, prefs) -> askStronger()
         suggestListUpdates -> askSuggestedListUpdates()
-        !prefs.listUpdatesAsked -> askListUpdates()
+        prefs.adBlock && !prefs.listUpdatesAsked -> askListUpdates()
         else -> finish()
     }
 
@@ -205,11 +205,11 @@ class SetupActivity : Activity() {
     companion object {
         /** Whether a question is still unanswered, so Sofa opens this screen when it starts. */
         fun needed(context: android.content.Context, prefs: Prefs) =
-            !prefs.setupDone || Updater.offered(context) && !prefs.updatesAsked || offerStronger(context, prefs) || !prefs.listUpdatesAsked
+            !prefs.setupDone || Updater.offered(context) && !prefs.updatesAsked || offerStronger(context, prefs) || prefs.adBlock && !prefs.listUpdatesAsked
 
         /** Never offered, and never switched on in Settings in an earlier version (on now, or downloaded once). */
         private fun offerStronger(context: android.content.Context, prefs: Prefs) =
-            !prefs.strongerAsked && !AdBlocker.strongerChosen(context)
+            prefs.adBlock && !prefs.strongerAsked && !AdBlocker.strongerChosen(context)
 
         private const val COLUMNS = 4
         private const val CARD_WIDTH = 400

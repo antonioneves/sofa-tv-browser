@@ -89,6 +89,8 @@ Everything is matched on the TV; nothing about your browsing leaves it.
   kept that way.
 - **Per site:** the Ad block button in the menu switches all of this off for one site and shows how much was
   blocked on the page.
+- **Off completely:** "Block ads and trackers" in Settings turns the ad blocker off and hides its options and buttons
+  everywhere in the app (list settings, the home screen's shield, the page menu's Ad block, Site settings).
 
 ## Video
 

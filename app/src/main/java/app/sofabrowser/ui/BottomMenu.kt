@@ -494,6 +494,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
             }))
         buttons[BrowserMenu.Action.PIN]?.set(if (s.pinned) R.drawable.ic_close else R.drawable.ic_add,
             context.getString(if (s.pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access))
+        buttons[BrowserMenu.Action.ADBLOCK]?.visibility = if (s.adBlockEnabled) View.VISIBLE else View.GONE
         buttons[BrowserMenu.Action.ADBLOCK]?.set(if (s.adBlockOn) R.drawable.ic_shield_filled else R.drawable.ic_shield,
             when {
                 !s.adBlockOn -> context.getString(R.string.adblock_site_off)

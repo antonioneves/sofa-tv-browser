@@ -61,6 +61,7 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
     private val privateButton: LabeledIconButton
     private val spaceButton: LabeledIconButton
     private val adBlockButton: LabeledIconButton
+    private val settingsButton: LabeledIconButton
     private val downloadsButton: LabeledIconButton
     private val micButton: LabeledIconButton
     private val phoneButton: LabeledIconButton
@@ -126,13 +127,14 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         }
         adBlockButton = button(R.drawable.ic_shield, R.string.ad_blocker) { listener.onToggleAdBlock() }
         downloadsButton = button(R.drawable.ic_download, R.string.downloads) { listener.onDownloads() }
+        settingsButton = button(R.drawable.ic_settings, R.string.settings) { listener.onSettings() }
         listOf(
             button(R.drawable.ic_history, R.string.history) { listener.onHistory() },
             downloadsButton,
             privateButton,
             spaceButton,
             adBlockButton,
-            button(R.drawable.ic_settings, R.string.settings) { listener.onSettings() },
+            settingsButton,
         ).forEach { top.addView(it, params(12)) }
 
         column.addView(top)
@@ -155,6 +157,9 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         spaceButton.visibility = if (app.sofabrowser.Space.offered(context)) VISIBLE else GONE
         privateButton.set(if (privateMode) R.drawable.ic_private_filled else R.drawable.ic_private,
             context.getString(if (privateMode) R.string.private_mode_on else R.string.private_mode_off))
+        // Off in Settings hides the button; one that just turned it off hands its focus to Settings.
+        if (!adBlock && adBlockButton.hasFocus()) settingsButton.requestFocus()
+        adBlockButton.visibility = if (adBlock) VISIBLE else GONE
         adBlockButton.set(if (adBlock) R.drawable.ic_shield_filled else R.drawable.ic_shield,
             context.getString(if (adBlock) R.string.adblock_on_short else R.string.adblock_off_short))
         setDownloadsActive(app.sofabrowser.downloads.DownloadEngine.activeCount > 0)

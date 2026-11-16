@@ -194,12 +194,16 @@ class SettingsActivity : Activity() {
         nav(R.string.bookmarks_transfer_title, null) { transfer.start() }
 
         section(R.string.section_privacy)
-        switch(R.string.adblock_setting, R.string.adblock_setting_sub, prefs::adBlock)
+        // Off hides the ad blocker's other options here, its buttons on the home screen and its button in the menu.
+        switch(R.string.adblock_setting, R.string.adblock_setting_sub, prefs::adBlock) { build() }
 
-        strongerRow()
-        switch(R.string.auto_update_lists, R.string.auto_update_lists_sub, prefs::autoUpdateLists) { on -> listUpdatesChanged(on) }
-        listsRow = nav(R.string.filter_lists, rulesText(blocker.rules.rules)) {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra(PAGE, PAGE_LISTS))
+        listsRow = null
+        if (prefs.adBlock) {
+            strongerRow()
+            switch(R.string.auto_update_lists, R.string.auto_update_lists_sub, prefs::autoUpdateLists) { on -> listUpdatesChanged(on) }
+            listsRow = nav(R.string.filter_lists, rulesText(blocker.rules.rules)) {
+                startActivity(Intent(this, SettingsActivity::class.java).putExtra(PAGE, PAGE_LISTS))
+            }
         }
         switch(R.string.cookies, R.string.cookies_sub, prefs::cookies, confirmOff = R.string.cookies_confirm)
         switch(R.string.third_party_cookies, R.string.third_party_cookies_sub, prefs::blockThirdPartyCookies)
@@ -569,7 +573,8 @@ class SettingsActivity : Activity() {
         // Rebuilt after a site is reset: focus stays where it was, on the next site.
         val focused = list.indexOfChild(list.focusedChild)
         list.removeAllViews()
-        val sites = siteChoices(this)
+        // With the ad blocker off, a site that only has its ad blocking switched off has nothing to show.
+        val sites = siteChoices(this).filter { prefs.adBlock || siteSummary(it).isNotEmpty() }
         pageTitle(R.string.site_settings, getString(if (sites.isEmpty()) R.string.site_settings_none else R.string.site_settings_intro))
         sites.forEach { s -> row(s.site, siteSummary(s), null) { resetSite(s) } }
         if (sites.size > 1) row(getString(R.string.site_settings_reset_all), null, null) {
@@ -586,7 +591,7 @@ class SettingsActivity : Activity() {
             val names = resources.getStringArray(R.array.user_agents)
             getString(R.string.site_browse_as, names[Prefs.UA_MODES.indexOf(mode).coerceAtLeast(0)].removeSuffix("…"))
         },
-        if (s.adBlockOff) getString(R.string.site_adblock_off) else null,
+        if (s.adBlockOff && prefs.adBlock) getString(R.string.site_adblock_off) else null,
         if (s.keysToPage) getString(R.string.site_keys_to_page) else null,
         s.hidden.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.site_hidden, it, it) },
     ).joinToString(getString(R.string.site_settings_separator))

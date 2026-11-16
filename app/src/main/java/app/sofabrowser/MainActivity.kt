@@ -995,6 +995,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             canGoForward = web?.canGoForward() == true,
             loading = loading,
             bookmarked = url.isNotEmpty() && db.isBookmarked(url),
+            adBlockEnabled = prefs.adBlock,
             adBlockOn = prefs.adBlock && (host == null || !browser.adBlockOff(host)),
             blocked = browser.adBlocker.blockedCount,
             desktop = browser.userAgentMode(url) != "mobile",
@@ -2683,7 +2684,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         tabs.forEach { it.browser.applySettings() }
         cursor.speedLevel = prefs.cursorSpeed
         // Cheap when nothing is due: it checks at most every few hours.
-        browser.adBlocker.refreshIfDue(prefs.autoUpdateLists)
+        if (prefs.adBlock) browser.adBlocker.refreshIfDue(prefs.autoUpdateLists)
         // While Sofa Player plays, the page stays at rest (swapIn), past a chooser or another screen.
         if (homeShown) home.refresh(prefs.privateMode, prefs.adBlock) else if (!nativeOn && !pageRested) web?.onResume()
         arrivedIntent?.let { arrived -> arrivedIntent = null; cursor.post { if (!isFinishing) handleIntent(arrived) } }

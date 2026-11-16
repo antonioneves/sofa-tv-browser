@@ -53,6 +53,8 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         val canGoForward: Boolean,
         val loading: Boolean,
         val bookmarked: Boolean,
+        /** The ad blocker is switched on in Settings; when it is off, its buttons are hidden everywhere. */
+        val adBlockEnabled: Boolean,
         val adBlockOn: Boolean,
         /** Requests, pop-ups and redirects blocked on this page. */
         val blocked: Int,
@@ -595,6 +597,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             }))
         buttons[Action.PIN]?.set(if (s.pinned) R.drawable.ic_close else R.drawable.ic_add,
             context.getString(if (s.pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access))
+        buttons[Action.ADBLOCK]?.visibility = if (s.adBlockEnabled) android.view.View.VISIBLE else android.view.View.GONE
         buttons[Action.ADBLOCK]?.set(if (s.adBlockOn) R.drawable.ic_shield_filled else R.drawable.ic_shield,
             when {
                 !s.adBlockOn -> context.getString(R.string.adblock_site_off)
