@@ -40,6 +40,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.webkit.WebViewFeature
 import app.sofabrowser.adblock.Sites
+import app.sofabrowser.browser.ActivationCodes
 import app.sofabrowser.browser.Browser
 import app.sofabrowser.browser.CrashLoop
 import app.sofabrowser.browser.Reader
@@ -1556,7 +1557,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         progress.visibility = View.GONE
         progress.scaleX = 0f
         menu?.takeIf { it.shown }?.update(menuState())
-        if (Browser.isWebUrl(url)) maybeAutoWatch(url)
+        if (Browser.isWebUrl(url)) { maybeAutoWatch(url); lookForActivation(url) }
         if (translateSite != null && translateUrl != url && Browser.hostOf(url)?.let(Sites::of) == translateSite) {
             translate(announce = announceTranslation)
         }
@@ -1856,6 +1857,38 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     /** The Watch that runs is Watch by itself's: no notices, and another look when nothing is found. */
     private var autoWatching = false
     private val autoWatchNext = Runnable { autoWatchTry() }
+
+    private var activationShown: String? = null
+    private var activationDialog: SofaDialog? = null
+
+    /**
+     * A page asking for a code to be entered on another device ("go to example.com/activate"): offers that address as a
+     * QR code, once per address, after the page has had time to show its code.
+     */
+    private fun lookForActivation(url: String) {
+        for (delay in longArrayOf(1500, 5000)) cursor.postDelayed({
+            val w = web ?: return@postDelayed
+            if (w.url != url || activationDialog?.isShowing == true) return@postDelayed
+            if (!started || homeShown || inPip || watching || fullscreen.visibility == View.VISIBLE) return@postDelayed
+            w.evaluateJavascript(ActivationCodes.TEXT_SCRIPT) { result ->
+                if (web !== w || w.url != url || activationDialog?.isShowing == true) return@evaluateJavascript
+                val found = ActivationCodes.find(result, url) ?: return@evaluateJavascript
+                if (found.address + found.code == activationShown) return@evaluateJavascript
+                activationShown = found.address + found.code
+                showActivation(found)
+            }
+        }, delay)
+    }
+
+    private fun showActivation(found: ActivationCodes.Activation) {
+        activationDialog = dialog()
+            .setTitle(R.string.activation_title)
+            .setView(PhoneCard.view(this, found.address,
+                listOf(getString(R.string.activation_step_scan), getString(R.string.activation_step_code, found.code), getString(R.string.activation_step_done)),
+                getString(R.string.activation_or_open)))
+            .setCloseIcon()
+            .show()
+    }
 
     private fun maybeAutoWatch(url: String) {
         if (url == autoWatchUrl || !WatchTarget.autoWatches(prefs.autoWatch, Browser.hostOf(url), prefs.autoWatchSites)) return

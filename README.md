@@ -27,6 +27,8 @@ called Sofa.
 - **Downloads** that pause, resume and carry on in the background.
 - **Tabs**, **reader view**, **translation** of the page (by Google's website translator, only when you ask), and
   **typing from your phone** on a small page Sofa serves on your home network.
+- **Sign in with your phone**: pages that show a code to enter on another device (YouTube, Netflix and the like) get
+  a QR code to their activation address, so your phone and its password manager do the signing in.
 - **Clear site data** from the menu: signs you out of one site without touching the others.
 - **Dark and Light themes.**
 
