@@ -551,7 +551,7 @@ object SiteAllowlist {
 
     private val privateSites: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
-    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = context.getSharedPreferences(Space.name(PREFS), Context.MODE_PRIVATE)
 
     fun contains(context: Context, host: String): Boolean =
         Sites.of(host.lowercase()).let { it in privateSites || prefs(context).contains(it) }
