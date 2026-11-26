@@ -30,8 +30,10 @@ import app.sofabrowser.Space
  * Its dock button after More chooses how the bar lives: collapsed (the default), the bar is hidden until BACK or MENU
  * opens it over the page and it closes after an action; docked, it is part of the screen, always shown at the left
  * edge with the page laid out beside it, and the same keys only move the focus into it, and out again.
+ *
+ * The balloon's actions and their order follow [layout] (Settings > Menu buttons).
  */
-class BrowserMenu(context: Context, private val actions: Actions) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar), PageMenu {
+class BrowserMenu(context: Context, private val actions: Actions, override val layout: MenuLayout) : Dialog(context, android.R.style.Theme_Translucent_NoTitleBar), PageMenu {
 
     enum class Action { HOME, WATCH, AUTO_WATCH, BACK, FORWARD, RELOAD, FIND, TRANSLATE, READER, HIDE_PARTS, BOOKMARK, PIN, TV_SHORTCUT, HISTORY, BOOKMARKS, DOWNLOADS, DOCK, NEW_TAB, CLOSE_TAB, ADBLOCK, ALLOW_ONCE, PHONE_SIGNIN, PHONE_CREDENTIALS, USER_AGENT, CLEAR_SITE, SCROLL, POINTER, ZOOM_OUT, ZOOM_IN, SETTINGS }
 
@@ -99,7 +101,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
     /** A picture of the page of a tab out of view, above its name. */
     private lateinit var tipPicture: android.widget.ImageView
     private var tipFor: android.view.View? = null
-    private lateinit var zoomLabel: TextView
+    private var zoomLabel: TextView? = null
     private lateinit var more: LabeledIconButton
     private lateinit var balloon: LinearLayout
     private lateinit var balloonList: LinearLayout
@@ -237,58 +239,45 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
         })
         bar.addView(tabStack, LinearLayout.LayoutParams(BAR.px, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // Two groups. First the toggles: they change how the page or the site is shown, the balloon stays open and
-        // the line shows the new state. Then the actions: each does one thing and closes the menu.
-        // Zoom first: out, the level, in, as wide as the balloon and as tall as the lines below, a third each.
+        // In the order chosen in Settings > Menu buttons; by default zoom, then the toggles, which change how the page
+        // or the site is shown and keep the balloon open, then the actions, which each do one thing and close the menu.
+        // Zoom: out, the level, in, as wide as the balloon and as tall as the lines below, a third each.
         fun zoomButton(action: Action, icon: Int, label: Int) =
             LabeledIconButton(context, icon, context.getString(label), labelled = false, row = true, iconOnly = true) { actions.onAction(action) }.also {
                 it.onFocused = { lastFocused = action; hideTip() }
                 buttons[action] = it
             }
-        zoomLabel = Ui.text(context, 24, Ui.p.textMid).apply { gravity = Gravity.CENTER; text = context.getString(R.string.percent, 100) }
-        list.addView(LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            clipChildren = false
-            addView(zoomButton(Action.ZOOM_OUT, R.drawable.ic_zoom_out, R.string.zoom_out), LinearLayout.LayoutParams(0, 64.px, 1f))
-            addView(zoomLabel, LinearLayout.LayoutParams(0, 64.px, 1f))
-            addView(zoomButton(Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in), LinearLayout.LayoutParams(0, 64.px, 1f))
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 2.px })
-        list.addView(android.view.View(context).apply { setBackgroundColor(Ui.p.fillFocused) },
+        fun line() = list.addView(android.view.View(context).apply { setBackgroundColor(Ui.p.fillFocused) },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2.px).apply { setMargins(8.px, 10.px, 8.px, 8.px) })
-        // Kept per site; not in private browsing, which saves none.
-        add(Action.AUTO_WATCH, R.drawable.ic_autoplay, R.string.auto_watch)
-        add(Action.TRANSLATE, R.drawable.ic_translate, R.string.translate)
+        for ((i, item) in layout.shown.withIndex()) when (item) {
+            MenuLayout.Item.ZOOM -> {
+                if (i > 0) line()
+                zoomLabel = Ui.text(context, 24, Ui.p.textMid).apply { gravity = Gravity.CENTER; text = context.getString(R.string.percent, 100) }
+                list.addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    clipChildren = false
+                    addView(zoomButton(Action.ZOOM_OUT, R.drawable.ic_zoom_out, R.string.zoom_out), LinearLayout.LayoutParams(0, 64.px, 1f))
+                    addView(zoomLabel, LinearLayout.LayoutParams(0, 64.px, 1f))
+                    addView(zoomButton(Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in), LinearLayout.LayoutParams(0, 64.px, 1f))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 2.px })
+                if (i < layout.shown.lastIndex) line()
+            }
+            // A tile on the TV's home screen would show anyone what's in the private space.
+            MenuLayout.Item.TV_SHORTCUT -> if (!Space.active) add(Action.TV_SHORTCUT, item.icon, item.label)
+            else -> {
+                add(Action.valueOf(item.name), item.icon, item.label)
+                // Shown only after a block, next to the shield it belongs with; the menu then opens with it focused.
+                if (item == MenuLayout.Item.ADBLOCK) add(Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once)
+            }
+        }
+        // With the shield hidden, "Allow once" goes first.
+        if (Action.ALLOW_ONCE !in buttons) {
+            add(Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once)
+            buttons[Action.ALLOW_ONCE]?.let { list.removeView(it); list.addView(it, 0, it.layoutParams) }
+        }
         buttons[Action.TRANSLATE]?.setOnLongClickListener { actions.onActionHeld(Action.TRANSLATE); true }
-        add(Action.READER, R.drawable.ic_article, R.string.reader_view)
-        add(Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark)
-        add(Action.PIN, R.drawable.ic_add, R.string.add_to_quick_access)
-        // How this site is shown, and how the remote moves about it.
-        add(Action.ADBLOCK, R.drawable.ic_shield, R.string.adblock_site)
-        add(Action.POINTER, R.drawable.ic_mouse, R.string.pointer)
-        list.addView(android.view.View(context).apply { setBackgroundColor(Ui.p.fillFocused) },
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2.px).apply { setMargins(8.px, 10.px, 8.px, 8.px) })
-        // Shown only after a block; the menu then opens with it focused.
-        add(Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once)
-        // Watching, the action a TV is most often used for, first of the actions.
-        add(Action.WATCH, R.drawable.ic_play_circle, R.string.watch)
-        // This page: look through it, hide parts, keep it.
-        add(Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page)
-        add(Action.HIDE_PARTS, R.drawable.ic_visibility_off, R.string.hide_parts)
-        add(Action.CLOSE_TAB, R.drawable.ic_close, R.string.close_tab)
         buttons[Action.HIDE_PARTS]?.setOnLongClickListener { actions.onActionHeld(Action.HIDE_PARTS); true }
-        // A tile on the TV's home screen would show anyone what's in the private space.
-        if (!Space.active) add(Action.TV_SHORTCUT, R.drawable.ic_tv, R.string.tv_shortcut)
-        // Somewhere else to go.
-        add(Action.BOOKMARKS, R.drawable.ic_bookmarks, R.string.bookmarks)
-        add(Action.HISTORY, R.drawable.ic_history, R.string.history)
-        add(Action.DOWNLOADS, R.drawable.ic_download, R.string.downloads)
-        // Asks which one, then closes the menu.
-        add(Action.PHONE_SIGNIN, R.drawable.ic_smartphone, R.string.activation_title)
-        add(Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent)
-        add(Action.CLEAR_SITE, R.drawable.ic_delete, R.string.clear_site_data)
-        add(Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode)
-        add(Action.SETTINGS, R.drawable.ic_settings, R.string.settings)
 
         // The balloon: a scrolling list in a bubble whose tail points at More. A long list scrolls inside it, and a
         // focused line keeps some room from its top and bottom edges.
@@ -629,7 +618,7 @@ class BrowserMenu(context: Context, private val actions: Actions) : Dialog(conte
             context.getString(R.string.user_agent))
         buttons[Action.POINTER]?.set(if (s.pointer) R.drawable.ic_mouse else R.drawable.ic_keyboard,
             context.getString(if (s.pointer) R.string.pointer_on else R.string.pointer_off))
-        zoomLabel.text = context.getString(R.string.percent, s.zoomPercent)
+        zoomLabel?.text = context.getString(R.string.percent, s.zoomPercent)
         // At either end of the zoom, focus moves to the other zoom button instead of falling out of the row.
         zoomLimit(Action.ZOOM_OUT, s.canZoomOut, Action.ZOOM_IN)
         zoomLimit(Action.ZOOM_IN, s.canZoomIn, Action.ZOOM_OUT)

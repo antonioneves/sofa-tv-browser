@@ -66,7 +66,7 @@ class ListActivity : Activity() {
                     .apply { marginEnd = 16.px })
             }
         }
-        deleteAllButton = headerButton(R.string.delete_all, danger = true) { confirmDeleteAll() }
+        deleteAllButton = headerButton(R.string.delete_all, danger = true) { guardHistory { confirmDeleteAll() } }
         header.addView(deleteAllButton)
         root.addView(header)
 
@@ -165,7 +165,7 @@ class ListActivity : Activity() {
             setResult(RESULT_OK, Intent().putExtra(SearchActivity.EXTRA_URL, url))
             finish()
         }
-        val remove = {
+        val remove = { guardHistory {
             delete()
             val i = list.indexOfChild(line)
             if (bookmark) {
@@ -177,7 +177,7 @@ class ListActivity : Activity() {
                 (list.getChildAt(i) as? LinearLayout ?: list.getChildAt(i - 1) as? LinearLayout)?.getChildAt(0)?.requestFocus()
                 empty.visibility = if (list.childCount == 0) View.VISIBLE else View.GONE
             }
-        }
+        } }
         // Adding a bookmark to Quick access (or removing it) moves it to the other section, so the list is rebuilt.
         val togglePin = {
             val i = list.indexOfChild(line)
@@ -303,6 +303,10 @@ class ListActivity : Activity() {
         }
         return super.onKeyDown(keyCode, event)
     }
+
+    /** Deleting History asks for the parental PIN when one is set, once for this visit; bookmarks never do. */
+    private fun guardHistory(action: () -> Unit) =
+        if (history) PinPad.guard(this, R.string.pin_title_history, stay = true, action = action) else action()
 
     private fun confirmDeleteAll() {
         Ui.dialog(this)

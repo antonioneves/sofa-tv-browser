@@ -27,12 +27,12 @@ import app.sofabrowser.Space
  * its room. Like the bar at the left it can be docked: kept on screen under the page ([dock]), or opened over the
  * page with BACK or MENU. It remembers the last button used and doesn't hide on its own.
  */
-class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
+class BottomMenu(context: Context, private val actions: BrowserMenu.Actions, override val layout: MenuLayout) :
     Dialog(context, android.R.style.Theme_Translucent_NoTitleBar), PageMenu {
 
     private val buttons = LinkedHashMap<BrowserMenu.Action, LabeledIconButton>()
     private lateinit var address: TextView
-    private lateinit var zoomLabel: TextView
+    private var zoomLabel: TextView? = null
     private lateinit var more: LabeledIconButton
     private lateinit var actionsPane: View
     private lateinit var tabStack: TabStack
@@ -191,51 +191,37 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
         }, onPick = { id -> if (id == shownTab) actions.onAddress() else actions.onTab(id) }, onFocused = { showTip(it) }, horizontal = true)
         bar.addView(tabStack, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // The page's zoom first, set apart from the actions after it.
-        add(BrowserMenu.Action.ZOOM_OUT, R.drawable.ic_zoom_out, R.string.zoom_out, gap = 0)
-        zoomLabel = Ui.text(context, 26, Ui.p.textMid).apply { gravity = Gravity.CENTER; text = context.getString(R.string.percent, 100) }
-        row.addView(zoomLabel, LinearLayout.LayoutParams(100.px, 80.px))
-        add(BrowserMenu.Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in, gap = 0)
-        // A dot level with the icons, taking the room the line it replaced had.
-        row.addView(View(context).apply { background = Ui.rounded(Ui.p.textWeak, DOT / 2) }, LinearLayout.LayoutParams(DOT.px, DOT.px).apply {
+        // In the order chosen in Settings > Menu buttons; by default the page's zoom first, set apart from the actions
+        // after it by a dot, then the actions grouped by what they act on.
+        fun dot() = row.addView(View(context).apply { background = Ui.rounded(Ui.p.textWeak, DOT / 2) }, LinearLayout.LayoutParams(DOT.px, DOT.px).apply {
             topMargin = (40 - DOT / 2).px
             marginStart = (21 - DOT / 2).px
             marginEnd = (21 - DOT / 2).px + ROW_GAP.px
         })
-
-        // Grouped by what they act on.
-        // Watching, the action a TV is most often used for, first.
-        add(BrowserMenu.Action.WATCH, R.drawable.ic_play_circle, R.string.watch, ROW_GAP)
-        // Kept per site; not in private browsing, which saves none.
-        add(BrowserMenu.Action.AUTO_WATCH, R.drawable.ic_autoplay, R.string.auto_watch, ROW_GAP)
-        // This page: look through it, keep it.
-        add(BrowserMenu.Action.FIND, R.drawable.ic_find_in_page, R.string.find_in_page, ROW_GAP)
-        add(BrowserMenu.Action.TRANSLATE, R.drawable.ic_translate, R.string.translate, ROW_GAP)
+        for ((i, item) in layout.shown.withIndex()) when (item) {
+            MenuLayout.Item.ZOOM -> {
+                if (i > 0) dot()
+                add(BrowserMenu.Action.ZOOM_OUT, R.drawable.ic_zoom_out, R.string.zoom_out, gap = 0)
+                zoomLabel = Ui.text(context, 26, Ui.p.textMid).apply { gravity = Gravity.CENTER; text = context.getString(R.string.percent, 100) }
+                row.addView(zoomLabel, LinearLayout.LayoutParams(100.px, 80.px))
+                add(BrowserMenu.Action.ZOOM_IN, R.drawable.ic_zoom_in, R.string.zoom_in, gap = 0)
+                if (i < layout.shown.lastIndex) dot()
+            }
+            // A tile on the TV's home screen would show anyone what's in the private space.
+            MenuLayout.Item.TV_SHORTCUT -> if (!Space.active) add(BrowserMenu.Action.TV_SHORTCUT, item.icon, item.label, ROW_GAP)
+            else -> {
+                add(BrowserMenu.Action.valueOf(item.name), item.icon, item.label, ROW_GAP)
+                // Shown only after a block, next to the shield it belongs with; the menu then opens with it focused.
+                if (item == MenuLayout.Item.ADBLOCK) add(BrowserMenu.Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once, ROW_GAP)
+            }
+        }
+        // With the shield hidden, "Allow once" goes first.
+        if (BrowserMenu.Action.ALLOW_ONCE !in buttons) {
+            add(BrowserMenu.Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once, ROW_GAP)
+            buttons[BrowserMenu.Action.ALLOW_ONCE]?.let { row.removeView(it); row.addView(it, 0, it.layoutParams) }
+        }
         buttons[BrowserMenu.Action.TRANSLATE]?.setOnLongClickListener { actions.onActionHeld(BrowserMenu.Action.TRANSLATE); true }
-        add(BrowserMenu.Action.READER, R.drawable.ic_article, R.string.reader_view, ROW_GAP)
-        add(BrowserMenu.Action.HIDE_PARTS, R.drawable.ic_visibility_off, R.string.hide_parts, ROW_GAP)
         buttons[BrowserMenu.Action.HIDE_PARTS]?.setOnLongClickListener { actions.onActionHeld(BrowserMenu.Action.HIDE_PARTS); true }
-        add(BrowserMenu.Action.BOOKMARK, R.drawable.ic_star, R.string.bookmark, ROW_GAP)
-        add(BrowserMenu.Action.PIN, R.drawable.ic_add, R.string.add_to_quick_access, ROW_GAP)
-        // A tile on the TV's home screen would show anyone what's in the private space.
-        if (!Space.active) add(BrowserMenu.Action.TV_SHORTCUT, R.drawable.ic_tv, R.string.tv_shortcut, ROW_GAP)
-        // Done with this tab; a new one is beside the tabs above.
-        add(BrowserMenu.Action.CLOSE_TAB, R.drawable.ic_close, R.string.close_tab, ROW_GAP)
-        // Somewhere else to go.
-        add(BrowserMenu.Action.BOOKMARKS, R.drawable.ic_bookmarks, R.string.bookmarks, ROW_GAP)
-        add(BrowserMenu.Action.HISTORY, R.drawable.ic_history, R.string.history, ROW_GAP)
-        add(BrowserMenu.Action.DOWNLOADS, R.drawable.ic_download, R.string.downloads, ROW_GAP)
-        // How this site is shown.
-        add(BrowserMenu.Action.ADBLOCK, R.drawable.ic_shield, R.string.adblock_site, ROW_GAP)
-        // Shown only after a block, next to the shield it belongs with; the menu then opens with it focused.
-        add(BrowserMenu.Action.ALLOW_ONCE, R.drawable.ic_open_in_new, R.string.allow_once, ROW_GAP)
-        add(BrowserMenu.Action.PHONE_SIGNIN, R.drawable.ic_smartphone, R.string.activation_title, ROW_GAP)
-        add(BrowserMenu.Action.USER_AGENT, R.drawable.ic_desktop_windows, R.string.user_agent, ROW_GAP)
-        add(BrowserMenu.Action.CLEAR_SITE, R.drawable.ic_delete, R.string.clear_site_data, ROW_GAP)
-        // How the remote moves about pages.
-        add(BrowserMenu.Action.SCROLL, R.drawable.ic_swap_vert, R.string.scroll_mode, ROW_GAP)
-        add(BrowserMenu.Action.POINTER, R.drawable.ic_mouse, R.string.pointer, ROW_GAP)
-        add(BrowserMenu.Action.SETTINGS, R.drawable.ic_settings, R.string.settings, ROW_GAP)
 
         // A focused button keeps room for its label (wider than the button) from the screen edge, so neither icon nor
         // label is ever cut.
@@ -522,7 +508,7 @@ class BottomMenu(context: Context, private val actions: BrowserMenu.Actions) :
             context.getString(R.string.user_agent))
         buttons[BrowserMenu.Action.POINTER]?.set(if (s.pointer) R.drawable.ic_mouse else R.drawable.ic_keyboard,
             context.getString(if (s.pointer) R.string.pointer_on else R.string.pointer_off))
-        zoomLabel.text = context.getString(R.string.percent, s.zoomPercent)
+        zoomLabel?.text = context.getString(R.string.percent, s.zoomPercent)
         // At either end of the zoom, focus moves to the other zoom button instead of falling out of the row.
         hideUnusable(BrowserMenu.Action.ZOOM_OUT, s.canZoomOut, BrowserMenu.Action.ZOOM_IN)
         hideUnusable(BrowserMenu.Action.ZOOM_IN, s.canZoomIn, BrowserMenu.Action.ZOOM_OUT)

@@ -3,10 +3,9 @@ package app.sofabrowser.ui
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.os.Build
 import android.os.Bundle
 import android.text.InputType
@@ -32,6 +31,7 @@ import app.sofabrowser.Space
 import app.sofabrowser.adblock.AdBlocker
 import app.sofabrowser.adblock.FilterList
 import app.sofabrowser.browser.Browser
+import app.sofabrowser.adblock.SiteAllowlist
 import app.sofabrowser.browser.ExternalPlayer
 import app.sofabrowser.browser.ProtectedMedia
 import app.sofabrowser.browser.RefreshRateMatch
@@ -41,6 +41,9 @@ import app.sofabrowser.browser.UrlInput
 import app.sofabrowser.browser.WatchTarget
 import app.sofabrowser.browser.WebViews
 import app.sofabrowser.data.Db
+import app.sofabrowser.dns.DnsProviders
+import app.sofabrowser.dns.DohEndpoint
+import app.sofabrowser.dns.SecureDns
 import app.sofabrowser.data.Favicons
 import app.sofabrowser.data.HistoryRetention
 import app.sofabrowser.data.SignIns
@@ -58,10 +61,23 @@ class SettingsActivity : Activity() {
 
     private lateinit var prefs: Prefs
     private lateinit var list: LinearLayout
-    /** Which page this is: the settings ([PAGE_LISTS], [PAGE_SITES] or null for the main one). */
+    /** Which page this is: the settings ([PAGE_LISTS], [PAGE_SITES], [PAGE_SITE_FILTERS], [PAGE_DNS], [PAGE_DNS_PICK], [PAGE_MENU] or null for the main one). */
     private val page get() = intent.getStringExtra(PAGE)
+    /** The page's scrolling list, hidden while the PIN is asked. */
+    private lateinit var content: View
+    private var unlocking = false
+    private val onFiltersPage get() = page == PAGE_SITE_FILTERS
+    private val onDnsPage get() = page == PAGE_DNS
+    private val onDnsPickPage get() = page == PAGE_DNS_PICK
+    private val onMenuPage get() = page == PAGE_MENU
     /** The Filter lists row on the main page, whose rule count is refreshed on return. */
     private var listsRow: View? = null
+    /** The Site filters row on the main page, whose value is refreshed on return. */
+    private var sitesRow: View? = null
+    /** The DNS row on the main page, whose value is refreshed on return. */
+    private var dnsRow: View? = null
+    /** The Menu buttons row's value, refreshed on return. */
+    private var menuRow: TextView? = null
 
     /** Importing and exporting bookmarks, from the Bookmarks entries below. */
     private val transfer by lazy {
@@ -98,26 +114,43 @@ class SettingsActivity : Activity() {
             setPadding(0, 72.px, 0, 96.px)
             clipChildren = false
         }
-        setContentView(FocusScrollView(this).apply {
-            background = Ui.background(false)
+        content = if (onMenuPage) MenuEditor(this, prefs) else FocusScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             clipChildren = false
             addView(list)
-        })
+        }
+        setContentView(FrameLayout(this).apply { background = Ui.background(false); addView(content) })
         when (page) {
+            PAGE_MENU -> Unit
             PAGE_LISTS -> buildLists()
             PAGE_SITES -> buildSites()
+            PAGE_SITE_FILTERS -> buildSiteFilters()
+            PAGE_DNS -> buildDns()
+            PAGE_DNS_PICK -> buildDnsPick()
             else -> build()
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        unlock()
+    }
+
     override fun onRestart() {
         super.onRestart()
+        // Back from Filter lists or Site filters: the rule count or the lists on may have changed.
         when (page) {
             PAGE_LISTS -> buildLists()
             PAGE_SITES -> buildSites()
-            // Back from Filter lists: the rule count may have changed.
-            else -> (listsRow as? TextView)?.text = rulesText(blocker.rules.rules)
+            PAGE_SITE_FILTERS -> buildSiteFilters()
+            PAGE_DNS -> buildDns()
+            PAGE_DNS_PICK, PAGE_MENU -> Unit
+            else -> {
+                (listsRow as? TextView)?.text = rulesText(blocker.rules.rules)
+                (sitesRow as? TextView)?.text = sitesValue()
+                (dnsRow as? TextView)?.text = dnsValue()
+                menuRow?.text = menuValue()
+            }
         }
     }
 
@@ -133,6 +166,10 @@ class SettingsActivity : Activity() {
         nav(R.string.theme, resources.getStringArray(R.array.themes)[THEMES.indexOf(prefs.theme).coerceAtLeast(0)]) { pickTheme() }
         nav(R.string.text_size, getString(R.string.percent, prefs.textZoom)) { pickTextSize() }
         nav(R.string.menu_position, resources.getStringArray(R.array.menu_positions)[if (prefs.menuBottom) 1 else 0]) { pickMenuPosition() }
+        menuRow = valueText(menuValue())
+        row(getString(R.string.menu_buttons), getString(R.string.menu_buttons_sub), menuRow) {
+            startActivity(Intent(this, SettingsActivity::class.java).putExtra(PAGE, PAGE_MENU))
+        }
         // WebView can only darken pages for a dark app theme.
         if (Ui.p.dark && WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
             switch(R.string.dark_pages, R.string.dark_pages_sub, prefs::darkPages)
@@ -204,6 +241,14 @@ class SettingsActivity : Activity() {
             listsRow = nav(R.string.filter_lists, rulesText(blocker.rules.rules)) {
                 startActivity(Intent(this, SettingsActivity::class.java).putExtra(PAGE, PAGE_LISTS))
             }
+        }
+        sitesRow = nav(R.string.site_filters, sitesValue()) {
+            startActivity(Intent(this, SettingsActivity::class.java).putExtra(PAGE, PAGE_SITE_FILTERS))
+        }
+        row(getString(R.string.pin_setting), getString(R.string.pin_setting_sub),
+            valueText(getString(if (pinOf(this).isSet) R.string.pin_value_on else R.string.filter_list_off))) { pinActions() }
+        dnsRow = nav(R.string.dns, dnsValue()) {
+            startActivity(Intent(this, SettingsActivity::class.java).putExtra(PAGE, PAGE_DNS))
         }
         switch(R.string.cookies, R.string.cookies_sub, prefs::cookies, confirmOff = R.string.cookies_confirm)
         switch(R.string.third_party_cookies, R.string.third_party_cookies_sub, prefs::blockThirdPartyCookies)
@@ -279,6 +324,15 @@ class SettingsActivity : Activity() {
         return row
     }
 
+
+    private fun menuValue(): String {
+        val l = prefs.menuLayout
+        return when {
+            l.hiddenCount > 0 -> resources.getQuantityString(R.plurals.menu_buttons_hidden, l.hiddenCount, l.hiddenCount)
+            l.isDefault -> getString(R.string.menu_buttons_default)
+            else -> getString(R.string.menu_buttons_custom)
+        }
+    }
     private fun arrow() = ImageView(this).apply { setImageResource(R.drawable.ic_chevron_right); setColorFilter(Ui.p.textMid); layoutParams = LinearLayout.LayoutParams(40.px, 40.px) }
 
     private fun valueText(value: String) = Ui.text(this, 28, Ui.p.textMid).apply { text = value; setPadding(24.px, 0, 0, 0) }
@@ -293,7 +347,7 @@ class SettingsActivity : Activity() {
 
     private fun switch(title: Int, subtitle: Int, prop: kotlin.reflect.KMutableProperty0<Boolean>, confirmOff: Int? = null,
                        onChange: ((Boolean) -> Unit)? = null) {
-        val toggle = Toggle(prop.get())
+        val toggle = Toggle(this, prop.get())
         row(getString(title), getString(subtitle), toggle) {
             val turnOn = !prop.get()
             fun apply() { prop.set(turnOn); toggle.on = turnOn; onChange?.invoke(turnOn) }
@@ -302,24 +356,6 @@ class SettingsActivity : Activity() {
                     .setPositiveButton(R.string.turn_off) { _, _ -> apply() }
                     .setNegativeButton(R.string.keep_on, null).show()
             } else apply()
-        }
-    }
-
-    /** 80x44 pill switch: blue when on. */
-    private inner class Toggle(initial: Boolean) : View(this@SettingsActivity) {
-        var on = initial
-            set(v) { field = v; invalidate() }
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-        init { layoutParams = LinearLayout.LayoutParams(80.px, 44.px).apply { marginStart = 24.px } }
-
-        override fun onDraw(c: Canvas) {
-            val h = height.toFloat()
-            paint.color = if (on) Ui.SWITCH_ON else Ui.p.toggleOff
-            c.drawRoundRect(0f, 0f, width.toFloat(), h, h / 2, h / 2, paint)
-            paint.color = Ui.p.knob
-            val r = h / 2 - 5.px
-            c.drawCircle(if (on) width - h / 2 else h / 2, h / 2, r, paint)
         }
     }
 
@@ -501,7 +537,7 @@ class SettingsActivity : Activity() {
 
     /** EasyList and EasyPrivacy in one switch, for TVs with room for them; they are downloaded when switched on. */
     private fun strongerRow() {
-        val toggle = Toggle(blocker.stronger)
+        val toggle = Toggle(this, blocker.stronger)
         row(getString(R.string.stronger_adblock), getString(R.string.stronger_adblock_sub), toggle) {
             val on = !toggle.on
             toggle.on = on
@@ -540,12 +576,12 @@ class SettingsActivity : Activity() {
         list.removeAllViews()
         pageTitle(R.string.filter_lists, getString(R.string.filter_lists_intro, rulesText(blocker.rules.rules)))
 
-        val first = blocker.lists.map { l -> row(l.name, listStatus(l), Toggle(l.enabled)) { listActions(l) } }.firstOrNull()
+        val first = blocker.lists.filter { !it.site }.map { l -> row(l.name, listStatus(l), Toggle(this, l.enabled)) { listActions(l) } }.firstOrNull()
         switch(R.string.auto_update_lists, R.string.auto_update_lists_sub, prefs::autoUpdateLists) { on ->
             listUpdatesChanged(on)
             buildLists()
         }
-        row(getString(R.string.add_filter_list), getString(R.string.add_filter_list_sub), arrow()) { enterListAddress() }
+        row(getString(R.string.add_filter_list), getString(R.string.add_filter_list_sub), arrow()) { enterListAddress(site = false) }
         row(getString(R.string.update_all_lists), getString(R.string.update_all_lists_sub), arrow()) {
             SofaToast.makeText(this, R.string.lists_updating, Toast.LENGTH_SHORT).show()
             blocker.updateAll { failed ->
@@ -623,18 +659,18 @@ class SettingsActivity : Activity() {
         val actions = mutableListOf<Pair<Int, () -> Unit>>()
         actions += (if (l.enabled) R.string.turn_off else R.string.turn_on) to {
             if (l.stronger) prefs.strongerAsked = true
-            blocker.setEnabled(l.id, !l.enabled) { if (!isFinishing) buildLists() }
+            blocker.setEnabled(l.id, !l.enabled) { if (!isFinishing) rebuild() }
         }
         if (l.url != null) actions += R.string.update to {
             SofaToast.makeText(this, R.string.list_adding, Toast.LENGTH_SHORT).show()
             blocker.update(l.id) { result ->
                 result.onSuccess { SofaToast.makeText(this, resources.getQuantityString(R.plurals.list_updated, it.rules, it.name, it.rules), Toast.LENGTH_LONG).show() }
                     .onFailure { SofaToast.makeText(this, getString(R.string.blocklist_failed, it.message), Toast.LENGTH_LONG).show() }
-                if (!isFinishing) buildLists()
+                if (!isFinishing) rebuild()
             }
         }
-        if (l.bundled && l.updated > 0) actions += R.string.reset_bundled to { blocker.resetToBundled(l.id) { if (!isFinishing) buildLists() } }
-        if (!l.bundled) actions += R.string.remove to { blocker.remove(l.id) { if (!isFinishing) buildLists() } }
+        if (l.bundled && l.updated > 0) actions += R.string.reset_bundled to { blocker.resetToBundled(l.id) { if (!isFinishing) rebuild() } }
+        if (!l.bundled) actions += R.string.remove to { blocker.remove(l.id) { if (!isFinishing) rebuild() } }
         dialog().setTitle(l.name)
             .setItems(actions.map { getString(it.first) }.toTypedArray()) { _, which -> actions[which].second() }
             .setNegativeButton(android.R.string.cancel, null).show()
@@ -642,27 +678,350 @@ class SettingsActivity : Activity() {
 
     // "https://" is the start of an address, the same in every language.
     @SuppressLint("SetTextI18n")
-    private fun enterListAddress() {
+    /** Asks for a list's address, "https://" already typed; [site] adds it to Site filters rather than ad blocking. */
+    private fun enterListAddress(site: Boolean) {
         val field = EditText(this).apply {
             setText("https://")
+            setSelection(text.length)
             isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         }
         dialog().setTitle(R.string.add_filter_list)
-            .setMessage(R.string.filter_list_address_message)
+            .setMessage(if (site) R.string.site_list_address_message else R.string.filter_list_address_message)
             .setView(padded(field))
-            .setPositiveButton(R.string.add) { _, _ -> addListAt(field.text.toString().trim()) }
+            .setPositiveButton(R.string.add) { _, _ -> addListAt(field.text.toString().trim(), site) }
             .setNegativeButton(android.R.string.cancel, null).show()
     }
 
-    private fun addListAt(url: String) {
+    private fun addListAt(typed: String, site: Boolean) {
+        // "lists.example/sites.txt" typed over the prefilled "https://", or without it, means https.
+        val url = typed.removePrefix("https://https://").let { if ("://" in it) it else "https://$it" }
         // Debug builds also take http://, so tests can serve a list from the development machine.
         if (!url.startsWith("https://") && !(BuildConfig.DEBUG && url.startsWith("http://"))) { SofaToast.makeText(this, R.string.https_only, Toast.LENGTH_LONG).show(); return }
         SofaToast.makeText(this, R.string.list_adding, Toast.LENGTH_SHORT).show()
-        blocker.add(url) { result ->
-            result.onSuccess { SofaToast.makeText(this, resources.getQuantityString(R.plurals.list_added, it.rules, it.name, it.rules), Toast.LENGTH_LONG).show() }
-                .onFailure { SofaToast.makeText(this, getString(R.string.list_add_failed, it.message), Toast.LENGTH_LONG).show() }
-            if (!isFinishing) buildLists()
+        blocker.add(url, site) { result ->
+            result.onSuccess {
+                SofaToast.makeText(this, resources.getQuantityString(if (site) R.plurals.site_list_added else R.plurals.list_added, it.rules, it.name, it.rules),
+                    Toast.LENGTH_LONG).show()
+            }.onFailure { SofaToast.makeText(this, getString(R.string.list_add_failed, it.message), Toast.LENGTH_LONG).show() }
+            if (!isFinishing) rebuild()
+        }
+    }
+
+    private fun rebuild() = if (onFiltersPage) buildSiteFilters() else buildLists()
+
+    // Site filters: whole sites blocked by category, a page of its own (PAGE_SITE_FILTERS)
+
+    /** Site filters lists being switched on or changed, by id, with the address they change to (null: the same). */
+    private val pending = HashMap<String, String?>()
+
+    /** The Site filters row's value on the main page: Off, the lists on, or how many. */
+    private fun sitesValue(): String {
+        val on = blocker.lists.filter { it.site && it.enabled }
+        return when {
+            on.isEmpty() -> getString(R.string.filter_list_off)
+            on.size <= 2 -> on.joinToString(", ") { siteListName(this, it) }
+            else -> getString(R.string.site_filters_on, on.size)
+        }
+    }
+
+    private fun buildSiteFilters() {
+        val focused = list.indexOfChild(list.focusedChild)
+        list.removeAllViews()
+        list.addView(Ui.text(this, 56, Ui.p.textMid, bold = true).apply {
+            text = getString(R.string.site_filters)
+        }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 16.px })
+        list.addView(Ui.text(this, 26, Ui.p.textWeak).apply {
+            text = getString(R.string.site_filters_intro)
+        }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 32.px })
+
+        val sites = blocker.lists.filter { it.site }
+        fun category(id: String) = sites.firstOrNull { it.id == id }
+        // Drugs last: its list over-blocks, so it comes after the others, with its warning.
+        val first = category(FilterList.ADULT)?.let { siteSwitch(it) }
+        category(FilterList.GAMBLING)?.let { gamblingRow(it) }
+        category(FilterList.UNSAFE)?.let { siteSwitch(it, getString(R.string.site_unsafe_what)) }
+        category(FilterList.DRUGS)?.let { siteSwitch(it, getString(R.string.site_drugs_warning), confirm = R.string.site_drugs_confirm) }
+
+        section(R.string.your_lists)
+        sites.filter { !it.category }.forEach { l -> row(l.name, siteStatus(l), Toggle(this, l.enabled)) { listActions(l) } }
+        row(getString(R.string.add_filter_list), getString(R.string.add_site_list_sub), arrow()) { enterListAddress(site = true) }
+        val allowed = SiteAllowlist.all(this)
+        if (allowed.isNotEmpty()) {
+            row(getString(R.string.allowed_sites), resources.getQuantityString(R.plurals.allowed_sites_count, allowed.size, allowed.size), arrow()) {
+                pickAllowed(allowed)
+            }
+        }
+        (list.getChildAt(focused)?.takeIf { it.isFocusable } ?: first)?.requestFocus()
+    }
+
+    /** The line under a Site filters list: where it comes from, [note], and its state (downloading, sites, updated, failed). */
+    private fun siteStatus(l: FilterList, note: String? = null): String {
+        val state = when {
+            l.id in pending -> getString(R.string.site_list_downloading)
+            !l.enabled -> l.error?.let { getString(if (l.updated == 0L) R.string.site_list_download_failed else R.string.filter_list_failed, it) }
+            else -> listOfNotNull(
+                resources.getQuantityString(R.plurals.sites_count, l.rules, l.rules),
+                l.error?.let { getString(R.string.filter_list_failed, it) } ?: when {
+                    l.updated > System.currentTimeMillis() - DateUtils.MINUTE_IN_MILLIS -> getString(R.string.filter_list_updated_now)
+                    l.updated > 0 -> getString(R.string.filter_list_updated, DateUtils.getRelativeTimeSpanString(l.updated))
+                    else -> null
+                },
+            ).reduce { a, b -> getString(R.string.filter_list_sub, a, b) }
+        }
+        return listOfNotNull(if (l.category) l.name else null, note, state ?: if (l.category) null else getString(R.string.filter_list_off))
+            .reduce { a, b -> getString(R.string.filter_list_sub, a, b) }
+    }
+
+    /** A category with a switch: one press turns it on or off; with [confirm], turning it on asks first. */
+    private fun siteSwitch(l: FilterList, note: String? = null, confirm: Int? = null): View =
+        row(siteListName(this, l), siteStatus(l, note), Toggle(this, l.enabled || l.id in pending)) {
+            if (l.id in pending) return@row
+            if (!l.enabled && confirm != null) {
+                dialog().setTitle(siteListName(this, l)).setMessage(confirm)
+                    .setPositiveButton(R.string.turn_on) { _, _ -> setSite(l, true) }
+                    .setNegativeButton(android.R.string.cancel, null).show()
+            } else setSite(l, !l.enabled)
+        }
+
+    private fun setSite(l: FilterList, on: Boolean, url: String? = null) {
+        if (on) pending[l.id] = url
+        blocker.setSite(l.id, on, url) { failure ->
+            pending -= l.id
+            failure?.let { SofaToast.makeText(this, getString(R.string.blocklist_failed, it.message ?: it.javaClass.simpleName), Toast.LENGTH_LONG).show() }
+            if (!isFinishing) buildSiteFilters()
+        }
+        buildSiteFilters()
+    }
+
+    /** Gambling comes in three sizes; its row shows the one in use and OK picks another. */
+    private fun gamblingRow(l: FilterList) {
+        val url = if (l.id in pending) pending[l.id] ?: l.url else if (l.enabled) l.url else null
+        val value = when (FilterList.GAMBLING_URLS.indexOf(url)) {
+            0 -> R.string.gambling_mini
+            1 -> R.string.gambling_medium
+            2 -> R.string.gambling_full
+            else -> R.string.filter_list_off
+        }
+        row(siteListName(this, l), siteStatus(l), valueText(getString(value))) { if (l.id !in pending) pickGambling(l) }
+    }
+
+    private fun pickGambling(l: FilterList) {
+        val items = listOf(
+            getString(R.string.filter_list_off) to null,
+            getString(R.string.gambling_mini) to getString(R.string.gambling_mini_note),
+            getString(R.string.gambling_medium_choice) to getString(R.string.gambling_medium_note),
+            getString(R.string.gambling_full) to getString(R.string.gambling_full_note),
+        ).map { (label, note) -> withNote(label, note) }
+        val current = if (l.enabled) FilterList.GAMBLING_URLS.indexOf(l.url) + 1 else 0
+        dialog().setTitle(R.string.site_gambling)
+            .setSingleChoiceItems(items.toTypedArray(), current) { d, which ->
+                d.dismiss()
+                if (which == current) return@setSingleChoiceItems
+                if (which == 0) setSite(l, false) else setSite(l, true, FilterList.GAMBLING_URLS[which - 1])
+            }.show()
+    }
+
+    /** A choice with its explanation underneath in small type, as in the search engine list. */
+    private fun withNote(label: String, note: String?): CharSequence {
+        if (note == null) return label
+        return SpannableString(label + "\n" + note).apply {
+            val from = label.length + 1
+            setSpan(RelativeSizeSpan(0.7f), from, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(ForegroundColorSpan(Ui.p.textWeak), from, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
+    /** Sites let through from the block screen; choosing one blocks it again. */
+    private fun pickAllowed(sites: List<String>) {
+        dialog().setTitle(R.string.allowed_sites_pick)
+            .setItems(sites.toTypedArray()) { _, which ->
+                SiteAllowlist.remove(this, sites[which])
+                SofaToast.makeText(this, getString(R.string.site_blocked_again, sites[which]), Toast.LENGTH_SHORT).show()
+                buildSiteFilters()
+            }
+            .setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    // Custom DNS: main and fallback on a page of their own (PAGE_DNS), each chosen on another (PAGE_DNS_PICK)
+
+    /** A page's big title and the explanation under it. */
+    private fun pageTitle(title: Int, intro: Int) {
+        list.addView(Ui.text(this, 56, Ui.p.textMid, bold = true).apply {
+            text = getString(title)
+        }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 16.px })
+        note(getString(intro))
+    }
+
+    /** A line of small text between rows. */
+    private fun note(text: String, color: Int = Ui.p.textWeak) {
+        list.addView(Ui.text(this, 26, color).apply {
+            this.text = text
+            setPadding(27.px, 0, 27.px, 0)
+        }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 16.px; bottomMargin = 16.px })
+    }
+
+    /** A choice's short name: the provider, or the custom address's host; null for the device DNS. */
+    private fun dnsName(choice: String): String? = when {
+        choice.isEmpty() -> null
+        DnsProviders.isCustom(choice) -> android.net.Uri.parse(choice).host ?: choice
+        else -> DnsProviders.byId(choice)?.name
+    }
+
+    /** What a choice does and its privacy tier, for the line under it. */
+    private fun dnsDetail(choice: String): String? = when {
+        choice.isEmpty() -> null
+        DnsProviders.isCustom(choice) -> getString(R.string.dns_custom)
+        else -> DnsProviders.byId(choice)?.let { getString(R.string.filter_list_sub, getString(it.variant), getString(it.tier.label)) }
+    }
+
+    private fun dnsValue() = dnsName(prefs.dnsMain) ?: getString(R.string.dns_device)
+
+    private fun buildDns() {
+        val focused = list.indexOfChild(list.focusedChild)
+        list.removeAllViews()
+        pageTitle(R.string.dns, R.string.dns_intro)
+        val main = prefs.dnsMain
+        val first = row(getString(R.string.dns_main), dnsDetail(main) ?: getString(R.string.dns_device_sub), valueText(dnsValue())) { pickDns(fallback = false) }
+        if (main.isNotEmpty()) {
+            val fallback = prefs.dnsFallback
+            row(getString(R.string.dns_fallback), dnsDetail(fallback) ?: getString(R.string.dns_fallback_sub),
+                valueText(dnsName(fallback) ?: getString(R.string.dns_none))) { pickDns(fallback = true) }
+            row(getString(R.string.dns_test), getString(R.string.dns_test_sub), null) { testDns() }
+            note(getString(R.string.dns_last_step))
+            when (SecureDns.unused) {
+                SecureDns.Unused.NETWORK_PROXY -> note(getString(R.string.dns_network_proxy), Ui.p.text)
+                SecureDns.Unused.NO_WEBVIEW_SUPPORT -> note(getString(R.string.dns_no_webview), Ui.p.text)
+                null -> Unit
+            }
+        }
+        (list.getChildAt(focused)?.takeIf { it.isFocusable } ?: first).requestFocus()
+    }
+
+    private fun pickDns(fallback: Boolean) {
+        startActivity(Intent(this, SettingsActivity::class.java).putExtra(PAGE, PAGE_DNS_PICK).putExtra(SLOT, if (fallback) FALLBACK else ""))
+    }
+
+    /** Every choice for one slot: the device DNS (or none), the four tiers in rank order, then a custom address. */
+    private fun buildDnsPick() {
+        val fallback = intent.getStringExtra(SLOT) == FALLBACK
+        val current = if (fallback) prefs.dnsFallback else prefs.dnsMain
+        list.removeAllViews()
+        pageTitle(if (fallback) R.string.dns_fallback else R.string.dns_main, R.string.dns_pick_intro)
+        var selected: View? = null
+        fun choice(title: String, sub: String, id: String, isCurrent: Boolean = id == current, onClick: () -> Unit = { chooseDns(fallback, id) }) =
+            row(title, sub, if (isCurrent) check() else null, onClick).also { if (isCurrent) selected = it }
+        val first = if (fallback) choice(getString(R.string.dns_none), getString(R.string.dns_none_sub), "")
+        else choice(getString(R.string.dns_device), getString(R.string.dns_device_sub), "")
+        DnsProviders.Tier.entries.forEach { tier ->
+            list.addView(Ui.text(this, 28, tier.color, bold = true).apply {
+                text = getString(R.string.dns_tier_heading, getString(tier.label))
+                setPadding(27.px, 40.px, 0, 16.px)
+            }, LinearLayout.LayoutParams(ROW_WIDTH.px, LinearLayout.LayoutParams.WRAP_CONTENT))
+            DnsProviders.ALL.filter { it.tier == tier }.forEach { p ->
+                choice(p.name, getString(R.string.filter_list_sub, getString(p.variant), getString(p.about)), p.id)
+            }
+        }
+        section(R.string.dns_custom)
+        val custom = DnsProviders.isCustom(current)
+        choice(getString(R.string.dns_custom), if (custom) current else getString(R.string.dns_custom_sub), current, isCurrent = custom) {
+            enterDnsAddress(fallback, if (custom) current else "https://")
+        }
+        (selected ?: first).requestFocus()
+    }
+
+    private fun check() = ImageView(this).apply { setImageResource(R.drawable.ic_check); setColorFilter(Ui.p.textMid); layoutParams = LinearLayout.LayoutParams(40.px, 40.px) }
+
+    private fun enterDnsAddress(fallback: Boolean, current: String) {
+        val field = EditText(this).apply {
+            setText(current)
+            setSelection(text.length)
+            isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        }
+        dialog().setTitle(R.string.dns_custom).setMessage(R.string.dns_custom_message).setView(padded(field))
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val typed = field.text.toString().trim().removePrefix("https://https://").let { if ("://" in it) it else "https://$it" }
+                if (runCatching { DohEndpoint(typed) }.isSuccess) chooseDns(fallback, typed)
+                else SofaToast.makeText(this, R.string.dns_custom_invalid, Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    /** Saves the choice and applies it at once; the device DNS as main also clears the fallback. */
+    private fun chooseDns(fallback: Boolean, choice: String) {
+        if (fallback) prefs.dnsFallback = choice
+        else {
+            prefs.dnsMain = choice
+            if (choice.isEmpty()) prefs.dnsFallback = ""
+        }
+        SecureDns.apply(applicationContext)
+        finish()
+    }
+
+    /** Looks one name up with the main and the fallback DNS, each on its own, and shows how each did. */
+    private fun testDns() {
+        val choices = listOf(prefs.dnsMain, prefs.dnsFallback).filter { it.isNotEmpty() }.distinct()
+        val lines = arrayOfNulls<String>(choices.size)
+        var left = choices.size
+        val shown = dialog().setTitle(R.string.dns_test).setMessage(R.string.dns_testing).setPositiveButton(android.R.string.ok, null).show()
+        choices.forEachIndexed { i, c ->
+            val label = DnsProviders.byId(c)?.let { getString(R.string.filter_list_sub, it.name, getString(it.variant)) } ?: dnsName(c)
+            SecureDns.test(c) { result ->
+                lines[i] = getString(R.string.dns_test_line, label, result.fold(
+                    { getString(R.string.dns_test_ms, it) },
+                    { getString(R.string.dns_test_failed, it.message ?: it.javaClass.simpleName) }))
+                if (--left == 0 && shown.isShowing) shown.setMessage(lines.joinToString("\n"))
+            }
+        }
+    }
+
+    // Parental PIN
+
+    /** Off: explains what the PIN guards, then asks for one. On: change it or turn it off (Settings is already unlocked). */
+    private fun pinActions() {
+        val pin = pinOf(this)
+        if (!pin.isSet) {
+            dialog().setTitle(R.string.pin_setting).setMessage(R.string.pin_intro)
+                .setPositiveButton(R.string.parental_pin_choose) { _, _ ->
+                    PinPad.choose(this) { ok ->
+                        if (!ok) return@choose
+                        PinGate.open()
+                        SofaToast.makeText(this, R.string.pin_turned_on, Toast.LENGTH_SHORT).show()
+                        build()
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null).show()
+            return
+        }
+        dialog().setTitle(R.string.pin_setting)
+            .setItems(arrayOf(getString(R.string.parental_pin_change), getString(R.string.pin_turn_off))) { _, which ->
+                if (which == 0) PinPad.choose(this) { ok -> if (ok) SofaToast.makeText(this, R.string.parental_pin_changed, Toast.LENGTH_SHORT).show() }
+                else {
+                    pin.remove()
+                    SofaToast.makeText(this, R.string.pin_turned_off, Toast.LENGTH_SHORT).show()
+                    build()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    /** Asks for the PIN before showing any Settings page, unless it was entered for this visit; not entered goes back to the browser. */
+    private fun unlock() {
+        if (unlocking || !pinOf(this).isSet || PinGate.isOpen) return
+        unlocking = true
+        // Hidden, not removed, so the row in focus keeps its focus for when the page shows.
+        content.alpha = 0f
+        PinPad.ask(this, R.string.pin_title_settings) { ok ->
+            unlocking = false
+            if (ok) {
+                PinGate.open()
+                content.animate().alpha(1f).setDuration(180).start()
+            } else {
+                // MainActivity is singleTask: starting it closes every Settings page above it.
+                startActivity(Intent(this, app.sofabrowser.MainActivity::class.java))
+                finish()
+            }
         }
     }
 
@@ -823,5 +1182,21 @@ class SettingsActivity : Activity() {
         private const val REQ_BOOKMARKS = 7001
         private const val PAGE_LISTS = "lists"
         private const val PAGE_SITES = "sites"
+        private const val PAGE_SITE_FILTERS = "site_filters"
+        private const val PAGE_DNS = "dns"
+        private const val PAGE_DNS_PICK = "dns_pick"
+        private const val PAGE_MENU = "menu"
+        /** Which DNS the pick page chooses: [FALLBACK], or the main one. */
+        private const val SLOT = "slot"
+        private const val FALLBACK = "fallback"
+
+        /** What Site filters calls [list]: a category's name, or the name of a list the user added. */
+        fun siteListName(context: Context, list: FilterList): String = when (list.id) {
+            FilterList.ADULT -> R.string.site_adult
+            FilterList.GAMBLING -> R.string.site_gambling
+            FilterList.UNSAFE -> R.string.site_unsafe
+            FilterList.DRUGS -> R.string.site_drugs
+            else -> null
+        }?.let(context::getString) ?: list.name
     }
 }

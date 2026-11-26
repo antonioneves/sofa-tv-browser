@@ -10,7 +10,8 @@ called Sofa.
 - **Game pads** (Xbox, PlayStation, 8BitDo and others): the left stick moves the pointer, the right stick scrolls,
   and the buttons work as in a console browser. Settings → Game controller shows them all.
 - **A menu on the Back key**: address, Watch, back and forward, find in page, bookmarks, history, zoom, ad
-  blocking per site, and "Browse as" desktop, mobile or TV.
+  blocking per site, and "Browse as" desktop, mobile or TV. Settings → Menu buttons puts its buttons in your order
+  and hides the ones you don't use.
 - **A home screen** with your own tiles, your most visited sites and your bookmarks.
 - **Watch**: one press of Play finds the page's main video and plays it fullscreen.
 - **Sofa Player**: in fullscreen, Sofa plays the site's stream in its own player when it can, with 4K at full
@@ -23,6 +24,11 @@ called Sofa.
 - **Ad blocking with filter lists** in the formats of uBlock Origin, Adblock Plus and hosts files, including
   hiding the empty boxes ads leave behind. One switch adds EasyList and EasyPrivacy.
 - **Pop-ups blocked**, even from ad networks no list knows yet, with "Allow once" in the menu when you need one.
+- **Site filters** (off until you choose): block whole sites by category, such as adult, gambling or unsafe sites,
+  or with a list of your own.
+- **Parental PIN** (off until you set one): a PIN before Settings open or a blocker is turned off.
+- **Custom DNS** (off until you choose): look sites up over DNS over HTTPS with a main and a fallback service,
+  picked from a list ranked from most to least private, or your own.
 - **Search** with the engine you choose at first start, and voice search.
 - **Downloads** that pause, resume and carry on in the background.
 - **Tabs**, **reader view**, **translation** of the page (by Google's website translator, only when you ask), and
@@ -55,8 +61,9 @@ Copies installed by an app store or by Obtainium never offer this; the store kee
 
 - **Nothing of its own:** no accounts, analytics, ads, crash reports or servers. Apart from the sites you visit,
   Sofa only contacts your search engine (for suggestions, if you turn them on), GitHub (for update checks, if
-  you turn them on) and the addresses of your filter lists (when you add or update them, or every few days if you
-  turn on automatic updates). Voice search uses the TV's speech service.
+  you turn them on), the addresses of your filter lists (when you add or update them, or every few days if you
+  turn on automatic updates) and the DNS service you choose, if you choose one ([Custom DNS](#custom-dns)).
+  Voice search uses the TV's speech service.
 - **Blocking:** ads and trackers are blocked on the TV (see [Ad blocking](#ad-blocking)), and third-party cookies
   are blocked too.
 - **Blending in:** few browsers send Do Not Track and desktop Chrome is the most common browser, so Sofa sends no
@@ -67,6 +74,33 @@ Copies installed by an app store or by Obtainium never offer this; the store kee
   A video handed to another app (Play in…) may stay in that app's own history, which Sofa can't erase.
 - **History** is kept for as long as you choose: 7, 30 or 90 days (the default), always or never.
 - **WebView reporting:** usage reports to Google are off, and so are Safe Browsing lookups unless you turn them on.
+
+### Custom DNS
+
+Sofa looks sites up with the TV's own DNS until you choose a **main DNS** in Settings → DNS. From then on, every
+site name is looked up over DNS over HTTPS: encrypted, so the network can't read or change the lookups. That covers
+pages, Sofa Player, downloads and list updates. A **fallback DNS** is asked when the main one doesn't answer, and the
+TV's own DNS when neither does, so pages keep loading. A name that doesn't exist isn't asked again elsewhere. Names
+on the home network (no dot, or `.local`, `.lan`, `.home.arpa` and the like) always use the TV's DNS. **Test** times
+a lookup with each one.
+
+The built-in services are ranked from most to least private, from each one's own privacy policy (November 2026).
+Each row says what it blocks, and services that offer a filtered and an unfiltered version have both:
+
+| Group | Services |
+|---|---|
+| Private | Quad9, UncensoredDNS, HaGeZi DNS, dnsforge.de |
+| Private with trade-offs | Cloudflare 1.1.1.1, DNS.SB, AdGuard DNS, CleanBrowsing |
+| Limited privacy | Bancuh, Tiarap, Control D |
+| Utility-first | Google Public DNS, DNS4EU, OpenDNS, DNS for Family |
+
+Any other service can be added by its DNS over HTTPS address (`https://…`). The service you choose sees the name of
+every site Sofa opens; that is what a DNS does. A service that blocks sites stops them on top of Sofa's own blocking.
+
+WebView has no DNS setting, so Sofa runs a small proxy inside the app, reachable only from the TV itself
+(127.0.0.1), that looks each site up and passes the connection through. HTTPS stays encrypted end to end between
+Sofa and the site. On a network that has its own proxy, or with a WebView too old for it, the chosen DNS isn't used,
+and Settings → DNS says so.
 
 ## Ad blocking
 
@@ -95,6 +129,38 @@ Everything is matched on the TV; nothing about your browsing leaves it.
   blocked on the page.
 - **Off completely:** "Block ads and trackers" in Settings turns the ad blocker off and hides its options and buttons
   everywhere in the app (list settings, the home screen's shield, the page menu's Ad block, Site settings).
+
+### Site filters
+
+Settings → Site filters blocks whole sites, not just their ads, whichever way you reach them: a typed address, a
+bookmark, a link or a redirect. Anything a page loads from such a site is blocked too, and the filters keep working
+when ad blocking is off. Each category is off until you turn it on, and its list is downloaded then:
+
+- **Adult sites:** HaGeZi's NSFW list (about 92,000 domains).
+- **Gambling**, in three sizes, one at a time: popular sites (about 110,000 domains), more sites (about 180,000, the
+  recommended one) or all known sites (about 630,000; about 5 MB of memory, and slow to update on cheap TVs).
+- **Unsafe sites:** FMHY's Basic list of fake download sites and malware.
+- **Drugs:** the Block List Project's list. It is updated rarely and also blocks some sites about medicines.
+- **Your lists:** any list of domains or hosts file, by its address.
+
+A blocked site shows which list blocked it, with **Go back** and **Allow this site**; Settings → Site filters →
+Allowed sites takes an allowed site back. The lists are written by their authors and miss sites: a filter, not a
+guarantee.
+
+### Parental PIN
+
+Settings → Parental PIN (off until you set one) asks for a 4-digit PIN before anyone opens Settings, turns ad
+blocking off (for every site or for one), lets a site through Site filters, turns private browsing on or deletes
+History. Turning things back on never asks. In Settings and History the PIN counts until you go back to browsing
+or Sofa leaves the screen; anywhere else it counts for one action.
+
+The PIN is entered with the remote's arrows, one digit at a time, or with its number keys. Sofa keeps only a salted
+hash of it, on the TV. After five wrong tries it waits 30 seconds before the next, then twice as long after each
+wrong try, up to 30 minutes, also across restarts. Forgot the PIN? Clearing Sofa's data in the TV's settings removes
+it, along with your bookmarks, lists and settings; there is no other way back.
+
+The PIN guards Sofa's own settings and blockers, not the TV: it can't stop anyone from using another app, changing
+the TV's settings or removing Sofa.
 
 ## Video
 
@@ -247,4 +313,5 @@ text.
 improved in [Fulguris](https://github.com/Slion/Fulguris) (Apache-2.0 parts only). Element hiding by class and id
 follows the design of [Brave](https://github.com/brave/adblock-rust) and [uBlock Origin](https://github.com/gorhill/uBlock),
 without their code. The lists are the work of [StevenBlack/hosts](https://github.com/StevenBlack/hosts),
-[HaGeZi](https://github.com/hagezi/dns-blocklists) and [the EasyList authors](https://easylist.to/).
+[HaGeZi](https://github.com/hagezi/dns-blocklists), [the EasyList authors](https://easylist.to/),
+[FMHY](https://github.com/fmhy/FMHYFilterlist) and [the Block List Project](https://github.com/blocklistproject/Lists).

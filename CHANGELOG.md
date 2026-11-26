@@ -172,6 +172,38 @@
 - Fixed: the border of a focused tile at the start or end of a row on the home screen, and of a focused card in
   History, Bookmarks and Downloads, was cut off.
 
+**Site filters**
+
+- **Block whole sites by category** (Settings → Site filters, each off until turned on): adult sites, gambling (in
+  three sizes, "More sites" recommended), unsafe sites (fake downloads and malware) and drugs, or any list of
+  domains by its address. A blocked site is stopped however you reach it, a typed address, a bookmark, a link or a
+  redirect, and so is anything a page loads from it, with ad blocking on or off. The block screen names the list
+  and offers Go back or Allow this site; Allowed sites in Settings takes a site back.
+- Reading a large list takes far less memory than before, which also helps the ad lists.
+
+**Custom DNS**
+
+- **DNS over HTTPS** (Settings → DNS, off until you choose): a main and a fallback DNS from services ranked in four
+  groups, from most to least private (Private, Private with trade-offs, Limited privacy, Utility-first), each with
+  what it blocks; filtered and unfiltered versions where a service has both; or any other service by its address.
+  It covers pages, Sofa Player, downloads and list updates. When neither service answers, the TV's own DNS takes
+  over so pages keep loading; home-network names always use it. Test shows how fast each one answers.
+
+**Parental PIN**
+
+- **A PIN for Settings and the blockers** (Settings → Parental PIN, off until you set one): once set, Sofa asks for
+  it before Settings open, ad blocking is turned off, a site is let through Site filters, private browsing starts
+  or History is deleted. It is entered with the remote's arrows or number keys, kept only as a salted hash, and
+  wrong tries lead to a growing pause.
+
+**Menu buttons**
+
+- **Your own menu** (Settings → Menu buttons): put the actions behind More (the sidebar's balloon, or the row under
+  the bottom bar) in the order you like and hide the ones you don't use. Pick a button up with OK, move it with the
+  arrows and put it down with OK; the actions as they will look are shown below the list. The bar's own buttons stay
+  where they are, and Settings always stays among the actions. Clearing browsing data keeps your menu, and Reset
+  brings back the default one.
+
 ## 1.2.2 (2026-10-30)
 
 **Sofa Player**

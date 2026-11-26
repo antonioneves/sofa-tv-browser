@@ -19,6 +19,8 @@ interface PageMenu {
     val dockHasFocus: Boolean
     /** Called when the docked bar is left: the focus goes back to the page. */
     var onLeave: (() -> Unit)?
+    /** The More actions and their order, from Settings > Menu buttons; a menu built for another layout is built again. */
+    val layout: MenuLayout
 
     fun show(state: BrowserMenu.State)
     fun update(s: BrowserMenu.State)

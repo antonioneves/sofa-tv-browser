@@ -39,6 +39,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.webkit.WebViewFeature
+import app.sofabrowser.adblock.FilterList
+import app.sofabrowser.adblock.SiteAllowlist
 import app.sofabrowser.adblock.Sites
 import app.sofabrowser.browser.ActivationCodes
 import app.sofabrowser.browser.Browser
@@ -99,6 +101,8 @@ import app.sofabrowser.ui.PadHelp
 import app.sofabrowser.ui.ListActivity
 import app.sofabrowser.ui.Palette
 import app.sofabrowser.ui.SearchActivity
+import app.sofabrowser.ui.PinGate
+import app.sofabrowser.ui.PinPad
 import app.sofabrowser.ui.SettingsActivity
 import app.sofabrowser.ui.PhoneCard
 import app.sofabrowser.ui.SofaDialog
@@ -413,6 +417,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             if (shown) screen.onPageFinished(url) else tabsChanged()
         }
         override fun onPageVisible(url: String) { if (shown) screen.onPageVisible(url) }
+        // A tab out of view keeps the empty stand-in page; the block screen shows only for the tab in view.
+        override fun onSiteBlocked(url: String, list: FilterList, replaced: Boolean) { if (shown) screen.onSiteBlocked(url, list, replaced) }
         override fun onProgress(percent: Int) {
             if (shown) screen.onProgress(percent) else if (percent >= 100) tab.loading = false
         }
@@ -1035,7 +1041,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     }
 
     /** The menu where Settings puts it: the bar at the left edge, or along the bottom of the screen. */
-    private fun menuView() = menu ?: (if (prefs.menuBottom) BottomMenu(this, this) else BrowserMenu(this, this)).also { m ->
+    private fun menuView() = menu ?: (if (prefs.menuBottom) BottomMenu(this, this, prefs.menuLayout) else BrowserMenu(this, this, prefs.menuLayout)).also { m ->
         menu = m
         // A docked bar is left for the page, not closed.
         m.onLeave = { if (!homeShown) web?.requestFocus() }
@@ -1141,9 +1147,14 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
             BrowserMenu.Action.ADBLOCK -> if (host != null) {
                 if (!prefs.adBlock) { toast(R.string.adblock_globally_off); return }
                 val allowed = !browser.adBlockOff(host)
-                browser.setAdBlockOff(host, allowed)
-                toast(if (allowed) R.string.adblock_site_disabled else R.string.adblock_site_enabled)
-                browser.reload()
+                fun apply() {
+                    browser.setAdBlockOff(host, allowed)
+                    toast(if (allowed) R.string.adblock_site_disabled else R.string.adblock_site_enabled)
+                    browser.reload()
+                    menu?.update(menuState())
+                }
+                // Turning blocking back on never needs the PIN.
+                if (allowed) PinPad.guard(this, R.string.pin_title_site_adblock) { apply() } else apply()
             }
             BrowserMenu.Action.PHONE_CREDENTIALS -> signInForm?.let { form ->
                 menu?.dismiss()
@@ -1369,12 +1380,21 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onSpace() = if (Space.active) Space.leave(this) else startActivity(Intent(this, PinActivity::class.java))
 
     override fun onToggleAdBlock() {
+        if (prefs.adBlock) PinPad.guard(this, R.string.pin_title_adblock) { toggleAdBlock() } else toggleAdBlock()
+    }
+
+    private fun toggleAdBlock() {
         prefs.adBlock = !prefs.adBlock
         toast(if (prefs.adBlock) R.string.adblock_on else R.string.adblock_off)
         home.refresh(prefs.privateMode, prefs.adBlock)
     }
 
     override fun onTogglePrivate() {
+        // Leaving private browsing never needs the PIN.
+        if (!prefs.privateMode) PinPad.guard(this, R.string.pin_title_private) { togglePrivate() } else togglePrivate()
+    }
+
+    private fun togglePrivate() {
         val entering = !prefs.privateMode
         val wasIsolated = browser.isolated
         // Private browsing has tabs of its own. Entering it puts the normal tabs away, as addresses and histories
@@ -2684,6 +2704,37 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
     private val crashLoop = CrashLoop()
 
+    private var siteBlock: SofaDialog? = null
+
+    /**
+     * The block screen: the site and the list that blocks it. "Go back" (focused) and Back leave it; "Allow this site"
+     * lets the site through from now on (Settings > Site filters > Allowed sites takes it back).
+     */
+    override fun onSiteBlocked(url: String, list: FilterList, replaced: Boolean) {
+        if (isFinishing) return
+        siteBlock?.dismiss()
+        val site = Sites.of(Browser.hostOf(url)?.lowercase() ?: url)
+        fun leave() {
+            // Nothing to go back to: the page was the first one opened from the home screen.
+            if (replaced) { if (web?.canGoBack() == true) browser.goBack() else showHome() }
+            else if (web?.url == null) showHome()
+        }
+        siteBlock = dialog().setTitle(R.string.site_blocked_title)
+            .setMessage(getString(R.string.site_blocked_text, site, SettingsActivity.siteListName(this, list)))
+            .setPositiveButton(R.string.go_back) { _, _ -> leave() }
+            .setNegativeButton(R.string.allow_this_site) { _, _ ->
+                // Not entered: back to the block screen, with Go back in focus.
+                PinPad.guard(this, R.string.pin_title_allow_site, cancelled = { onSiteBlocked(url, list, replaced) }) {
+                    SiteAllowlist.allow(this, Browser.hostOf(url) ?: site)
+                    toast(getString(R.string.site_allowed, site))
+                    if (replaced && web?.url == url) browser.reloadAllowed() else openUrl(url)
+                }
+            }
+            .setOnCancelListener { leave() }
+            .show()
+            .also { it.getButton(android.content.DialogInterface.BUTTON_POSITIVE)?.requestFocus() }
+    }
+
     override fun onRendererGone() {
         val url = web?.url
         browser.destroy()
@@ -2739,12 +2790,15 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         resumed = true
         // Back from the search screen: the sofa that glided into its corner goes, whichever way the screen closed.
         leftSofa?.invoke(); leftSofa = null
+        // Back to browsing: a PIN entered for Settings or History doesn't carry over.
+        PinGate.close()
         playInSince = 0L
         // A theme change in Settings rebuilds the screen (and the WebView, whose pages follow the theme).
         if (Ui.paletteFor(this, prefs.theme) !== palette) { recreate(); return }
         // The menu moved in Settings, between the left edge and the bottom of the screen: the old one goes.
         menu?.let { m ->
-            if ((m is BottomMenu) != prefs.menuBottom) {
+            // Or its buttons were rearranged in Settings > Menu buttons.
+            if ((m is BottomMenu) != prefs.menuBottom || m.layout != prefs.menuLayout) {
                 m.undock()
                 m.dismiss()
                 menu = null

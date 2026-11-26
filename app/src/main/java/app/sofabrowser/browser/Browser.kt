@@ -34,9 +34,11 @@ import app.sofabrowser.cookieBannerSites
 import app.sofabrowser.data.HiddenElements
 import app.sofabrowser.adblock.AdBlocker
 import app.sofabrowser.adblock.Allowlist
+import app.sofabrowser.adblock.FilterList
 import app.sofabrowser.adblock.InPageBlocking
 import app.sofabrowser.adblock.NavigationGuard
 import app.sofabrowser.adblock.Sites
+import java.io.ByteArrayInputStream
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -75,6 +77,11 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         fun onPopupBlocked(url: String?)
         /** The page tried to leave for a listed host on its own; "Allow once" can follow it. */
         fun onRedirectBlocked()
+        /**
+         * A Site filters [list] blocks the site at [url]. With [replaced], an empty page took its place in the history;
+         * otherwise the navigation was stopped and the page before stays.
+         */
+        fun onSiteBlocked(url: String, list: FilterList, replaced: Boolean)
         fun onRendererGone()
     }
 
@@ -103,6 +110,13 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
 
     /** The "Browse as" mode the view has now, with the custom string when it is "custom". */
     private var appliedUserAgent: String? = null
+
+    /** The address whose page a Site filters list replaced with an empty one, while that one shows. */
+    @Volatile private var blockedPage: String? = null
+
+    /** A page reloaded by [reloadAllowed], until its visit is recorded. */
+    private var allowedReload: String? = null
+
     val adBlocker = AdBlocker.get(context)
     private val guard = NavigationGuard()
     /** Set while Sofa taps the page on its own ([unattended]), so the guard doesn't take that tap for the user's. */
@@ -406,11 +420,17 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
         override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
             pageHost = AdBlocker.hostOf(url)
             pageUrl = url
-            if (!isReload) host.onVisited(url)
+            // A blocked site's empty stand-in stays out of History; the page itself counts once the user allows it.
+            val allowed = isReload && url == allowedReload
+            if (allowed) allowedReload = null
+            if ((!isReload || allowed) && url != blockedPage) host.onVisited(url)
         }
 
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
             val url = request.url.toString()
+            // Site filters apply whether ad blocking is on or not, and to every way of reaching a page: typed
+            // addresses, bookmarks and home tiles never pass through shouldOverrideUrlLoading.
+            val site = if (url.startsWith("http")) adBlocker.siteListed(url) else null
             if (request.isForMainFrame) {
                 // A new document's subresources are requested before onPageStarted reaches the UI thread, so the
                 // page host, count and streams switch over here, on the network thread, ahead of them.
@@ -418,7 +438,18 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
                 pageUrl = url
                 adBlocker.resetPageCount()
                 streams.clear()
+                if (site != null) {
+                    blockedPage = url
+                    view.post { host.onSiteBlocked(url, site, replaced = true) }
+                    return WebResourceResponse("text/html", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"),
+                        ByteArrayInputStream(BLOCKED_PAGE))
+                }
+                blockedPage = null
             } else {
+                if (site != null) {
+                    adBlocker.countBlocked()
+                    return WebResourceResponse("text/plain", "utf-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                }
                 if (url !in refetching && StreamSniffer.isCandidate(url)) streams.request(url, listed(url), request.requestHeaders)
                 if (app.sofabrowser.BuildConfig.DEBUG && extensionOf(url) in setOf("m3u8", "mpd")) android.util.Log.d("SofaStream", "manifest $url")
             }
@@ -427,6 +458,10 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val url = request.url
+            if (request.isForMainFrame && url.scheme?.lowercase()?.startsWith("http") == true) {
+                // Links and server redirects: stopped before anything loads, so the page before stays.
+                adBlocker.siteListed(url.toString())?.let { host.onSiteBlocked(url.toString(), it, replaced = false); return true }
+            }
             return when (url.scheme?.lowercase()) {
                 "http", "https" -> (request.isForMainFrame && blockNavigation(view, request)).also { blocked ->
                     if (request.isForMainFrame && !blocked) mainFrameTarget = url.toString()
@@ -691,6 +726,9 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
     }
     fun reload() { guard.userNavigation(); web?.reload() }
 
+    /** Reloads a page whose site the user just allowed from the block screen: unlike a plain reload, a visit. */
+    fun reloadAllowed() { allowedReload = web?.url; reload() }
+
     /** Whether ad blocking (and with it pop-up and redirect blocking) applies to pages from [pageHost]. */
     private fun blocking(pageHost: String?) = prefs.adBlock && (pageHost == null || !adBlockOff(pageHost))
 
@@ -726,6 +764,8 @@ class Browser(private val context: Context, private val prefs: Prefs, private va
 
     companion object {
         private const val PRIVATE_PROFILE = "private"
+        /** What a blocked site's page is replaced with, under the block screen: empty, dark, and titled with nothing. */
+        private val BLOCKED_PAGE = "<!doctype html><meta name=color-scheme content=dark><title></title><body style=background:#121212>".toByteArray()
         private val PRESS_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
             KeyEvent.KEYCODE_BUTTON_A)
         private const val GPC_SCRIPT =

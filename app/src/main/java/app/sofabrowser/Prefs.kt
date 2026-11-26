@@ -168,9 +168,20 @@ class Prefs(context: Context) {
     /** Shows the way into the private space; off, nothing on screen says there is one. */
     var privateSpace by boolean("private_space", false)
     var safeBrowsing by boolean("safe_browsing", false)
+    /**
+     * Custom DNS (SecureDns): the main and the fallback DNS, each a DnsProviders id or a DoH address ("https://…"), or
+     * "" for the device's own DNS. Both empty by default: Sofa then contacts no DNS provider of its own.
+     */
+    var dnsMain by string("dns_main", "")
+    var dnsFallback by string("dns_fallback", "")
     /** Lets WebView darken pages that have no dark theme of their own. */
     var darkPages by boolean("dark_pages", false)
     var showMostVisited by boolean("most_visited", true)
+    /** The browse menu's buttons, in the user's order (MenuLayout.encode); "" is the default menu. A setting: clearing browsing data never touches it. */
+    var menuButtons by string("menu_buttons", "")
+    var menuLayout: app.sofabrowser.ui.MenuLayout
+        get() = app.sofabrowser.ui.MenuLayout.decode(menuButtons)
+        set(v) { menuButtons = v.encode() }
     var privateMode by boolean("private_mode", false)
     var askedNotifications by boolean("asked_notifications", false)
     /** The WebView version the old-WebView warning was last shown for, and when. */
