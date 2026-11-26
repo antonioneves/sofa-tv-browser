@@ -365,6 +365,21 @@ class BrowserMenu(context: Context, private val actions: Actions, override val l
         content.visibility = if (visible) android.view.View.VISIBLE else android.view.View.GONE
     }
 
+    override fun tapAt(x: Float, y: Float): Boolean {
+        if (!docked || content.visibility != android.view.View.VISIBLE) return false
+        val at = IntArray(2)
+        content.getLocationInWindow(at)
+        val t = android.os.SystemClock.uptimeMillis()
+        val down = MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, x - at[0], y - at[1], 0)
+        val taken = content.dispatchTouchEvent(down)
+        down.recycle()
+        if (!taken) return false
+        val up = MotionEvent.obtain(t, android.os.SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x - at[0], y - at[1], 0)
+        content.dispatchTouchEvent(up)
+        up.recycle()
+        return true
+    }
+
     /** A key while the docked bar has the focus: what the bar adds to the usual way the focus moves. */
     override fun dockedKey(event: KeyEvent): Boolean {
         val focus = content.findFocus() ?: return false

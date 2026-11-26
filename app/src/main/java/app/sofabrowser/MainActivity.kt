@@ -202,7 +202,15 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
 
         val root = FrameLayout(this)
         browserLayer = FrameLayout(this).apply { visibility = View.GONE }
-        cursor = CursorLayout(this).apply { listener = this@MainActivity }
+        cursor = CursorLayout(this).apply {
+            listener = this@MainActivity
+            // The pointer can click the docked sidebar's buttons, and the balloon open beside it.
+            tapOver = { x, y ->
+                val at = IntArray(2)
+                getLocationInWindow(at)
+                menu?.tapAt(x + at[0], y + at[1]) == true
+            }
+        }
         browserLayer.addView(cursor, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         progress = View(this).apply { setBackgroundColor(Ui.BRAND); pivotX = 0f; scaleX = 0f }
         browserLayer.addView(progress, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 6.px, Gravity.BOTTOM))
@@ -1095,6 +1103,8 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         (browserLayer.layoutParams as? FrameLayout.LayoutParams)?.let {
             val left = if (m?.docked == true && m !is BottomMenu) BrowserMenu.BAR.px else 0
             val bottom = if (m?.docked == true && m is BottomMenu) BrowserMenu.BAR.px else 0
+            // The pointer may go over a bar docked at the left edge, which the page is laid out beside.
+            cursor.barReach = left
             if (it.leftMargin != left || it.bottomMargin != bottom) { it.leftMargin = left; it.bottomMargin = bottom; browserLayer.layoutParams = it }
         }
     }

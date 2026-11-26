@@ -39,6 +39,19 @@ class CursorLayout(context: Context) : FrameLayout(context) {
 
     var listener: Listener? = null
 
+    /**
+     * How far (px) the pointer may go past this layer's left edge, over a bar docked beside it; 0 when none is. There
+     * the pointer is drawn above the bar, and OK is handed to [tapOver] instead of the page.
+     */
+    var barReach = 0
+        set(value) {
+            field = value
+            if (pos.x < -value) { pos.x = -value.toFloat(); invalidate() }
+        }
+
+    /** A tap at (x, y) in this layer when the pointer is in the bar or the page has something of the menu over it: true when the menu took it. */
+    var tapOver: ((Float, Float) -> Boolean)? = null
+
     /** 1 = slow, 2 = normal, 3 = fast. */
     var speedLevel = 2
 
@@ -142,9 +155,9 @@ class CursorLayout(context: Context) : FrameLayout(context) {
             if (dy != 0) dirY = dy
             // A quick tap still moves a few pixels, for fine positioning.
             if (!scrollMode) {
-                pos.x = (pos.x + dx * NUDGE * unit).coerceIn(0f, w - 1)
+                pos.x = (pos.x + dx * NUDGE * unit).coerceIn(-barReach.toFloat(), w - 1)
                 pos.y = (pos.y + dy * NUDGE * unit).coerceIn(0f, h - 1)
-                if (okHeld && touchDown) touch(MotionEvent.ACTION_MOVE) else if (!okHeld) hover()
+                if (okHeld && touchDown && pos.x >= 0) touch(MotionEvent.ACTION_MOVE) else if (!okHeld) hover()
             }
             start()
         } else {
@@ -179,13 +192,15 @@ class CursorLayout(context: Context) : FrameLayout(context) {
         if (okRevealOnly) { okRevealOnly = false; return }
         if (!okHeld) return
         okHeld = false
+        if (!touchDown && tapOver?.invoke(pos.x, pos.y) == true) { invalidate(); return }
+        if (pos.x < 0) { invalidate(); return }
         if (!touchDown) touch(MotionEvent.ACTION_DOWN)
         touch(MotionEvent.ACTION_UP)
         invalidate()
     }
 
     private val holdCheck = Runnable {
-        if (okHeld && !touchDown) {
+        if (okHeld && !touchDown && pos.x >= 0) {
             okHeld = false
             okRevealOnly = true // swallow the key-up
             // A short touch makes WebView hit-test the spot. It is cancelled once the answer is in, well before the
@@ -259,9 +274,12 @@ class CursorLayout(context: Context) : FrameLayout(context) {
                 lastActivity = SystemClock.uptimeMillis()
                 val oldX = pos.x
                 val oldY = pos.y
-                pos.x = (pos.x + stepX).coerceIn(0f, w - 1)
+                pos.x = (pos.x + stepX).coerceIn(-barReach.toFloat(), w - 1)
                 pos.y = (pos.y + stepY).coerceIn(0f, h - 1)
-                if (pos.x != oldX || pos.y != oldY) {
+                if (pos.x < 0) {
+                    // Over the bar: the page is not touched, and a touch begun on it ends.
+                    if (touchDown) touch(MotionEvent.ACTION_CANCEL)
+                } else if (pos.x != oldX || pos.y != oldY) {
                     if (okHeld) {
                         if (!touchDown) { removeCallbacks(holdCheck); touch(MotionEvent.ACTION_DOWN, PointF(oldX, oldY)) }
                         touch(MotionEvent.ACTION_MOVE)
@@ -269,7 +287,7 @@ class CursorLayout(context: Context) : FrameLayout(context) {
                         hover()
                     }
                 }
-                val sx = if ((pos.x > w - edge && stepX > 0) || (pos.x < edge && stepX < 0)) stepX else 0f
+                val sx = if (pos.x < 0) 0f else if ((pos.x > w - edge && stepX > 0) || (pos.x < edge && stepX < 0)) stepX else 0f
                 val sy = if ((pos.y > h - edge && stepY > 0) || (pos.y < edge && stepY < 0)) stepY else 0f
                 if ((sx != 0f || sy != 0f) && !okHeld) dragScroll(sx, sy)
             }
@@ -368,6 +386,7 @@ class CursorLayout(context: Context) : FrameLayout(context) {
 
     /** Mouse hover at the pointer, so CSS :hover and hover menus react as they would on a desktop. */
     private fun hover() {
+        if (pos.x < 0) return
         val child = getChildAt(0) ?: return
         val props = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_MOUSE }
         val coords = MotionEvent.PointerCoords().apply { x = pos.x - child.left; y = pos.y - child.top }
@@ -380,11 +399,41 @@ class CursorLayout(context: Context) : FrameLayout(context) {
 
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
+        if (pos.x >= 0) drawPointer(canvas, pos.x, pos.y)
+    }
+
+    private fun drawPointer(canvas: Canvas, x: Float, y: Float) {
         if (!visible || scrollMode) return
         val r = if (okHeld || touchDown) pressedRadius else radius
-        canvas.drawCircle(pos.x, pos.y, r, fill)
-        canvas.drawCircle(pos.x, pos.y, r, ring)
-        canvas.drawCircle(pos.x, pos.y, r + 3f, outline)
+        canvas.drawCircle(x, y, r, fill)
+        canvas.drawCircle(x, y, r, ring)
+        canvas.drawCircle(x, y, r + 3f, outline)
+    }
+
+    /** Over the bar the pointer is drawn on the window's overlay, above the bar, which is drawn after this layer. */
+    private val overBar = object : android.graphics.drawable.Drawable() {
+        override fun draw(canvas: Canvas) {
+            if (pos.x >= 0) return
+            val at = IntArray(2)
+            getLocationInWindow(at)
+            drawPointer(canvas, pos.x + at[0], pos.y + at[1])
+        }
+        override fun setAlpha(alpha: Int) = Unit
+        override fun setColorFilter(filter: android.graphics.ColorFilter?) = Unit
+        @Suppress("OVERRIDE_DEPRECATION")
+        override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
+    }
+    private var overBarOn = false
+
+    override fun invalidate() {
+        super.invalidate()
+        if (pos.x < 0 || overBarOn) overBar.invalidateSelf()
+        overBarOn = pos.x < 0
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        (rootView as? android.view.ViewGroup)?.let { overBar.setBounds(0, 0, it.width, it.height); it.overlay.add(overBar) }
     }
 
     /** Hides the pointer until the next key, e.g. while an overlay is open. */
@@ -395,6 +444,7 @@ class CursorLayout(context: Context) : FrameLayout(context) {
     }
 
     override fun onDetachedFromWindow() {
+        (rootView as? android.view.ViewGroup)?.overlay?.remove(overBar)
         Choreographer.getInstance().removeFrameCallback(frame)
         running = false
         super.onDetachedFromWindow()

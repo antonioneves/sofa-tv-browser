@@ -36,4 +36,6 @@ interface PageMenu {
     fun setDockVisible(visible: Boolean) = Unit
     /** A key while the docked bar has the focus: what the bar adds to the usual way the focus moves. */
     fun dockedKey(event: KeyEvent): Boolean = false
+    /** A tap at ([x], [y]) in the window by the pointer, on the docked bar or what is open beside it: true when a button or the bar took it. */
+    fun tapAt(x: Float, y: Float): Boolean = false
 }
