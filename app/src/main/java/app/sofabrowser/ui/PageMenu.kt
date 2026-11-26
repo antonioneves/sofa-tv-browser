@@ -38,4 +38,6 @@ interface PageMenu {
     fun dockedKey(event: KeyEvent): Boolean = false
     /** A tap at ([x], [y]) in the window by the pointer, on the docked bar or what is open beside it: true when a button or the bar took it. */
     fun tapAt(x: Float, y: Float): Boolean = false
+    /** The pointer is at ([x], [y]) in the window ([over] false: it left or is hidden): the button under it shows as hovered. */
+    fun hoverAt(x: Float, y: Float, over: Boolean) = Unit
 }

@@ -52,6 +52,9 @@ class CursorLayout(context: Context) : FrameLayout(context) {
     /** A tap at (x, y) in this layer when the pointer is in the bar or the page has something of the menu over it: true when the menu took it. */
     var tapOver: ((Float, Float) -> Boolean)? = null
 
+    /** The pointer moved to (x, y) in this layer, or (over = false) went away: the menu shows what is under it as hovered. */
+    var hoverOver: ((Float, Float, Boolean) -> Unit)? = null
+
     /** 1 = slow, 2 = normal, 3 = fast. */
     var speedLevel = 2
 
@@ -279,6 +282,7 @@ class CursorLayout(context: Context) : FrameLayout(context) {
                 if (pos.x < 0) {
                     // Over the bar: the page is not touched, and a touch begun on it ends.
                     if (touchDown) touch(MotionEvent.ACTION_CANCEL)
+                    hover()
                 } else if (pos.x != oldX || pos.y != oldY) {
                     if (okHeld) {
                         if (!touchDown) { removeCallbacks(holdCheck); touch(MotionEvent.ACTION_DOWN, PointF(oldX, oldY)) }
@@ -386,6 +390,7 @@ class CursorLayout(context: Context) : FrameLayout(context) {
 
     /** Mouse hover at the pointer, so CSS :hover and hover menus react as they would on a desktop. */
     private fun hover() {
+        hoverOver?.invoke(pos.x, pos.y, true)
         if (pos.x < 0) return
         val child = getChildAt(0) ?: return
         val props = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_MOUSE }
@@ -438,6 +443,7 @@ class CursorLayout(context: Context) : FrameLayout(context) {
 
     /** Hides the pointer until the next key, e.g. while an overlay is open. */
     fun hide() {
+        hoverOver?.invoke(pos.x, pos.y, false)
         cancelGestures()
         lastActivity = SystemClock.uptimeMillis() - HIDE_AFTER_MS
         invalidate()

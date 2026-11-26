@@ -210,6 +210,11 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 getLocationInWindow(at)
                 menu?.tapAt(x + at[0], y + at[1]) == true
             }
+            hoverOver = { x, y, over ->
+                val at = IntArray(2)
+                getLocationInWindow(at)
+                menu?.hoverAt(x + at[0], y + at[1], over)
+            }
         }
         browserLayer.addView(cursor, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         progress = View(this).apply { setBackgroundColor(Ui.BRAND); pivotX = 0f; scaleX = 0f }

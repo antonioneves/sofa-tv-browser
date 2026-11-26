@@ -365,6 +365,17 @@ class BrowserMenu(context: Context, private val actions: Actions, override val l
         content.visibility = if (visible) android.view.View.VISIBLE else android.view.View.GONE
     }
 
+    override fun hoverAt(x: Float, y: Float, over: Boolean) {
+        if (!docked || content.visibility != android.view.View.VISIBLE) return
+        val at = IntArray(2)
+        content.getLocationInWindow(at)
+        val t = android.os.SystemClock.uptimeMillis()
+        val ev = MotionEvent.obtain(t, t, if (over) MotionEvent.ACTION_HOVER_MOVE else MotionEvent.ACTION_HOVER_EXIT, x - at[0], y - at[1], 0)
+        ev.source = android.view.InputDevice.SOURCE_MOUSE
+        content.dispatchGenericMotionEvent(ev)
+        ev.recycle()
+    }
+
     override fun tapAt(x: Float, y: Float): Boolean {
         if (!docked || content.visibility != android.view.View.VISIBLE) return false
         val at = IntArray(2)

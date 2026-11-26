@@ -131,6 +131,8 @@ object Ui {
     /** A fill that changes when focused, as used by buttons, rows and the search pill. */
     fun fillSelector(normal: Int, focused: Int, radius: Int) = StateListDrawable().apply {
         addState(intArrayOf(android.R.attr.state_focused), rounded(focused, radius))
+        // A mouse or the pointer over it: the focus colour, half as strong.
+        addState(intArrayOf(android.R.attr.state_hovered), rounded((focused and 0xFFFFFF) or (0x66 shl 24), radius))
         addState(intArrayOf(), rounded(normal, radius))
     }
 
