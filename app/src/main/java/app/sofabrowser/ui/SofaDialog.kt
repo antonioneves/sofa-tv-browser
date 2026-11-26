@@ -114,7 +114,10 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0.6f)
-            setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            // From Android 11 the dialog follows the keyboard itself (see below); the window's own resizing
+            // didn't move it every time the keyboard came up.
+            setSoftInputMode(if (Build.VERSION.SDK_INT >= 30) WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+                else WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
         b.onDismiss?.let { setOnDismissListener(it) }
         b.onCancel?.let { setOnCancelListener(it) }
@@ -205,9 +208,8 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         root.addView(sheet, FrameLayout.LayoutParams(900.px, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         // Keep the sheet within the screen: long text and long lists scroll inside it.
         root.setPadding(0, 48.px, 0, 48.px)
-        // From Android 15 a window is no longer made smaller for the keyboard (SOFT_INPUT_ADJUST_RESIZE above does that
-        // up to Android 14), so the sheet keeps above the keyboard itself.
-        if (Build.VERSION.SDK_INT >= 35) root.setOnApplyWindowInsetsListener { v, insets ->
+        // The sheet keeps above the keyboard whenever it is up, as many times as it comes.
+        if (Build.VERSION.SDK_INT >= 30) root.setOnApplyWindowInsetsListener { v, insets ->
             v.setPadding(0, 48.px, 0, 48.px + insets.getInsets(WindowInsets.Type.ime()).bottom)
             insets
         }
