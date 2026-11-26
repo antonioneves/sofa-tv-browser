@@ -95,11 +95,14 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
     fun isPinned(url: String): Boolean =
         readableDatabase.rawQuery("SELECT 1 FROM bookmarks WHERE url = ? AND pinned IS NOT NULL", arrayOf(url)).use { it.moveToFirst() }
 
-    /** Pins the bookmark for [url] to the end of Quick access, bookmarking the page first if it is not yet. */
+    /**
+     * Pins the bookmark for [url] to the end of Quick access, bookmarking the page first if it is not yet. Quick access
+     * is the top level, so a bookmark in a folder comes out of it.
+     */
     fun pin(title: String, url: String) {
         val db = writableDatabase
         val next = db.compileStatement("SELECT COALESCE(MAX(pinned) + 1, 0) FROM bookmarks").simpleQueryForLong()
-        val changed = db.update("bookmarks", ContentValues().apply { put("pinned", next) }, "url = ? AND pinned IS NULL", arrayOf(url))
+        val changed = db.update("bookmarks", ContentValues().apply { put("pinned", next); putNull("folder") }, "url = ? AND pinned IS NULL", arrayOf(url))
         if (changed == 0 && !isBookmarked(url)) db.insert("bookmarks", null, ContentValues().apply {
             put("title", title.ifBlank { url }); put("url", url); put("created", System.currentTimeMillis()); put("pinned", next)
         })
