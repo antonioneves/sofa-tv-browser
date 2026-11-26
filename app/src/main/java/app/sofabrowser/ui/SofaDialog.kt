@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.drawable.ColorDrawable
+import android.os.Build
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.Spanned
@@ -14,6 +15,7 @@ import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -112,7 +114,10 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0.6f)
-            setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            // From Android 11 the dialog follows the keyboard itself (see below); the window's own resizing
+            // didn't move it every time the keyboard came up.
+            setSoftInputMode(if (Build.VERSION.SDK_INT >= 30) WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+                else WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
         b.onDismiss?.let { setOnDismissListener(it) }
         b.onCancel?.let { setOnCancelListener(it) }
@@ -200,12 +205,14 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         }
 
         val root = FrameLayout(context)
-        // A sheet with a text field sits at the top: the keyboard fills the lower part of the screen, and neither the
-        // window's resizing nor the keyboard's reported size can be counted on to move the sheet out of its way.
-        val gravity = if (hasField(sheet)) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
-        root.addView(sheet, FrameLayout.LayoutParams(900.px, ViewGroup.LayoutParams.WRAP_CONTENT, gravity))
+        root.addView(sheet, FrameLayout.LayoutParams(900.px, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         // Keep the sheet within the screen: long text and long lists scroll inside it.
         root.setPadding(0, 48.px, 0, 48.px)
+        // The sheet keeps above the keyboard whenever it is up, as many times as it comes.
+        if (Build.VERSION.SDK_INT >= 30) root.setOnApplyWindowInsetsListener { v, insets ->
+            v.setPadding(0, 48.px, 0, 48.px + insets.getInsets(WindowInsets.Type.ime()).bottom)
+            insets
+        }
         root.clipChildren = false
         setContentView(root)
         (firstFocus ?: positive ?: negative ?: neutral)?.requestFocus()
@@ -366,6 +373,3 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
 
     private companion object { const val MAX_BODY = 560 }
 }
-
-private fun hasField(v: View): Boolean =
-    v is EditText || v is ViewGroup && (0 until v.childCount).any { hasField(v.getChildAt(it)) }
