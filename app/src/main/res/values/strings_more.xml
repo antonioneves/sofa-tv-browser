@@ -234,9 +234,8 @@
     <string name="folder_deleted">Folder deleted</string>
     <string name="folder_moved_to">Moved to %1$s</string>
     <string name="folder_move_title">Move “%1$s” to</string>
-    <string name="folder_cant_move">A folder can\'t go into itself or a folder inside it</string>
+    <string name="folder_no_place">There is no other place to move it to</string>
     <string name="folder_top">Bookmarks (top)</string>
-    <string name="folder_here_now">(here now)</string>
     <string name="move_selected">Move selected (%d)</string>
     <string name="confirm_clear_bookmarks_folders">Delete all bookmarks and folders?</string>
 </resources>

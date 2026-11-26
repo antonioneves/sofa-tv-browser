@@ -334,25 +334,21 @@ class ListActivity : Activity() {
     }
 
     /**
-     * Asks where [what] goes: the top level or any folder, indented under its parent, the folder it is in now marked.
-     * [allowed] refuses a folder it can't go into; [move] moves it there.
+     * Asks where [what] goes: the top level or any folder, indented under its parent. Only the places it can go are
+     * offered, so not where it is now, and for a folder not itself, a folder inside it, one that already has a folder
+     * of that name, or one too deep ([allowed] says which). When there is none, says so instead. [move] moves it.
      */
     private fun pickFolder(what: String, now: Long?, allowed: (Long?) -> Boolean, move: (Long?) -> Unit) {
-        val targets = listOf<Long?>(null) + tree.outline().map { it.first.id }
-        val labels = listOf(getString(R.string.folder_top)) + tree.outline().map { (f, depth) -> "    ".repeat(depth) + f.title }
-        val marked = labels.mapIndexed { i, l -> if (targets[i] == now) "$l  ${getString(R.string.folder_here_now)}" else l }
+        val places = listOf<Pair<Long?, String>>(null to getString(R.string.folder_top)) +
+            tree.outline().map { (f, depth) -> f.id to "    ".repeat(depth) + f.title }
+        val offered = places.filter { (id, _) -> id != now && allowed(id) }
+        if (offered.isEmpty()) return toast(getString(R.string.folder_no_place))
         Ui.dialog(this).setTitle(getString(R.string.folder_move_title, what))
-            .setSingleChoiceItems(marked.toTypedArray(), targets.indexOf(now)) { d, i ->
+            .setSingleChoiceItems(offered.map { it.second }.toTypedArray(), -1) { d, i ->
                 d.dismiss()
-                val to = targets[i]
-                when {
-                    to == now -> Unit
-                    !allowed(to) -> toast(getString(R.string.folder_cant_move))
-                    else -> {
-                        move(to)
-                        toast(getString(R.string.folder_moved_to, tree[to]?.title ?: getString(R.string.bookmarks)))
-                    }
-                }
+                val to = offered[i].first
+                move(to)
+                toast(getString(R.string.folder_moved_to, tree[to]?.title ?: getString(R.string.bookmarks)))
             }
             .setNegativeButton(android.R.string.cancel, null).show()
     }
