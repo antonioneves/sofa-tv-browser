@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
+import android.text.InputType
 import android.text.TextUtils
 import android.text.format.DateUtils
 import android.view.Gravity
@@ -16,15 +17,18 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.BaseAdapter
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
+import android.widget.Toast
 import app.sofabrowser.R
 import app.sofabrowser.browser.UrlInput
 import app.sofabrowser.data.Db
 import app.sofabrowser.data.Favicons
+import app.sofabrowser.data.FolderTree
 import app.sofabrowser.data.Site
 import java.text.DateFormat
 import java.util.Calendar
@@ -32,6 +36,9 @@ import java.util.Date
 
 /**
  * History or bookmarks as one focusable list. Returns the chosen URL in [SearchActivity.EXTRA_URL].
+ *
+ * Bookmarks show one folder at a time: at the top level Quick access, then the folders A to Z and the bookmarks there;
+ * in a folder an "Up to…" row, its folders and its bookmarks. Back goes back through the folders visited first.
  *
  * Only the rows on screen exist as views (a [ListView]), and an icon is looked up when its row is shown, so a list of
  * thousands of imported bookmarks costs about what a screenful does.
@@ -47,6 +54,17 @@ class ListActivity : Activity() {
     private sealed interface Item
     private class Header(val label: String) : Item
     private class Entry(val title: String, val url: String, val meta: String?, val bookmark: Boolean, val delete: () -> Unit) : Item
+    private class FolderItem(val id: Long, val title: String, val detail: String) : Item
+    private class Up(val to: Long?, val label: String) : Item
+
+    // The folder shown (null: the top level), and the ones visited before it, which Back returns to.
+    private var folder: Long? = null
+    private val trail = ArrayList<Long?>()
+    private var tree = FolderTree(emptyList())
+    private lateinit var titleView: TextView
+    private lateinit var newFolderButton: TextView
+    private lateinit var moveSelectedButton: TextView
+    private lateinit var deleteFolderButton: TextView
 
     // Selecting bookmarks to delete several at once: OK ticks a row instead of opening it.
     private var selecting = false
@@ -60,6 +78,11 @@ class ListActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Ui.init(this)
+        if (!history) {
+            folder = savedInstanceState?.takeIf { it.containsKey(STATE_FOLDER) }?.getLong(STATE_FOLDER)
+                ?: intent.takeIf { it.hasExtra(EXTRA_FOLDER) }?.getLongExtra(EXTRA_FOLDER, 0)
+            savedInstanceState?.getLongArray(STATE_TRAIL)?.forEach { trail += it.takeIf { it != TOP } }
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = Ui.background(false)
@@ -67,15 +90,21 @@ class ListActivity : Activity() {
             clipToPadding = false
         }
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        header.addView(Ui.text(this, 56, Ui.p.text, bold = true).apply {
+        titleView = Ui.text(this, 56, Ui.p.text, bold = true).apply {
             text = getString(if (history) R.string.history else R.string.bookmarks)
-        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.START
+        }
+        header.addView(titleView, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = 32.px })
         if (!history) {
+            newFolderButton = headerButton(R.string.folder_new) { newFolder() }
             selectButton = headerButton(R.string.select) { setSelecting(true) }
             selectAllButton = headerButton(R.string.select_all) { selectAll() }
+            moveSelectedButton = headerButton(R.string.move_selected) { moveSelected() }
             deleteSelectedButton = headerButton(R.string.delete_selected, danger = true) { confirmDeleteSelected() }
             cancelButton = headerButton(android.R.string.cancel) { setSelecting(false) }
-            listOf(selectButton, selectAllButton, deleteSelectedButton, cancelButton).forEach {
+            deleteFolderButton = headerButton(R.string.folder_delete_this, danger = true) { folder?.let(::deleteFolder) }
+            listOf(newFolderButton, selectButton, selectAllButton, moveSelectedButton, deleteSelectedButton, cancelButton, deleteFolderButton).forEach {
                 header.addView(it, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
                     .apply { marginEnd = 16.px })
             }
@@ -138,24 +167,61 @@ class ListActivity : Activity() {
                 items += Entry(h.title, h.url, time.format(Date(h.visitedAt)), bookmark = false) { db.removeHistory(h.id) }
             }
         } else {
-            // Two sections: the bookmarks in Quick access, in their order, then the rest.
-            val pinned = db.pinned()
-            val pinnedUrls = pinned.map { it.url }.toSet()
-            val rest = db.bookmarks().filter { it.url !in pinnedUrls }
-            if (pinned.isNotEmpty()) items += Header(getString(R.string.quick_access))
-            pinned.forEach { b -> items += Entry(b.title, b.url, null, bookmark = true) { db.removeBookmark(b.url) } }
-            if (rest.isNotEmpty()) items += Header(getString(R.string.bookmarks))
-            rest.forEach { b -> items += Entry(b.title, b.url, null, bookmark = true) { db.removeBookmark(b.url) } }
+            tree = db.folderTree()
+            // A folder deleted meanwhile (from the start page's menu, or a restore) shows the top level.
+            if (folder != null && tree[folder] == null) { folder = null; trail.clear() }
+            val counts = db.bookmarkCounts()
+            fun bookmark(b: Site) = Entry(b.title, b.url, null, bookmark = true) { db.removeBookmark(b.url) }
+            val folders = tree.children(folder).map {
+                FolderItem(it.id, it.title, FolderText.contents(this, tree.children(it.id).size, counts[it.id] ?: 0))
+            }
+            val here = folder
+            if (here == null) {
+                // Two sections: the bookmarks in Quick access, in their order, then the folders and the rest.
+                val pinned = db.pinned()
+                val pinnedUrls = pinned.map { it.url }.toSet()
+                val rest = db.bookmarksIn(null).filter { it.url !in pinnedUrls }
+                if (pinned.isNotEmpty()) items += Header(getString(R.string.quick_access))
+                pinned.forEach { items += bookmark(it) }
+                if (folders.isNotEmpty() || rest.isNotEmpty()) items += Header(getString(R.string.bookmarks))
+                items += folders
+                rest.forEach { items += bookmark(it) }
+            } else {
+                val parent = tree[here]?.parent
+                items += Up(parent, getString(R.string.folder_up, tree[parent]?.title ?: getString(R.string.bookmarks)))
+                items += folders
+                db.bookmarksIn(here).forEach { items += bookmark(it) }
+                if (items.size == 1) items += Header(getString(R.string.folder_empty))
+            }
+            titleView.text = (listOf(getString(R.string.bookmarks)) + tree.pathNames(folder)).joinToString("  ›  ")
         }
         adapter.items = items
         adapter.notifyDataSetChanged()
         empty.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
         selected.retainAll(items.mapNotNullTo(HashSet()) { (it as? Entry)?.url })
         updateHeader()
-        focusRow(focusAt ?: items.indexOfFirst { it is Entry })
+        focusRow(focusAt ?: items.indexOfFirst { it !is Header && it !is Up }.takeIf { it >= 0 } ?: 0)
     }
 
     private val entries get() = adapter.items.filterIsInstance<Entry>()
+
+    /** Shows folder [to]; [back] when Back returned there, else the folder left is remembered for Back. */
+    private fun go(to: Long?, back: Boolean = false) {
+        val from = folder
+        if (!back) trail += from
+        folder = to
+        if (selecting) { selecting = false; selected.clear() }
+        load()
+        // Back in a folder's parent, the folder that was left keeps the focus.
+        val at = adapter.items.indexOfFirst { it is FolderItem && it.id == from }
+        if (from != null && at >= 0) focusRow(at)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        folder?.let { outState.putLong(STATE_FOLDER, it) }
+        outState.putLongArray(STATE_TRAIL, trail.map { it ?: TOP }.toLongArray())
+    }
 
     /**
      * Focus on the row at [position] (or the nearest row after it, else before it), scrolled into sight; [top] keeps it
@@ -165,7 +231,7 @@ class ListActivity : Activity() {
         val items = adapter.items
         if (items.isEmpty() || position < 0) return
         val from = position.coerceAtMost(items.size - 1)
-        val at = (from until items.size).firstOrNull { items[it] is Entry } ?: (from downTo 0).firstOrNull { items[it] is Entry } ?: return
+        val at = (from until items.size).firstOrNull { items[it] !is Header } ?: (from downTo 0).firstOrNull { items[it] !is Header } ?: return
         if (top != null) list.setSelectionFromTop(at, top) else list.setSelection(at)
         list.post { list.getChildAt(at - list.firstVisiblePosition)?.findViewWithTag<View>(BODY)?.requestFocus() }
     }
@@ -207,10 +273,142 @@ class ListActivity : Activity() {
             val pinned = db.isPinned(entry.url)
             items.add(TileMenu.Item(if (pinned) R.drawable.ic_star_filled else R.drawable.ic_star,
                 if (pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access) { togglePin(entry) })
+            items.add(TileMenu.Item(R.drawable.ic_move, R.string.move) { moveBookmarks(listOf(entry.url), entry.title.ifBlank { entry.url }) })
         }
         items.add(TileMenu.Item(R.drawable.ic_delete, R.string.delete) { remove(entry) }.danger())
         TileMenu(this, Site(0, entry.title.ifBlank { entry.url }, entry.url), items).show()
     }
+
+    private fun showMenu(f: FolderItem) {
+        TileMenu(this, Site(0, f.title, ""), listOf(
+            TileMenu.Item(R.drawable.ic_folder, R.string.folder_open) { go(f.id) },
+            TileMenu.Item(R.drawable.ic_edit, R.string.folder_rename) { renameFolder(f.id) },
+            TileMenu.Item(R.drawable.ic_move, R.string.move) { moveFolder(f.id) },
+            TileMenu.Item(R.drawable.ic_delete, R.string.delete) { deleteFolder(f.id) }.danger(),
+        )).show()
+    }
+
+    // Folders
+
+    /** A one-line name field in a dialog, OK saving it through [save], which says whether the name was taken. */
+    private fun askName(title: Int, current: String, save: (String) -> Boolean) {
+        val field = EditText(this).apply {
+            setText(current)
+            setSelection(text.length)
+            isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val box = FrameLayout(this).apply { setPadding(0, 8.px, 0, 8.px); addView(field) }
+        Ui.dialog(this).setTitle(title).setView(box)
+            .setPositiveButton(R.string.folder_save) { _, _ ->
+                val name = FolderTree.cleanName(field.text.toString())
+                if (name.isNotEmpty() && !save(name)) toast(getString(R.string.folder_name_taken, name))
+            }
+            .setNegativeButton(android.R.string.cancel, null).show()
+        // The name first: OK on it brings up the keyboard.
+        field.requestFocus()
+    }
+
+    private fun newFolder() {
+        val parent = folder
+        if (!tree.canHold(parent)) return tooDeep()
+        askName(R.string.folder_new, "") { name ->
+            if (db.folderTree().find(parent, name) != null) return@askName false
+            val id = db.addFolder(parent, name)
+            load()
+            focusRow(adapter.items.indexOfFirst { it is FolderItem && it.id == id })
+            true
+        }
+    }
+
+    private fun renameFolder(id: Long) {
+        val f = tree[id] ?: return
+        askName(R.string.folder_rename_title, f.title) { name ->
+            val other = db.folderTree().find(f.parent, name)
+            if (other != null && other.id != id) return@askName false
+            db.renameFolder(id, name)
+            load()
+            focusRow(adapter.items.indexOfFirst { it is FolderItem && it.id == id })
+            true
+        }
+    }
+
+    /**
+     * Asks where [what] goes: the top level or any folder, indented under its parent, the folder it is in now marked.
+     * [allowed] refuses a folder it can't go into; [move] moves it there.
+     */
+    private fun pickFolder(what: String, now: Long?, allowed: (Long?) -> Boolean, move: (Long?) -> Unit) {
+        val targets = listOf<Long?>(null) + tree.outline().map { it.first.id }
+        val labels = listOf(getString(R.string.folder_top)) + tree.outline().map { (f, depth) -> "    ".repeat(depth) + f.title }
+        val marked = labels.mapIndexed { i, l -> if (targets[i] == now) "$l  ${getString(R.string.folder_here_now)}" else l }
+        Ui.dialog(this).setTitle(getString(R.string.folder_move_title, what))
+            .setSingleChoiceItems(marked.toTypedArray(), targets.indexOf(now)) { d, i ->
+                d.dismiss()
+                val to = targets[i]
+                when {
+                    to == now -> Unit
+                    !allowed(to) -> toast(getString(R.string.folder_cant_move))
+                    else -> {
+                        move(to)
+                        toast(getString(R.string.folder_moved_to, tree[to]?.title ?: getString(R.string.bookmarks)))
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    private fun moveBookmarks(urls: List<String>, what: String) {
+        pickFolder(what, folder, { true }) { to ->
+            val at = adapter.items.indexOfFirst { it is Entry && it.url == urls.first() }
+            urls.forEach { db.moveBookmark(it, to) }
+            selecting = false
+            selected.clear()
+            load(at.takeIf { it >= 0 })
+        }
+    }
+
+    private fun moveSelected() {
+        if (selected.isEmpty()) return
+        val urls = selected.toList()
+        moveBookmarks(urls, if (urls.size == 1) entries.firstOrNull { it.url == urls[0] }?.title ?: urls[0]
+            else resources.getQuantityString(R.plurals.bookmark_count, urls.size, urls.size))
+    }
+
+    private fun moveFolder(id: Long) {
+        val f = tree[id] ?: return
+        pickFolder(f.title, f.parent, { tree.canMove(id, it) && db.folderTree().find(it, f.title) == null }) { to ->
+            val at = adapter.items.indexOfFirst { it is FolderItem && it.id == id }
+            db.moveFolder(id, to)
+            load(at.takeIf { it >= 0 })
+        }
+    }
+
+    /** Deletes folder [id]; when anything is in it, asks first, with Cancel focused. */
+    private fun deleteFolder(id: Long) {
+        val f = tree[id] ?: return
+        val inside = tree.subtree(id)
+        val counts = db.bookmarkCounts()
+        val folders = inside.size - 1
+        val bookmarks = inside.sumOf { counts[it] ?: 0 }
+        val delete = {
+            val at = adapter.items.indexOfFirst { it is FolderItem && it.id == id }
+            db.deleteFolder(id)
+            toast(getString(R.string.folder_deleted))
+            if (folder != null && folder in inside) go(f.parent, back = true) else load(at.takeIf { it >= 0 })
+        }
+        if (folders == 0 && bookmarks == 0) { delete(); return }
+        val d = Ui.dialog(this)
+            .setMessage(getString(R.string.folder_delete_confirm, f.title, FolderText.deleted(this, folders, bookmarks)))
+            .setDestructive()
+            .setPositiveButton(R.string.delete) { _, _ -> delete() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+        d.getButton(android.content.DialogInterface.BUTTON_NEGATIVE)?.requestFocus()
+    }
+
+    private fun tooDeep() = toast(resources.getQuantityString(R.plurals.folder_too_deep, FolderTree.MAX_DEPTH, FolderTree.MAX_DEPTH))
+
+    private fun toast(text: String) = SofaToast.makeText(this, text, Toast.LENGTH_SHORT).show()
 
     private fun dayLabel(t: Long): String {
         val now = Calendar.getInstance()
@@ -234,12 +432,12 @@ class ListActivity : Activity() {
         override fun getViewTypeCount() = 2
         override fun getItemViewType(position: Int) = if (items[position] is Header) 0 else 1
         override fun areAllItemsEnabled() = false
-        override fun isEnabled(position: Int) = items[position] is Entry
+        override fun isEnabled(position: Int) = items[position] !is Header
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
             when (val item = items[position]) {
                 is Header -> ((convertView as? TextView) ?: headerView()).apply { text = item.label }
-                is Entry -> ((convertView as? RowView) ?: RowView(this@ListActivity)).apply { bind(item) }
+                else -> ((convertView as? RowView) ?: RowView(this@ListActivity)).apply { bind(item) }
             }
 
         private fun headerView() = Ui.text(this@ListActivity, 30, Ui.p.textWeak).apply {
@@ -248,9 +446,13 @@ class ListActivity : Activity() {
         }
     }
 
-    /** One entry: OK opens the page (or ticks it while selecting); holding OK, or Menu, opens its options. */
+    /**
+     * One entry: OK opens the page (or ticks it while selecting); holding OK, or Menu, opens its options. A folder's row
+     * opens the folder, and the Up row its parent.
+     */
     private inner class RowView(context: Context) : LinearLayout(context) {
-        private var entry: Entry? = null
+        private var item: Item? = null
+        private val entry get() = item as? Entry
         private val icon = ImageView(context)
         private val title = Ui.text(context, 34, Ui.p.text).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
         private val meta = Ui.text(context, 24, Ui.p.textWeak).apply {
@@ -270,13 +472,17 @@ class ListActivity : Activity() {
             foreground = Ui.focusBorder(16)
             setPadding(40.px, 0, 40.px, 0)
             setOnClickListener {
-                val e = entry ?: return@setOnClickListener
-                if (e.bookmark && selecting) toggle(e.url) else open(e)
+                when (val i = item) {
+                    is Entry -> if (i.bookmark && selecting) toggle(i.url) else open(i)
+                    is FolderItem -> go(i.id)
+                    is Up -> go(i.to)
+                    else -> Unit
+                }
             }
-            setOnLongClickListener { entry?.let(::showMenu); true }
+            setOnLongClickListener { menu(); true }
             setOnKeyListener { _, keyCode, event ->
                 if (keyCode != KeyEvent.KEYCODE_MENU) return@setOnKeyListener false
-                if (event.action == KeyEvent.ACTION_UP) entry?.let(::showMenu)
+                if (event.action == KeyEvent.ACTION_UP) menu()
                 true
             }
             setOnFocusChangeListener { v, has -> Ui.animateScale(v, if (has) 1.02f else 1f, has) }
@@ -296,18 +502,45 @@ class ListActivity : Activity() {
             addView(body, LayoutParams(0, 136.px, 1f))
         }
 
-        fun bind(e: Entry) {
-            entry = e
-            icon.setImageDrawable(Favicons.get(context).drawable(e.url, e.title, 128))
-            title.text = e.title.ifBlank { e.url }
-            meta.text = listOfNotNull(e.meta, UrlInput.display(e.url)).joinToString("  ·  ")
+        private fun menu() {
+            when (val i = item) {
+                is Entry -> showMenu(i)
+                is FolderItem -> if (!selecting) showMenu(i)
+                else -> Unit
+            }
+        }
+
+        fun bind(i: Item) {
+            item = i
+            icon.clearColorFilter()
+            when (i) {
+                is Entry -> {
+                    icon.setImageDrawable(Favicons.get(context).drawable(i.url, i.title, 128))
+                    title.text = i.title.ifBlank { i.url }
+                    meta.text = listOfNotNull(i.meta, UrlInput.display(i.url)).joinToString("  ·  ")
+                }
+                is FolderItem -> {
+                    icon.setImageResource(R.drawable.ic_folder)
+                    icon.setColorFilter(Ui.p.textMid, PorterDuff.Mode.SRC_IN)
+                    title.text = i.title
+                    meta.text = i.detail
+                }
+                is Up -> {
+                    icon.setImageResource(R.drawable.ic_arrow_upward)
+                    icon.setColorFilter(Ui.p.textMid, PorterDuff.Mode.SRC_IN)
+                    title.text = i.label
+                    meta.text = ""
+                }
+                is Header -> Unit
+            }
+            meta.visibility = if (meta.text.isNullOrEmpty()) View.GONE else View.VISIBLE
             showCheck()
             // A reused row starts as an unfocused one.
             if (!body.hasFocus()) { body.scaleX = 1f; body.scaleY = 1f }
         }
 
         fun showCheck() {
-            val e = entry ?: return
+            val e = entry ?: run { check.visibility = View.GONE; return }
             val on = e.url in selected
             check.visibility = if (e.bookmark && selecting) View.VISIBLE else View.GONE
             check.setImageResource(if (on) R.drawable.ic_check_box else R.drawable.ic_check_box_outline_blank)
@@ -331,7 +564,8 @@ class ListActivity : Activity() {
         if (!on) selected.clear()
         refreshChecks()
         updateHeader()
-        if (on) focusRow(list.firstVisiblePosition) else selectButton.requestFocus()
+        if (on) focusRow(adapter.items.indexOfFirst { it is Entry }.takeIf { it >= 0 } ?: list.firstVisiblePosition)
+        else selectButton.requestFocus()
     }
 
     private fun toggle(url: String) {
@@ -346,17 +580,25 @@ class ListActivity : Activity() {
         updateHeader()
     }
 
-    /** The buttons of the bookmarks screen: Select and Delete all, or while selecting Select all, Delete selected and Cancel. */
+    /**
+     * The buttons of the bookmarks screen: New folder, Select, and Delete all at the top or Delete folder in a folder;
+     * while selecting Select all, Move selected, Delete selected and Cancel.
+     */
     private fun updateHeader() {
         if (history) return
         fun show(v: View, on: Boolean) { v.visibility = if (on) View.VISIBLE else View.GONE }
-        show(selectButton, !selecting && adapter.items.isNotEmpty())
-        show(deleteAllButton, !selecting)
+        show(newFolderButton, !selecting)
+        show(selectButton, !selecting && entries.isNotEmpty())
+        show(deleteAllButton, !selecting && folder == null)
+        show(deleteFolderButton, !selecting && folder != null)
         show(selectAllButton, selecting)
+        show(moveSelectedButton, selecting)
         show(deleteSelectedButton, selecting)
         show(cancelButton, selecting)
         deleteSelectedButton.text = getString(R.string.delete_selected, selected.size)
+        moveSelectedButton.text = getString(R.string.move_selected, selected.size)
         deleteSelectedButton.alpha = if (selected.isEmpty()) 0.5f else 1f
+        moveSelectedButton.alpha = if (selected.isEmpty()) 0.5f else 1f
     }
 
     private fun confirmDeleteSelected() {
@@ -382,6 +624,10 @@ class ListActivity : Activity() {
             setSelecting(false)
             return true
         }
+        if (keyCode == KeyEvent.KEYCODE_BACK && trail.isNotEmpty()) {
+            go(trail.removeAt(trail.size - 1), back = true)
+            return true
+        }
         return super.onKeyDown(keyCode, event)
     }
 
@@ -391,7 +637,11 @@ class ListActivity : Activity() {
 
     private fun confirmDeleteAll() {
         Ui.dialog(this)
-            .setMessage(if (history) R.string.confirm_clear_history else R.string.confirm_clear_bookmarks)
+            .setMessage(when {
+                history -> R.string.confirm_clear_history
+                tree.outline().isNotEmpty() -> R.string.confirm_clear_bookmarks_folders
+                else -> R.string.confirm_clear_bookmarks
+            })
             .setDestructive()
             .setPositiveButton(R.string.delete_all) { _, _ ->
                 if (history) db.clearHistory() else db.clearBookmarks()
@@ -405,6 +655,12 @@ class ListActivity : Activity() {
         const val EXTRA_MODE = "mode"
         const val MODE_HISTORY = "history"
         const val MODE_BOOKMARKS = "bookmarks"
+        /** The folder (its id) the Bookmarks screen opens in; the top level without it. */
+        const val EXTRA_FOLDER = "folder"
+        private const val STATE_FOLDER = "folder"
+        private const val STATE_TRAIL = "trail"
+        // The top level, in the saved trail.
+        private const val TOP = -1L
         private const val BODY = "body"
     }
 }

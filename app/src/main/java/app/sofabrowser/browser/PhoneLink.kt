@@ -50,13 +50,13 @@ class PhoneLink(
                 else Response.html(html(words.sent)).also { main.post { onText(text) } }
             }
             r.path == "/$FILE_NAME" && r.method == "GET" -> Response("200 OK", "text/html; charset=utf-8",
-                BookmarkFile.write(db.bookmarkEntries()).toByteArray(Charsets.UTF_8),
+                BookmarkFile.write(db.bookmarkEntries(), db.folderEntries()).toByteArray(Charsets.UTF_8),
                 listOf("Content-Disposition: attachment; filename=\"$FILE_NAME\""))
             r.path == "/import" && r.method == "POST" -> {
                 val entries = BookmarkFile.read(String(r.body, Charsets.UTF_8))
                 if (entries == null) Response.text(words.notAFile, "422 Unprocessable Content")
                 else {
-                    val added = db.importBookmarks(entries)
+                    val added = db.importBookmarks(entries).bookmarks
                     val message = words.added(added)
                     main.post { onImported(added, message) }
                     Response.text(message)

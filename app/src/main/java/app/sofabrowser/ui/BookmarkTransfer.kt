@@ -2,6 +2,7 @@ package app.sofabrowser.ui
 
 import android.app.Activity
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
@@ -89,9 +90,6 @@ class BookmarkTransfer(private val activity: Activity, private val onUrl: (Strin
             .show()
     }
 
-    private fun addedText(added: Int) =
-        if (added == 0) activity.getString(R.string.bookmarks_added_none)
-        else activity.resources.getQuantityString(R.plurals.bookmarks_added, added, added)
 
     /** Handles the result of the file picker; false when [requestCode] is not one of this class's. */
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
@@ -103,12 +101,12 @@ class BookmarkTransfer(private val activity: Activity, private val onUrl: (Strin
             var added = 0
             val message = try {
                 if (requestCode == REQ_EXPORT) {
-                    val file = BookmarkFile.write(db.bookmarkEntries()).toByteArray(Charsets.UTF_8)
+                    val file = BookmarkFile.write(db.bookmarkEntries(), db.folderEntries()).toByteArray(Charsets.UTF_8)
                     activity.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(file) }
                     activity.getString(R.string.bookmarks_exported)
                 } else {
                     val text = activity.contentResolver.openInputStream(uri)!!.use { String(it.readBytes(), Charsets.UTF_8) }
-                    BookmarkFile.read(text)?.let { added = db.importBookmarks(it); addedText(added) }
+                    BookmarkFile.read(text)?.let { val imported = db.importBookmarks(it); added = imported.bookmarks; addedText(activity, imported) }
                         ?: activity.getString(R.string.bookmarks_not_a_file)
                 }
             } catch (_: Exception) {
@@ -124,6 +122,18 @@ class BookmarkTransfer(private val activity: Activity, private val onUrl: (Strin
     }
 
     companion object {
+        /** "Added 12 bookmarks", "Added 12 bookmarks in 3 folders", or that nothing was new. */
+        fun addedText(context: Context, imported: Db.Imported): String {
+            val r = context.resources
+            val added = imported.bookmarks
+            return when {
+                added == 0 -> context.getString(R.string.bookmarks_added_none)
+                imported.folders == 0 -> r.getQuantityString(R.plurals.bookmarks_added, added, added)
+                else -> r.getQuantityString(R.plurals.bookmarks_added_in_folders, added, added,
+                    r.getQuantityString(R.plurals.folder_count, imported.folders, imported.folders))
+            }
+        }
+
         // High, so they never meet the host activity's own request codes.
         const val REQ_EXPORT = 7101
         const val REQ_IMPORT = 7102

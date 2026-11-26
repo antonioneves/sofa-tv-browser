@@ -71,6 +71,10 @@ object BackupFile {
     fun cleanPages(raw: List<Pair<String, String>>): List<Pair<String, String>> =
         raw.filter { (_, url) -> webAddress(url) && url.length <= 8192 }.map { (t, u) -> t.take(500) to u }
 
+    /** A bookmark folder's path from a backup: names cleaned as typed ones are, no deeper than Sofa keeps. */
+    fun cleanPath(path: List<String>): List<String> =
+        path.map(FolderTree::cleanName).filter { it.isNotEmpty() }.take(FolderTree.MAX_DEPTH)
+
     /** Sites (host names) with their hidden parts of pages kept to the plain selectors [HiddenElements] allows. */
     fun cleanHidden(raw: Map<String, String>): Map<String, String> =
         raw.filterKeys { HOST.matches(it) }.mapValues { HiddenElements.join(HiddenElements.parse(it.value)) }.filterValues { it.isNotEmpty() }

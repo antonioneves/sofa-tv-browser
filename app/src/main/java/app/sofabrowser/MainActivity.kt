@@ -1408,6 +1408,7 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
     override fun onVoiceSearch() = startSearch(voice = true, current = null)
     override fun onPhoneSearch() = startSearch(voice = false, current = null, phone = true)
     override fun onBookmarks() = openList(ListActivity.MODE_BOOKMARKS)
+    override fun onFolder(id: Long) = openList(ListActivity.MODE_BOOKMARKS, id)
     override fun onHistory() = openList(ListActivity.MODE_HISTORY)
     override fun onSettings() = openSettings()
     override fun onDownloads() = startActivity(Intent(this, DownloadsActivity::class.java))
@@ -1564,10 +1565,13 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
         startActivityForResult(Intent(this, SettingsActivity::class.java), REQ_URL)
     }
 
-    private fun openList(mode: String) {
+    /** The Bookmarks or History screen; bookmarks open in [folder] when given. */
+    private fun openList(mode: String, folder: Long? = null) {
         menu?.dismiss()
+        val intent = Intent(this, ListActivity::class.java).putExtra(ListActivity.EXTRA_MODE, mode)
+        folder?.let { intent.putExtra(ListActivity.EXTRA_FOLDER, it) }
         @Suppress("DEPRECATION")
-        startActivityForResult(Intent(this, ListActivity::class.java).putExtra(ListActivity.EXTRA_MODE, mode), REQ_URL)
+        startActivityForResult(intent, REQ_URL)
     }
 
     @Deprecated("Framework activity result API")

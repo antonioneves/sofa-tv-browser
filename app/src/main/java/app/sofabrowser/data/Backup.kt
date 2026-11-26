@@ -35,7 +35,10 @@ object Backup {
             .put("tiles", pages(db.pinned().map { it.title to it.url }))
             .put("bookmarks", JSONArray(db.bookmarkEntries().map {
                 JSONObject().put("title", it.title).put("url", it.url).put("created", it.created)
+                    .apply { if (it.folder.isNotEmpty()) put("folder", JSONArray(it.folder)) }
             }))
+            // Every folder, so empty ones come back too; a bookmark names its own folder by path.
+            .put("folders", JSONArray(db.folderEntries().map { JSONObject().put("path", JSONArray(it.path)).put("created", it.created) }))
             .put("history", JSONArray(db.history(HISTORY_LIMIT).map {
                 JSONObject().put("title", it.title).put("url", it.url).put("visited", it.visitedAt)
             }))
@@ -78,7 +81,12 @@ object Backup {
         db.importTiles(pairs("tiles"))
         val marks = pairs("bookmarks").map { it.second }.toSet()
         val created = objects("bookmarks").filter { it.optString("url") in marks }
-        db.importBookmarks(created.map { BookmarkFile.Entry(it.optString("title"), it.optString("url"), it.optLong("created", 0)) })
+        fun path(a: JSONArray?) = BackupFile.cleanPath((0 until (a?.length() ?: 0)).map { a!!.optString(it) })
+        val folders = objects("folders").map { BookmarkFile.Folder(path(it.optJSONArray("path")), it.optLong("created", 0)) }
+            .filter { it.path.isNotEmpty() }.distinctBy { it.path }.take(BookmarkFile.MAX_FOLDERS)
+        db.importBookmarks(created.map {
+            BookmarkFile.Entry(it.optString("title"), it.optString("url"), it.optLong("created", 0), path(it.optJSONArray("folder")))
+        }, folders)
         val seen = pairs("history").map { it.second }.toSet()
         db.importHistory(objects("history").filter { it.optString("url") in seen && it.optLong("visited", 0) > 0 }
             .map { HistoryEntry(0, it.optString("title").take(500), it.optString("url"), it.optLong("visited")) })

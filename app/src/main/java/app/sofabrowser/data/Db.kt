@@ -12,10 +12,10 @@ data class Site(val id: Long, val title: String, val url: String)
 data class HistoryEntry(val id: Long, val title: String, val url: String, val visitedAt: Long)
 
 /**
- * All persistent user data: bookmarks (the pinned ones are Quick access) and history. Everything stays on the device;
+ * All persistent user data: bookmarks in their folders (the pinned ones are Quick access) and history. Everything stays on the device;
  * there is no sync and no upload.
  */
-class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space.name("sofa.db"), null, 4) {
+class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space.name("sofa.db"), null, 5) {
 
     private val writer = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
         Thread(r, "history-db").apply { priority = Thread.MIN_PRIORITY }
@@ -29,6 +29,7 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         db.execSQL("CREATE INDEX history_url ON history (url)")
         createDownloads(db)
         createMostVisitedRemoved(db)
+        createFolders(db)
         val now = System.currentTimeMillis()
         DEFAULT_TILES.forEachIndexed { i, (title, url) ->
             db.insert("bookmarks", null, ContentValues().apply {
@@ -41,6 +42,15 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         if (oldVersion < 2) createDownloads(db)
         if (oldVersion < 3) createMostVisitedRemoved(db)
         if (oldVersion < 4) pinTiles(db)
+        // Folders. Every bookmark there before stays at the top level.
+        if (oldVersion < 5) createFolders(db)
+    }
+
+    /** Bookmark folders: a folder's [Folder.parent] is null at the top level, as a bookmark's folder is. */
+    private fun createFolders(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE folders (id INTEGER PRIMARY KEY, parent INTEGER, title TEXT NOT NULL, created INTEGER NOT NULL)")
+        db.execSQL("ALTER TABLE bookmarks ADD COLUMN folder INTEGER")
+        db.execSQL("CREATE INDEX bookmarks_folder ON bookmarks (folder)")
     }
 
     /** Quick access used to be its own list of tiles; now they are bookmarks that are pinned, in the same order. */
@@ -119,18 +129,65 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         }
     }
 
-    // Bookmarks
+    // Bookmarks and their folders
 
-    /** Newest first; [limit] of them when the caller shows only a few (the start page), all when it is 0. */
-    fun bookmarks(limit: Int = 0): List<Site> =
-        query("SELECT id, title, url FROM bookmarks ORDER BY created DESC" + if (limit > 0) " LIMIT $limit" else "") {
+    /** Every bookmark, in any folder, newest first. */
+    fun bookmarks(): List<Site> = query("SELECT id, title, url FROM bookmarks ORDER BY created DESC") {
+        Site(it.getLong(0), it.getString(1), it.getString(2))
+    }
+
+    /** The bookmarks in [folder] (null: the top level), newest first. */
+    fun bookmarksIn(folder: Long?): List<Site> =
+        query("SELECT id, title, url FROM bookmarks WHERE " + inFolder(folder) + " ORDER BY created DESC", folderArgs(folder)) {
             Site(it.getLong(0), it.getString(1), it.getString(2))
         }
 
-    /** The newest [limit] bookmarks that are not pinned to Quick access, the most recently added first. */
+    /** The newest [limit] bookmarks at the top level that are not pinned to Quick access, the most recently added first. */
     fun recentBookmarks(limit: Int): List<Site> = query(
-        "SELECT id, title, url FROM bookmarks WHERE pinned IS NULL ORDER BY created DESC LIMIT $limit") {
+        "SELECT id, title, url FROM bookmarks WHERE pinned IS NULL AND folder IS NULL ORDER BY created DESC LIMIT $limit") {
         Site(it.getLong(0), it.getString(1), it.getString(2))
+    }
+
+    /** How many bookmarks each folder holds itself (not counting its folders); the top level under null. */
+    fun bookmarkCounts(): Map<Long?, Int> = HashMap<Long?, Int>().also { out ->
+        readableDatabase.rawQuery("SELECT folder, COUNT(*) FROM bookmarks GROUP BY folder", null).use { c ->
+            while (c.moveToNext()) out[if (c.isNull(0)) null else c.getLong(0)] = c.getInt(1)
+        }
+    }
+
+    fun folderTree(): FolderTree = FolderTree(query("SELECT id, parent, title, created FROM folders") {
+        Folder(it.getLong(0), if (it.isNull(1)) null else it.getLong(1), it.getString(2), it.getLong(3))
+    })
+
+    /** A new folder called [title] in [parent]; its id. */
+    fun addFolder(parent: Long?, title: String): Long = writableDatabase.insertOrThrow("folders", null, ContentValues().apply {
+        if (parent == null) putNull("parent") else put("parent", parent)
+        put("title", title)
+        put("created", System.currentTimeMillis())
+    })
+
+    fun renameFolder(id: Long, title: String) {
+        writableDatabase.update("folders", ContentValues().apply { put("title", title) }, "id = ?", arrayOf(id.toString()))
+    }
+
+    /** Moves folder [id] into [to]; the caller checked [FolderTree.canMove]. */
+    fun moveFolder(id: Long, to: Long?) {
+        writableDatabase.update("folders", ContentValues().apply { if (to == null) putNull("parent") else put("parent", to) },
+            "id = ?", arrayOf(id.toString()))
+    }
+
+    fun moveBookmark(url: String, to: Long?) {
+        writableDatabase.update("bookmarks", ContentValues().apply { if (to == null) putNull("folder") else put("folder", to) },
+            "url = ?", arrayOf(url))
+    }
+
+    /** Folder [id] with every folder and bookmark in it. */
+    fun deleteFolder(id: Long) {
+        val ids = folderTree().subtree(id).joinToString(",")
+        transaction { db ->
+            db.execSQL("DELETE FROM bookmarks WHERE folder IN ($ids)")
+            db.execSQL("DELETE FROM folders WHERE id IN ($ids)")
+        }
     }
 
     fun isBookmarked(url: String): Boolean =
@@ -148,38 +205,79 @@ class Db private constructor(context: Context) : SQLiteOpenHelper(context, Space
         writableDatabase.delete("bookmarks", "url = ?", arrayOf(url))
     }
 
-    /** All bookmarks, newest first, with when each was added. */
-    fun bookmarkEntries(): List<BookmarkFile.Entry> =
-        query("SELECT title, url, created FROM bookmarks ORDER BY created DESC") {
-            BookmarkFile.Entry(it.getString(0), it.getString(1), it.getLong(2))
+    /** All bookmarks, newest first, with when each was added and its folder, for a bookmarks file or a backup. */
+    fun bookmarkEntries(): List<BookmarkFile.Entry> {
+        val tree = folderTree()
+        return query("SELECT title, url, created, folder FROM bookmarks ORDER BY created DESC") {
+            BookmarkFile.Entry(it.getString(0), it.getString(1), it.getLong(2), tree.pathNames(if (it.isNull(3)) null else it.getLong(3)))
         }
-
-    fun clearBookmarks() {
-        writableDatabase.delete("bookmarks", null, null)
     }
 
+    /** Every folder by its path, so a file or a backup keeps empty ones and the dates they were made. */
+    fun folderEntries(): List<BookmarkFile.Folder> {
+        val tree = folderTree()
+        return tree.outline().map { (f, _) -> BookmarkFile.Folder(tree.pathNames(f.id), f.created) }
+    }
+
+    /** Every bookmark and every folder. */
+    fun clearBookmarks() = transaction { db ->
+        db.delete("bookmarks", null, null)
+        db.delete("folders", null, null)
+    }
+
+    /** What an import added: bookmarks, and the folders they went into. */
+    data class Imported(val bookmarks: Int, val folders: Int)
+
     /**
-     * Adds the [entries] not bookmarked yet and returns how many. An entry without a date counts as added now, just
-     * after the one before it, so the list keeps the file's order.
+     * Adds [entries] that aren't bookmarked yet, each in its folder, made where missing; a folder already there with the
+     * same name in the same place takes them, so importing a file twice adds nothing. A bookmark already there stays
+     * in its folder with its title. An entry without a date counts as added now, just after the one before it, so the
+     * list keeps the file's order. [folders] are made too even when empty (a backup's), and give made folders their dates.
      */
-    fun importBookmarks(entries: List<BookmarkFile.Entry>): Int {
-        val db = writableDatabase
+    fun importBookmarks(entries: List<BookmarkFile.Entry>, folders: List<BookmarkFile.Folder> = emptyList()): Imported {
         val now = System.currentTimeMillis()
         var added = 0
+        val filled = HashSet<Long>()
+        transaction { db ->
+            val tree = folderTree()
+            val dates = folders.associate { it.path to it.created }
+            fun folder(path: List<String>) = tree.resolve(path) { parent, title ->
+                val made = dates[tree.pathNames(parent) + title]?.takeIf { it > 0 } ?: now
+                db.insertOrThrow("folders", null, ContentValues().apply {
+                    if (parent == null) putNull("parent") else put("parent", parent)
+                    put("title", title)
+                    put("created", made)
+                })
+            }
+            folders.forEach { folder(it.path) }
+            entries.forEachIndexed { i, e ->
+                // A bookmark already there is left alone, so its folder isn't made for it.
+                if (db.rawQuery("SELECT 1 FROM bookmarks WHERE url = ?", arrayOf(e.url)).use { it.moveToFirst() }) return@forEachIndexed
+                val to = folder(e.folder)
+                db.insertOrThrow("bookmarks", null, ContentValues().apply {
+                    put("title", e.title.ifBlank { e.url }); put("url", e.url); put("created", if (e.created > 0) e.created else now - i)
+                    if (to == null) putNull("folder") else put("folder", to)
+                })
+                added++
+                to?.let { filled += it }
+            }
+        }
+        return Imported(added, filled.size)
+    }
+
+    private fun inFolder(folder: Long?) = if (folder == null) "folder IS NULL" else "folder = ?"
+
+    private fun folderArgs(folder: Long?) = folder?.let { arrayOf(it.toString()) }
+
+    private fun transaction(work: (SQLiteDatabase) -> Unit) {
+        val db = writableDatabase
         db.beginTransaction()
         try {
-            entries.forEachIndexed { i, e ->
-                val row = db.insertWithOnConflict("bookmarks", null, ContentValues().apply {
-                    put("title", e.title.ifBlank { e.url }); put("url", e.url)
-                    put("created", if (e.created > 0) e.created else now - i)
-                }, SQLiteDatabase.CONFLICT_IGNORE)
-                if (row != -1L) added++
-            }
+            work(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
         }
-        return added
     }
 
     /** Pins the quick-access [pages] (title, address) that are not pinned yet, bookmarking them first if need be. */

@@ -30,6 +30,8 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
         fun onVoiceSearch()
         fun onPhoneSearch()
         fun onBookmarks()
+        /** A bookmarks folder's card: the Bookmarks screen opens in that folder. */
+        fun onFolder(id: Long)
         fun onHistory()
         fun onTogglePrivate()
         fun onToggleAdBlock()
@@ -186,12 +188,22 @@ class HomeView(context: Context, private val listener: Listener) : FrameLayout(c
                 }
             }
         }
-        // Bookmarks live on the home screen: the 20 newest that are not in Quick access, ending in a card for the list
-        // that manages them all.
+        // Bookmarks live on the home screen: the top level's folders A to Z, then its 20 newest bookmarks that are not
+        // in Quick access, ending in a card for the list that manages them all.
         bookmarksRow = addRow(R.string.bookmarks, db.recentBookmarks(20)) { card ->
             card.setOnLongClickListener { card.site?.let(listener::onBookmarkMenu); true }
-        }.also {
-            it.addView(SiteCard(context, null, context.getDrawable(R.drawable.ic_bookmarks), context.getString(R.string.all_bookmarks)).apply {
+        }.also { row ->
+            val tree = db.folderTree()
+            val counts = db.bookmarkCounts()
+            tree.children(null).forEachIndexed { i, f ->
+                val detail = FolderText.contents(context, tree.children(f.id).size, counts[f.id] ?: 0)
+                row.addView(SiteCard(context, null, context.getDrawable(R.drawable.ic_folder), f.title, detail, tint = true).apply {
+                    contentDescription = "${f.title}, $detail"
+                    setOnClickListener { if (moving == null) listener.onFolder(f.id) }
+                }, i)
+            }
+            row.addView(SiteCard(context, null, context.getDrawable(R.drawable.ic_bookmarks), context.getString(R.string.all_bookmarks),
+                tint = true).apply {
                 setOnClickListener { listener.onBookmarks() }
             })
         }
