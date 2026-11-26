@@ -1485,8 +1485,14 @@ open class MainActivity : Activity(), HomeView.Listener, Browser.Host, BrowserMe
                 home.refresh(prefs.privateMode, prefs.adBlock)
             },
             TileMenu.Item(R.drawable.ic_delete, R.string.delete) {
-                db.removeBookmark(site.url)
-                home.refresh(prefs.privateMode, prefs.adBlock)
+                dialog().setMessage(resources.getQuantityString(R.plurals.confirm_delete_bookmarks, 1, 1))
+                    .setDestructive()
+                    .setPositiveButton(R.string.delete) { _, _ ->
+                        db.removeBookmark(site.url)
+                        home.refresh(prefs.privateMode, prefs.adBlock)
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
             }.danger(),
         )).show()
     }

@@ -275,7 +275,9 @@ class ListActivity : Activity() {
                 if (pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access) { togglePin(entry) })
             items.add(TileMenu.Item(R.drawable.ic_move, R.string.move) { moveBookmarks(listOf(entry.url), entry.title.ifBlank { entry.url }) })
         }
-        items.add(TileMenu.Item(R.drawable.ic_delete, R.string.delete) { remove(entry) }.danger())
+        items.add(TileMenu.Item(R.drawable.ic_delete, R.string.delete) {
+            if (entry.bookmark) confirmDeleteBookmark { remove(entry) } else remove(entry)
+        }.danger())
         TileMenu(this, Site(0, entry.title.ifBlank { entry.url }, entry.url), items).show()
     }
 
@@ -595,6 +597,16 @@ class ListActivity : Activity() {
         moveSelectedButton.text = getString(R.string.move_selected, selected.size)
         deleteSelectedButton.alpha = if (selected.isEmpty()) 0.5f else 1f
         moveSelectedButton.alpha = if (selected.isEmpty()) 0.5f else 1f
+    }
+
+    /** Asks before one bookmark is deleted, with Cancel focused; [delete] runs when it is confirmed. */
+    private fun confirmDeleteBookmark(delete: () -> Unit) {
+        Ui.dialog(this)
+            .setMessage(resources.getQuantityString(R.plurals.confirm_delete_bookmarks, 1, 1))
+            .setDestructive()
+            .setPositiveButton(R.string.delete) { _, _ -> delete() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun confirmDeleteSelected() {
