@@ -273,7 +273,8 @@ class ListActivity : Activity() {
             val pinned = db.isPinned(entry.url)
             items.add(TileMenu.Item(if (pinned) R.drawable.ic_star_filled else R.drawable.ic_star,
                 if (pinned) R.string.remove_from_quick_access else R.string.add_to_quick_access) { togglePin(entry) })
-            items.add(TileMenu.Item(R.drawable.ic_move, R.string.move) { moveBookmarks(listOf(entry.url), entry.title.ifBlank { entry.url }) })
+            if (bookmarkPlaces().isNotEmpty())
+                items.add(TileMenu.Item(R.drawable.ic_move, R.string.move) { moveBookmarks(listOf(entry.url), entry.title.ifBlank { entry.url }) })
         }
         items.add(TileMenu.Item(R.drawable.ic_delete, R.string.delete) {
             if (entry.bookmark) confirmDeleteBookmark { remove(entry) } else remove(entry)
@@ -282,12 +283,13 @@ class ListActivity : Activity() {
     }
 
     private fun showMenu(f: FolderItem) {
-        TileMenu(this, Site(0, f.title, ""), listOf(
+        val items = listOfNotNull(
             TileMenu.Item(R.drawable.ic_folder, R.string.folder_open) { go(f.id) },
             TileMenu.Item(R.drawable.ic_edit, R.string.folder_rename) { renameFolder(f.id) },
-            TileMenu.Item(R.drawable.ic_move, R.string.move) { moveFolder(f.id) },
+            TileMenu.Item(R.drawable.ic_move, R.string.move) { moveFolder(f.id) }.takeIf { folderPlaces(f.id).isNotEmpty() },
             TileMenu.Item(R.drawable.ic_delete, R.string.delete) { deleteFolder(f.id) }.danger(),
-        )).show()
+        )
+        TileMenu(this, Site(0, f.title, ""), items).show()
     }
 
     // Folders
@@ -340,10 +342,19 @@ class ListActivity : Activity() {
      * offered, so not where it is now, and for a folder not itself, a folder inside it, one that already has a folder
      * of that name, or one too deep ([allowed] says which). When there is none, says so instead. [move] moves it.
      */
-    private fun pickFolder(what: String, now: Long?, allowed: (Long?) -> Boolean, move: (Long?) -> Unit) {
-        val places = listOf<Pair<Long?, String>>(null to getString(R.string.folder_top)) +
-            tree.outline().map { (f, depth) -> f.id to "    ".repeat(depth) + f.title }
-        val offered = places.filter { (id, _) -> id != now && allowed(id) }
+    private fun places(now: Long?, allowed: (Long?) -> Boolean): List<Pair<Long?, String>> =
+        (listOf<Pair<Long?, String>>(null to getString(R.string.folder_top)) +
+            tree.outline().map { (f, depth) -> f.id to "    ".repeat(depth) + f.title })
+            .filter { (id, _) -> id != now && allowed(id) }
+
+    private fun bookmarkPlaces() = places(folder) { true }
+
+    private fun folderPlaces(id: Long): List<Pair<Long?, String>> {
+        val f = tree[id] ?: return emptyList()
+        return places(f.parent) { tree.canMove(id, it) && db.folderTree().find(it, f.title) == null }
+    }
+
+    private fun pickFolder(what: String, offered: List<Pair<Long?, String>>, move: (Long?) -> Unit) {
         if (offered.isEmpty()) return toast(getString(R.string.folder_no_place))
         Ui.dialog(this).setTitle(getString(R.string.folder_move_title, what))
             .setSingleChoiceItems(offered.map { it.second }.toTypedArray(), -1) { d, i ->
@@ -356,7 +367,7 @@ class ListActivity : Activity() {
     }
 
     private fun moveBookmarks(urls: List<String>, what: String) {
-        pickFolder(what, folder, { true }) { to ->
+        pickFolder(what, bookmarkPlaces()) { to ->
             val at = adapter.items.indexOfFirst { it is Entry && it.url == urls.first() }
             urls.forEach { db.moveBookmark(it, to) }
             selecting = false
@@ -374,7 +385,7 @@ class ListActivity : Activity() {
 
     private fun moveFolder(id: Long) {
         val f = tree[id] ?: return
-        pickFolder(f.title, f.parent, { tree.canMove(id, it) && db.folderTree().find(it, f.title) == null }) { to ->
+        pickFolder(f.title, folderPlaces(id)) { to ->
             val at = adapter.items.indexOfFirst { it is FolderItem && it.id == id }
             db.moveFolder(id, to)
             load(at.takeIf { it >= 0 })
@@ -590,7 +601,7 @@ class ListActivity : Activity() {
         show(deleteAllButton, !selecting && folder == null)
         show(deleteFolderButton, !selecting && folder != null)
         show(selectAllButton, selecting)
-        show(moveSelectedButton, selecting)
+        show(moveSelectedButton, selecting && bookmarkPlaces().isNotEmpty())
         show(deleteSelectedButton, selecting)
         show(cancelButton, selecting)
         deleteSelectedButton.text = getString(R.string.delete_selected, selected.size)
