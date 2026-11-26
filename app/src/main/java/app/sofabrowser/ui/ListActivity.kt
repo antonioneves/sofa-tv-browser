@@ -392,7 +392,7 @@ class ListActivity : Activity() {
         }
     }
 
-    /** Deletes folder [id]; when anything is in it, asks first, with Cancel focused. */
+    /** Deletes folder [id] after asking, with Cancel focused. */
     private fun deleteFolder(id: Long) {
         val f = tree[id] ?: return
         val inside = tree.subtree(id)
@@ -405,9 +405,9 @@ class ListActivity : Activity() {
             toast(getString(R.string.folder_deleted))
             if (folder != null && folder in inside) go(f.parent, back = true) else load(at.takeIf { it >= 0 })
         }
-        if (folders == 0 && bookmarks == 0) { delete(); return }
         val d = Ui.dialog(this)
-            .setMessage(getString(R.string.folder_delete_confirm, f.title, FolderText.deleted(this, folders, bookmarks)))
+            .setMessage(if (folders == 0 && bookmarks == 0) getString(R.string.folder_delete_confirm_empty, f.title)
+                else getString(R.string.folder_delete_confirm, f.title, FolderText.deleted(this, folders, bookmarks)))
             .setDestructive()
             .setPositiveButton(R.string.delete) { _, _ -> delete() }
             .setNegativeButton(android.R.string.cancel, null)

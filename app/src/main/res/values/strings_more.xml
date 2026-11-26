@@ -229,6 +229,7 @@
     <!-- "3 folders, 12 bookmarks" under a folder's name -->
     <string name="folder_contents">%1$s, %2$s</string>
     <!-- "Delete News and the 2 folders and 12 bookmarks in it?" -->
+    <string name="folder_delete_confirm_empty">Delete the empty folder %1$s?</string>
     <string name="folder_delete_confirm">Delete %1$s and the %2$s in it?</string>
     <string name="folder_and">%1$s and %2$s</string>
     <string name="folder_deleted">Folder deleted</string>
