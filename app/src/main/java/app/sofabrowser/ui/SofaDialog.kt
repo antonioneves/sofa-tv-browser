@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.drawable.ColorDrawable
+import android.os.Build
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.Spanned
@@ -14,6 +15,7 @@ import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -203,6 +205,12 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         root.addView(sheet, FrameLayout.LayoutParams(900.px, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         // Keep the sheet within the screen: long text and long lists scroll inside it.
         root.setPadding(0, 48.px, 0, 48.px)
+        // From Android 15 a window is no longer made smaller for the keyboard (SOFT_INPUT_ADJUST_RESIZE above does that
+        // up to Android 14), so the sheet keeps above the keyboard itself.
+        if (Build.VERSION.SDK_INT >= 35) root.setOnApplyWindowInsetsListener { v, insets ->
+            v.setPadding(0, 48.px, 0, 48.px + insets.getInsets(WindowInsets.Type.ime()).bottom)
+            insets
+        }
         root.clipChildren = false
         setContentView(root)
         (firstFocus ?: positive ?: negative ?: neutral)?.requestFocus()
