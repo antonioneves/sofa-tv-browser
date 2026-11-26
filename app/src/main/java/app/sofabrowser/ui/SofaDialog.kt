@@ -213,13 +213,14 @@ class SofaDialog private constructor(context: Context, private val b: Builder) :
         }
         root.clipChildren = false
         // Some TV keyboards say they are showing but give no height, and the window is not made smaller for them (the
-        // Grundig's does so from the second time it is brought up). The sheet then keeps out of the lower part of the
-        // screen that such a keyboard takes, 4/9 of it as on that TV.
+        // Grundig's does so from the second time it is brought up). The sheet then moves up to the middle of the part
+        // of the screen above such a keyboard, which takes the lower 4/9 as on that TV. It is moved, not laid out
+        // again, so nothing flickers and the focus stays where it is.
         if (Build.VERSION.SDK_INT >= 30) root.viewTreeObserver.addOnGlobalLayoutListener {
             val ime = root.rootWindowInsets ?: return@addOnGlobalLayoutListener
-            val bottom = if (ime.isVisible(WindowInsets.Type.ime()) && ime.getInsets(WindowInsets.Type.ime()).bottom == 0)
-                48.px + root.height * 4 / 9 else 48.px
-            if (root.paddingBottom != bottom) root.setPadding(0, 48.px, 0, bottom)
+            val up = if (ime.isVisible(WindowInsets.Type.ime()) && ime.getInsets(WindowInsets.Type.ime()).bottom == 0)
+                minOf(root.height * 2f / 9, (sheet.top - 48.px).toFloat().coerceAtLeast(0f)) else 0f
+            if (sheet.translationY != -up) sheet.translationY = -up
         }
         setContentView(root)
         (firstFocus ?: positive ?: negative ?: neutral)?.requestFocus()
